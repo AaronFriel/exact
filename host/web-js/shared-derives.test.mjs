@@ -189,10 +189,13 @@ test('a compiled row call limit names its LoadDerive pc', async () => {
 test('nested slot arms share mount code and keep each row and arm instance', async () => {
   const layers = 6;
   const source = [
+    'shape DetailData',
+    '  title: string',
     'component App',
     '  state raised = false',
     '  state picked = 0',
     '  state broken = false',
+    '  state detail = false',
     '  action flip',
     '    raised = !raised',
     '  action overflow',
@@ -204,6 +207,8 @@ test('nested slot arms share mount code and keep each row and arm instance', asy
     '      button "Toggle" press=flip testId="toggle"',
     '      button "Overflow" press=overflow testId="overflow"',
     '      text `${picked}` testId="picked"',
+    '      if detail',
+    '        Detail()',
     '      for n in [4, 9] key=n',
     ...Array.from({ length: layers }, (_, i) => ' '.repeat(8 + 2 * i) + `Layer${i}(raised=raised)`),
     ' '.repeat(8 + 2 * layers) + 'button "Only visible leaf" aria-label="row\\u0000s0\\u0000" testId=`leaf-${n}` press=pick(range(broken ? 65537 : n).length)',
@@ -218,6 +223,10 @@ test('nested slot arms share mount code and keep each row and arm instance', asy
     else
       column padding=4 testId="layer-${i}"
         children`),
+    'component Detail',
+    '  resource data = readDetail() as shape DetailData else empty()',
+    '  view',
+    '    text data.title',
   ].join('\n') + '\n';
   const reports = [];
   for (const sites of [false, true]) {

@@ -64,6 +64,7 @@ fn each_instance_makes_and_refreshes_its_own_request() {
     assert!(js.contains("R($r.r0)"), "{js}");
     assert!(js.contains("\"/0=\"+rowPath($k)"), "{js}");
     assert!(js.contains("+\"/1:0\""), "{js}");
+    assert_eq!(js.matches("const $q").count(), 2, "{js}");
 }
 
 /// A launch instance takes the bake's answer only while the boot builds it

@@ -186,9 +186,8 @@ struct Em<'a> {
     /// The tab panels whose contents wait for their first selection
     /// (`exact_runner::instance::panel_sites`; tabs.js).
     panels: Vec<exact_plan::NodesId>,
-    /// Whether a child's resource is in the plan: its instances' paths are
-    /// then kept (LLP 1035.005.004 D8).
-    owns_requests: bool,
+    /// Arms on the instance path of a child resource or task (LLP 1035.005.004 D8).
+    path_arms: Vec<bool>,
 }
 
 /// The runner's reserved sources the JS runtime answers itself: the page's
@@ -287,8 +286,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         site_attrs,
         dev_reload,
         panels: exact_runner::instance::tabs::panel_sites(plan),
-        owns_requests: plan.resources.iter().any(|r| r.owner.is_some())
-            || plan.timers.iter().any(|t| t.owner.is_some()),
+        path_arms: sites::instance_paths(plan),
     };
     em.heights = em.drag_targets(PropId::HeightDragFor);
     em.transforms = em.drag_targets(PropId::TransformDragFor);

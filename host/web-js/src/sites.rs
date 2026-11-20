@@ -62,3 +62,35 @@ impl Sites {
         &self.by_arm[a as usize]
     }
 }
+
+/// Mark each arm a resource or task owner crosses when it mounts. A site
+/// with a parent mounts under that node, even in a hand-built plan.
+pub(super) fn instance_paths(plan: &Plan) -> Vec<bool> {
+    let mut paths = vec![false; plan.arms.len()];
+    let mut nodes = std::collections::HashSet::new();
+    let owners = plan
+        .resources
+        .iter()
+        .filter_map(|r| r.owner)
+        .chain(plan.timers.iter().filter_map(|t| t.owner));
+    for owner in owners {
+        let mut arm = Some(owner);
+        while let Some(id) = arm {
+            if std::mem::replace(&mut paths[id.0 as usize], true) {
+                break;
+            }
+            let region = plan.region(plan.arm(id).region);
+            let mut parent = region.parent;
+            arm = region.arm;
+            while let Some(id) = parent {
+                if !nodes.insert(id) {
+                    arm = None;
+                    break;
+                }
+                let node = plan.node(id);
+                (parent, arm) = (node.parent, node.arm);
+            }
+        }
+    }
+    paths
+}

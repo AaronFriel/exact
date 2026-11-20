@@ -269,11 +269,9 @@ impl Em<'_> {
         Ok(decl)
     }
 
-    /// The path of an instance one region deeper, `segment` added, as
-    /// `const $q<arm>=…;`, put in force in `scope`; nothing where the plan
-    /// has no child's resource.
+    /// Extend the path only where a descendant resource or task reads it.
     fn instance_path(&mut self, scope: &mut Scope, segment: String, arm: u32) -> String {
-        if !self.owns_requests {
+        if !self.path_arms[arm as usize] {
             return String::new();
         }
         let outer = scope.path.clone().unwrap_or_else(|| "\"\"".into());
@@ -341,7 +339,7 @@ impl Em<'_> {
         // The row's own slots, started from their initializers when
         // the row is created and kept with its key (LLP 1017 P4c).
         // The row's identity (`$k`, rows.js `rowKey`) names its instances.
-        let path = if self.owns_requests && list.is_none() {
+        let path = if self.path_arms[arms[0] as usize] && list.is_none() {
             let row_path = self.uses.rt("rowPath");
             self.instance_path(&mut inner, format!("\"/{r}=\"+{row_path}($k)"), arms[0])
         } else {
