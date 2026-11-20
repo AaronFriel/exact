@@ -133,6 +133,23 @@ class HeadlessLaunchTest {
         assertTrue(Host.turns.indexOf("environment") in 0 until Host.turns.indexOf("start"))
     }
 
+    @Test fun aLoopSelectionBelongsToOneInstallAndDrivesCanOverrideIt() {
+        val app = RuntimeEnvironment.getApplication()
+        val saved = "http://127.0.0.1:8765/"
+        val other = "http://127.0.0.1:9123/"
+        val select = Intent().setClassName(app, "dev.exact.app.DevLoop").putExtra("x_dev_plan", saved)
+        assertEquals(saved, DevLoop.atLaunch(app, select))
+        assertEquals(saved, DevLoop.atLaunch(app, null))
+        assertEquals(saved, DevLoop.atLaunch(app, Intent(Intent.ACTION_MAIN)))
+        assertEquals(other, DevLoop.atLaunch(app, Intent().putExtra("x_dev_plan", other)))
+        assertNull(DevLoop.atLaunch(app, Intent().putExtra("x_agent", "1")))
+        assertNull(DevLoop.atLaunch(app, Intent().putExtra("x_plan", "/fixture")))
+        assertEquals(saved, DevLoop.atLaunch(app, Intent().setClassName(app, "dev.exact.app.Notify")))
+        val prefs = app.getSharedPreferences("exact.devLoop", android.content.Context.MODE_PRIVATE)
+        prefs.edit().putLong("installed", -2).commit()
+        assertNull(DevLoop.atLaunch(app, Intent(Intent.ACTION_MAIN)))
+    }
+
     @Test fun aDriverLaunchTransfersItsEnvironmentBeforeBoot() {
         val app = RuntimeEnvironment.getApplication()
         app.applicationInfo.metaData = Bundle().apply { putBoolean("dev.exact.development", true) }

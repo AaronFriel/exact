@@ -918,8 +918,8 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         if (accessible) Native.access(accessAgain).also { accessAgain = false }?.let { access?.invoke(it) }
         // exact2 runs on this thread (owner=0): its bindings are checked here, as the owner checks them after a turn.
         Formas.turned()
-        stream ?: return false
         Native.chrome()?.let(chrome)
+        stream ?: return false
         val told = Native.scrollers()
         moved = stream.limit() > 0 && stream.get(0) == 22
         if (moved) { applyMove(stream); applyMoveTracks(stream) } else applyStream(stream)

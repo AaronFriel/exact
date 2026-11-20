@@ -1330,7 +1330,7 @@ function extensionArgs(app, out, config, bound, firebase, development) {
 /** The `am start` arguments that launch the app `id`, following the dev loop at `url` when there is one (LLP 1122 D4):
  * `-S` stops a running reader first, since it reads its launch extras once per process. */
 export const launchArgs = (id, url = null) =>
-  ['shell', 'am', 'start', '-W', ...(url ? ['-S'] : []), '-n', `${id}/dev.exact.app.MainActivity`, ...(url ? ['--es', 'x_dev_plan', url] : [])];
+  ['shell', 'am', 'start', '-W', ...(url ? ['-S'] : []), '-n', `${id}/dev.exact.app.${url ? 'DevLoop' : 'MainActivity'}`, ...(url ? ['--es', 'x_dev_plan', url] : [])];
 
 /** `--install` (`--run`: and launch it): the APK onto the device `androidDevice` names. With none ready the build
  * stands and says how to install it; several entries must be one phone’s transports or name ANDROID_SERIAL. `url`
