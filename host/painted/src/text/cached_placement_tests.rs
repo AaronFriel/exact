@@ -115,6 +115,33 @@ fn edited_width_matches_fresh_shaping_after_lines_move_wrap_or_change_face() {
         old = next;
     }
 }
+
+#[test]
+fn short_field_rows_keep_glyph_storage_compact_after_an_edit() {
+    let mut engine = engine();
+    let style =
+        StyleProps::default().with_rows(|rows| rows.white_space = exact_kernel::WhiteSpace::Pre);
+    for (row, glyphs) in [("x\n", 261), ("\n", 5)] {
+        let value = format!("head\n{}", row.repeat(256));
+        let before =
+            engine.edited_field(&crate::paint::text_spec(&style, &value), Some(280.), None);
+        let after = engine.edited_field(
+            &crate::paint::text_spec(&style, &format!("q{value}")),
+            Some(280.),
+            Some(&before),
+        );
+        let mut lines = after.lines().clone();
+        assert_eq!(lines.glyphs.len(), glyphs);
+        let retained = lines.capacity_bytes();
+        lines.glyphs = Default::default();
+        let packed = lines.capacity_bytes() + glyphs * std::mem::size_of::<LayoutGlyph>();
+        assert!(
+            retained <= packed + 1024,
+            "{retained} bytes for a {packed}-byte layout"
+        );
+    }
+}
+
 fn cache_card(p: &Paragraph) -> BTreeMap<GlyphKey, Option<(i32, i32, u32, u32)>> {
     p.source
         .catalog
