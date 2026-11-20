@@ -54,6 +54,7 @@ public enum ExactEnv {
     /// Whether the agent's world is settled between calls: native animation
     /// applies at once. False under `platform` timing.
     public static let agentFreezes = agentMode && agentTiming != "platform"
+    static let postsLiveWork = !agentFreezes && environment["EXACT_FILL_SYNC"] != "1"
     public static let smoke = environment["EXACT_SMOKE"] == "1"
     /// Milliseconds since the process's `main`: the wall clock for startup stamps.
     public static let t0 = CACurrentMediaTime()
@@ -404,6 +405,7 @@ public final class ExactSession {
     var clockDue: Double?
     /// An advance of a deadline already due is running (`advanceIfDue`)
     var advancingDue = false
+    var postsTimerAdvances = ExactEnv.postsLiveWork
     lazy var taskTimers = NativeTaskTimers(now: { [weak self] in self?.now() ?? 0 }, ready: { [weak self] in self?.deliverNativeTimer() })
     lazy var timerAdmissions = TimerAdmissions(session: self)
     /// The agent's clock (milliseconds) when the driver owns time; nil runs
@@ -519,7 +521,7 @@ public final class ExactSession {
     /// Read when a session wires itself; tests set it to drive the
     /// asynchronous path on macOS.
     #if os(iOS) || os(tvOS)
-    nonisolated(unsafe) static var asyncFills = !ExactEnv.agentFreezes && ExactEnv.environment["EXACT_FILL_SYNC"] != "1"
+    nonisolated(unsafe) static var asyncFills = ExactEnv.postsLiveWork
     #else
     nonisolated(unsafe) static var asyncFills = false
     #endif

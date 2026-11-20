@@ -33,8 +33,6 @@ final class StagePlan {
     /// time, after the rest is built: what joins draws in that frame.
     static let attachLimit = 32
     static let firstAttachSeconds = 0.0005
-    /// The agent's frozen clock and `EXACT_FILL_SYNC=1` prepare and publish in one turn (T9, T12).
-    static let synchronous = ExactEnv.agentFreezes || ExactEnv.environment["EXACT_FILL_SYNC"] == "1"
 
     let batch: Batch
     /// Per op of `batch`: whether preparation applies it.
@@ -360,7 +358,7 @@ extension ExactSession {
         stage = plan
         // Its timers and frames are the runtime's latest: a deadline before the reveal is asked on time.
         followRunner(batch, shown: false)
-        if clock != nil || StagePlan.synchronous { finishStage(); return true }
+        if clock != nil || !ExactEnv.postsLiveWork { finishStage(); return true }
         // Motion its commits began on its nodes starts at the reveal; what already runs runs on (LLP 1003.001).
         runtime.unshown(Array(plan.structural.union(plan.written.keys)))
         let frames = StageFrames(self)
