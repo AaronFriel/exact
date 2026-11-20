@@ -450,4 +450,55 @@ mod tests {
             "expected offset near LEFT EDGE, got {near_offset}"
         );
     }
+
+    #[test]
+    fn unchanged_textarea_reuses_retained_field_geometry_across_redraws() {
+        let source = r##"component App
+  state clicks = 0
+  state body = "line one\nline two\nline three\nline four\n"
+  action inc
+    clicks = clicks + 1
+  action edit(v: string)
+    body = v
+  view
+    column width=300 height=200 padding=8 gap=8
+      button "Inc" testId="inc" press=inc width=60 height=24
+      text `${clicks}`
+      textarea testId="editor" value=body input=edit width=260 height=120 font-size=14
+"##;
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
+            &crate::test_plan(source),
+            (),
+            (300., 200.),
+            1.,
+            PathBuf::new(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        p.frame();
+        let (inc, editor) = {
+            let k = p.host.kernel();
+            (
+                k.node_by_key(k.find_by_test_id("inc")[0]).unwrap().id,
+                k.node_by_key(k.find_by_test_id("editor")[0]).unwrap().id,
+            )
+        };
+        let first = p.brush.field_text[&editor].geometry.clone();
+        p.tap(inc).unwrap();
+        p.frame();
+        let second = p.brush.field_text[&editor].geometry.clone();
+        assert!(
+            std::rc::Rc::ptr_eq(&first, &second),
+            "unchanged textarea must reuse its cached Geometry across unrelated redraws"
+        );
+        p.set_focus(Some(editor), 10.);
+        p.type_text(editor, "x").unwrap();
+        p.frame();
+        let third = p.brush.field_text[&editor].geometry.clone();
+        assert!(
+            !std::rc::Rc::ptr_eq(&first, &third),
+            "editing the textarea must rebuild Geometry"
+        );
+    }
 }

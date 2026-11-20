@@ -24,7 +24,9 @@ pub(crate) struct Composition {
 }
 
 pub(crate) struct PaintedField {
-    pub(crate) geometry: Geometry,
+    pub(crate) geometry: Rc<Geometry>,
+    paragraph: Rc<Paragraph>,
+    geometry_x: (f32, f32),
     pub(crate) value: String,
     spec: Spec,
     content: Rect4,
@@ -50,7 +52,7 @@ impl PaintedField {
         reason = "The paragraph supplies geometry; the other arguments initialize retained field state."
     )]
     fn new(
-        paragraph: &Paragraph,
+        paragraph: Rc<Paragraph>,
         value: &str,
         spec: Spec,
         content: Rect4,
@@ -58,6 +60,7 @@ impl PaintedField {
         masked: bool,
         transform: Transform,
         decorations: Option<Rc<FieldDecorations>>,
+        previous: Option<&PaintedField>,
     ) -> Self {
         let left = |width| line_left(spec.align, spec.direction, content.2, width);
         let empty_x = left(0.);
@@ -83,13 +86,29 @@ impl PaintedField {
                     (content.3 - paragraph.height) / 2.
                 },
         );
-        let geometry = Geometry::new(
-            paragraph,
-            value,
-            masked,
-            if multiline { empty_x } else { 0. },
-            if multiline { first_x } else { 0. },
-        );
+        let geometry_x = if multiline {
+            (empty_x, first_x)
+        } else {
+            (0., 0.)
+        };
+        let geometry = previous
+            .filter(|prev| {
+                Rc::ptr_eq(&prev.paragraph, &paragraph)
+                    && prev.masked == masked
+                    && prev.geometry_x.0.to_bits() == geometry_x.0.to_bits()
+                    && prev.geometry_x.1.to_bits() == geometry_x.1.to_bits()
+                    && prev.value == value
+            })
+            .map(|prev| prev.geometry.clone())
+            .unwrap_or_else(|| {
+                Rc::new(Geometry::new(
+                    &paragraph,
+                    value,
+                    masked,
+                    geometry_x.0,
+                    geometry_x.1,
+                ))
+            });
         let (scroll_width, right_caret_inset) =
             if !multiline && spec.direction == exact_kernel::Direction::Rtl {
                 // RTL trailing spaces can lie left of the paragraph's origin.
@@ -107,6 +126,8 @@ impl PaintedField {
         };
         Self {
             geometry,
+            paragraph,
+            geometry_x,
             value: value.to_owned(),
             spec,
             content,
@@ -135,7 +156,7 @@ impl PaintedField {
         }
         let paragraph = text.paragraph(&spec, self.multiline.then_some(self.content.2));
         let mut field = Self::new(
-            &paragraph,
+            paragraph,
             value,
             spec,
             self.content,
@@ -143,6 +164,7 @@ impl PaintedField {
             self.masked,
             self.transform,
             self.decorations.clone(),
+            Some(self),
         );
         field.set_scroll(self.scroll);
         field
@@ -452,7 +474,7 @@ impl Painter {
             None => Cow::Borrowed(std::slice::from_ref(&base)),
         };
         let mut field = PaintedField::new(
-            &paragraph,
+            paragraph.clone(),
             value,
             spec,
             content,
@@ -460,6 +482,7 @@ impl Painter {
             node.props.str(PropId::Type) == Some("password"),
             ts,
             decorations,
+            self.field_text.get(&node.id).map(Rc::as_ref),
         );
         field.set_scroll(walk.scene.scroll.get(&node.id).copied().unwrap_or_default());
         let translation = field.scroll_translation();
