@@ -40,7 +40,7 @@ impl Em<'_> {
                 .map_or_else(|| format!("style {}", b.id), |s| s.name().replace('_', "-")),
         };
         let tg = self.uses.budget("tg");
-        let site = self.site_number(i);
+        let site = self.site_number(scope, i);
         Ok(format!(
             "{tg}({e},{site},{},{f})",
             serde_json::to_string(&row).unwrap()

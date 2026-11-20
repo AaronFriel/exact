@@ -36,6 +36,8 @@ pub struct Scope {
     pub local_derives: std::rc::Rc<BTreeMap<usize, String>>,
     /// Emit root getters, handlers and literals as operands a shared body can take as arguments.
     pub capture: bool,
+    /// Sites after variable-length slot content have no fixed offset from the enclosing mount.
+    pub capture_sites: bool,
     /// Whether this is an action body (writes and commands are allowed).
     pub action: bool,
     /// A shared at-read body accepts its reader's budget.

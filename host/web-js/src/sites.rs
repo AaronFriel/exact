@@ -64,11 +64,17 @@ impl Sites {
     }
 }
 
+#[derive(Clone, Default)]
+pub(super) struct MountShape {
+    pub repeated: bool,
+    pub slot: Option<std::ops::Range<usize>>,
+}
+
 /// Count references to a subtree across distinct parent shapes. Two copies of
 /// one component need a mount for its root. A child used only there is
 /// already shared by that mount. The emitter checks the generated bodies
 /// before sharing them, including bindings and closed-over variables.
-pub(super) fn repeated_nodes(plan: &Plan, sites: &Sites) -> Vec<bool> {
+pub(super) fn repeated_nodes(plan: &Plan, sites: &Sites) -> Vec<MountShape> {
     #[derive(Hash, Eq, PartialEq)]
     enum Kind {
         Node(u8, Vec<(BindingKind, u16)>, Vec<EventKind>),
@@ -132,9 +138,49 @@ pub(super) fn repeated_nodes(plan: &Plan, sites: &Sites) -> Vec<bool> {
     }
     let mut shapes = Shapes::default();
     shapes.visit(plan, sites, Site::Node(sites.root));
-    let mut repeated = vec![false; plan.nodes.len()];
+    // Where the same node surrounds different children, retain its common
+    // leading and trailing subtrees. Each caller mounts the children between them.
+    let mut variants: HashMap<&Kind, Vec<(usize, &[usize])>> = HashMap::new();
+    for ((kind, children), &shape) in &shapes.index {
+        if matches!(kind, Kind::Node(..)) {
+            variants.entry(kind).or_default().push((shape, children));
+        }
+    }
+    let mut slots = vec![None; shapes.uses.len()];
+    for group in variants.values().filter(|group| group.len() > 1) {
+        let first = group[0].1;
+        let mut prefix = first.len();
+        let mut suffix = first.len();
+        for &(_, children) in &group[1..] {
+            prefix = first[..prefix]
+                .iter()
+                .zip(children)
+                .take_while(|(a, b)| a == b)
+                .count();
+            suffix = first
+                .iter()
+                .rev()
+                .take(suffix)
+                .zip(children.iter().rev())
+                .take_while(|(a, b)| a == b)
+                .count();
+        }
+        let shortest = group
+            .iter()
+            .map(|(_, children)| children.len())
+            .min()
+            .unwrap();
+        suffix = suffix.min(shortest - prefix);
+        for &(shape, children) in group {
+            slots[shape] = Some(prefix..children.len() - suffix);
+        }
+    }
+    let mut repeated = vec![MountShape::default(); plan.nodes.len()];
     for (node, shape) in shapes.nodes {
-        repeated[node as usize] = shapes.uses[shape] > 1;
+        repeated[node as usize] = MountShape {
+            repeated: shapes.uses[shape] > 1,
+            slot: slots[shape].clone(),
+        };
     }
     repeated
 }

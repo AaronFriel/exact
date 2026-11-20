@@ -424,3 +424,85 @@ test('shared action code writes its own slot and reports the name of the failing
     }, sites ? ['--sites'] : []);
   }
 }, 60000);
+
+test('cards with different slot contents share their frame and retain each row binding', async () => {
+  await pageFor(`component App
+  state active = ""
+  action choose(id: string)
+    active = id
+  view
+    column
+      for id in ["Alice", "Bob"] key=id
+        column
+          Card()
+            text id
+          Card()
+            text "Choose"
+            button id press=choose(id)
+          Card()
+            if active == id
+              text "Selected"
+            else
+              text "Waiting"
+component Card
+  slot
+  view
+    column aria-label="Shared card"
+      text "Header"
+      children
+      text "Footer"
+`, async (page, js) => {
+    for (const fixed of ['"Shared card"', '"Header"', '"Footer"']) expect(js.split(fixed)).toHaveLength(2);
+    const cards = page.getByLabel('Shared card');
+    expect(await cards.allTextContents()).toEqual([
+      'HeaderAliceFooter', 'HeaderChooseAliceFooter', 'HeaderWaitingFooter',
+      'HeaderBobFooter', 'HeaderChooseBobFooter', 'HeaderWaitingFooter',
+    ]);
+    await page.getByRole('button', { name: 'Bob' }).click();
+    expect(await cards.nth(5).textContent()).toBe('HeaderSelectedFooter');
+    expect(await cards.nth(2).textContent()).toBe('HeaderWaitingFooter');
+  });
+}, 60000);
+
+test('content after a variable-length slot reports each binding at its plan site', async () => {
+  const source = `component App
+  state limit = 2
+  action overflow
+    limit = 65537
+  view
+    column
+      button "Overflow" press=overflow testId="overflow"
+      Meter(count=range(limit).length)
+        text "A"
+      Meter(count=range(limit).length)
+        text "B"
+        button "Again" press=overflow
+      Meter(count=range(limit).length)
+        if limit > 0
+          text "C"
+component Meter
+  props
+    count: number
+  slot
+  view
+    column aria-label="Slot meter"
+      text \`Before \${count}\`
+      children
+      text \`After \${count}\`
+`;
+  const reports = [];
+  for (const sites of [false, true]) {
+    await pageFor(source, async (page, js) => {
+      if (!sites) expect(js.split('"Slot meter"')).toHaveLength(2);
+      expect(await page.getByLabel('Slot meter').allTextContents()).toEqual([
+        'Before 2AAfter 2', 'Before 2BAgainAfter 2', 'Before 2CAfter 2',
+      ]);
+      await page.getByTestId('overflow').click();
+      const trapped = await page.evaluate(async () => (await import('/rt.js')).journal
+        .filter(line => line.includes('IterationLimit')).map(line => line.replace(/^t=\S+ /, '')).sort());
+      expect(trapped).toHaveLength(6);
+      reports.push(trapped);
+    }, sites ? ['--sites'] : []);
+  }
+  expect(reports[0]).toEqual(reports[1]);
+}, 60000);

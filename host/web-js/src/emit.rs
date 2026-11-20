@@ -140,7 +140,7 @@ struct Em<'a> {
     out: String,
     mount_templates: templates::Templates,
     next_local_element: Option<u32>,
-    repeated_nodes: Vec<bool>,
+    repeated_nodes: Vec<sites::MountShape>,
     classes: Vec<String>,
     /// Each distinct set of state looks (LLP 1121 D8), `data-exact-looks` index plus one.
     looks: Vec<Vec<(u8, String)>>,
@@ -464,7 +464,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         body.push_str(&mutations::root_then(plan, i, &top, &mut em.uses)?);
     }
     em.out.clear();
-    em.template_scope(true, |em| em.node(sites.root, "$R", &top))?;
+    em.template_scope(true, |em| em.mount_node(sites.root, "$R", &top))?;
     let view = std::mem::take(&mut em.out);
     if let Some(m) = &modes {
         body.push_str(&m.js(plan, &em.classes));
@@ -857,7 +857,7 @@ impl Em<'_> {
         Ok(())
     }
 
-    fn node(&mut self, i: u32, parent: &str, scope: &Scope) -> Result<(), String> {
+    fn node(&mut self, i: u32, parent: &str, scope: &Scope) -> Result<Option<String>, String> {
         let plan = self.plan;
         let row = &plan.node(NodesId(i));
         let node_type = NodeType::from_wire(row.node_type).ok_or("unknown node type")?;
@@ -884,7 +884,7 @@ impl Em<'_> {
             }
             let hd = self.uses.rt("hd");
             let _ = write!(self.out, "{hd}({parent},{{{}}});", fields.join(","));
-            return Ok(());
+            return Ok(None);
         }
         let parts = self.parts[i as usize].clone().ok_or("no parts")?;
         let mut virtualized = false;
@@ -1413,17 +1413,19 @@ impl Em<'_> {
             let tp = self.uses.rt("tp");
             let _ = write!(self.out, "{tp}({e},{e}=>{{");
         }
+        let mut slot = None;
         self.template_scope(status_owner || (panel && self.dev_reload), |em| {
             if virtualized {
                 em.collection_children(i, &e, scope, &edges)
             } else {
-                em.children(em.sites.of_node(i), &parent_of_children, scope)
+                slot = em.mount_children(i, &parent_of_children, scope, !status_owner)?;
+                Ok(())
             }
         })?;
         self.live_time(i, element, &e, scope)?;
         if panel {
             self.out.push_str("});");
         }
-        Ok(())
+        Ok(slot)
     }
 }

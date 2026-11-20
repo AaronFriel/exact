@@ -27,6 +27,8 @@ struct Call {
     base: Option<u32>,
     args: Vec<Value>,
     parent: Option<Box<str>>,
+    /// A slot mount follows the DOM parent in the surrounding expression.
+    takes_slot: bool,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq)]
@@ -162,6 +164,12 @@ impl Templates {
         self.intern(Some(params), source, parent, parent_site)
     }
 
+    pub fn slot_frame(&mut self, body: String) -> String {
+        let call = self.mount("p,$slot", body, Some("p"), None);
+        self.calls.last_mut().unwrap().takes_slot = true;
+        call
+    }
+
     pub fn expression(&mut self, source: String) -> String {
         self.intern(None, source, None, None)
     }
@@ -225,6 +233,7 @@ impl Templates {
             base,
             args,
             parent: parent.map(Into::into),
+            takes_slot: false,
         });
         format!("\0{call}\0")
     }
@@ -242,22 +251,45 @@ impl Templates {
         }
         // Children are interned first. An inlined parent copies its children
         // to every use. A shared parent emits them once.
+        let all_names: Vec<_> = (0..self.bodies.len())
+            .map(|i| Some(format!("{prefix}{i}")))
+            .collect();
+        let called = Render {
+            templates: &self,
+            names: &all_names,
+            enclosing: false,
+        };
         let mut names = vec![None; self.bodies.len()];
         for (i, t) in self.bodies.iter().enumerate().rev() {
             let n = uses[i];
-            let name = format!("{prefix}{i}");
-            let len: usize = t
-                .body
-                .iter()
-                .map(|p| if let Part::Js(js) = p { js.len() } else { 1 })
-                .sum();
-            let share = n > 1 && (n - 1).saturating_mul(len) > 8 + (n + 1) * name.len();
-            if share {
-                names[i] = Some(name);
+            let name = all_names[i].as_ref().unwrap();
+            if n > 1 {
+                let threshold = (8 + (n + 1) * name.len()) / (n - 1);
+                let literal: usize = t
+                    .body
+                    .iter()
+                    .map(|p| if let Part::Js(js) = p { js.len() } else { 1 })
+                    .sum();
+                let share = literal > threshold
+                    || t.body.iter().any(|p| matches!(p, Part::Call(_))) && {
+                        // A small adapter may call several other mounts. Count what
+                        // those calls emit, including their bindings and site offsets.
+                        let values: Vec<_> = t
+                            .columns
+                            .iter()
+                            .map(|c| c.fixed.clone().unwrap_or_else(|| Value::Local("$c".into())))
+                            .collect();
+                        let mut js = String::new();
+                        called.expand(&t.body, Base::Relative(0), &values, &mut js);
+                        js.len() > threshold
+                    };
+                if share {
+                    names[i] = Some(name.clone());
+                }
             }
             for part in t.body.iter() {
                 if let Part::Call(call) = part {
-                    uses[call.id] += if share { 1 } else { n };
+                    uses[call.id] += if names[i].is_some() { 1 } else { n };
                 }
             }
         }
@@ -365,7 +397,8 @@ impl Render<'_> {
                         }
                         if let Some(parent) = &call.parent {
                             inputs.push(parent.to_string());
-                            write!(out, "({});", inputs.join(",")).unwrap();
+                            let end = if call.takes_slot { "," } else { ");" };
+                            write!(out, "({}{end}", inputs.join(",")).unwrap();
                         } else if t.params.is_none() {
                             write!(out, "({})", inputs.join(",")).unwrap();
                         } else if !inputs.is_empty() {
@@ -379,6 +412,12 @@ impl Render<'_> {
                             self.expand(&t.body, base, &values, out);
                             continue;
                         };
+                        if call.takes_slot {
+                            write!(out, "(({params})=>{{").unwrap();
+                            self.expand(&t.body, base, &values, out);
+                            write!(out, "}})({},", call.parent.as_deref().unwrap()).unwrap();
+                            continue;
+                        }
                         match call.parent.as_deref() {
                             Some("p") => out.push('{'),
                             // The parent can have the same local name as a child.
