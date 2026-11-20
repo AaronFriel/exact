@@ -190,7 +190,7 @@ pub use checkpoint::Checkpoint;
 use exact_kernel::{CommitReceipt, Kernel, ViewId};
 use exact_plan::{ActionsId, Code, EventKind, MutationMode, MutationsId, NodesId, Plan, Value};
 pub use router::{launch_matches, routing, RouterChange, Routing};
-pub use split::{press_writes_router, StackSplit};
+pub use split::{press_writes_router, RouteInspector, StackSplit};
 pub use uploads::{UploadEnd, UploadMark};
 
 /// A host-facing effect an action asked for; executed after commit, in order.

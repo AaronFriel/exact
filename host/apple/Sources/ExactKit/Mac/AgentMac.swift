@@ -1280,7 +1280,7 @@ extension Agent {
             picture = Capture.withGuests(of: [session]) { Capture.picture(of: v, flipped: v.isFlipped) }
         }
         let area = presenter.navigation.stackSplit.agentCaptureArea
-        if presenter.navigation.stackSplit.active, let full = picture, let image = full.cgImage {
+        if presenter.navigation.stackSplit.active || presenter.navigation.stackSplit.hasInspector, let full = picture, let image = full.cgImage {
             let scale = CGFloat(full.pixelsWide) / v.bounds.width
             picture = image.cropping(to: area.applying(CGAffineTransform(scaleX: scale, y: scale))).map(NSBitmapImageRep.init(cgImage:))
             picture?.size = area.size

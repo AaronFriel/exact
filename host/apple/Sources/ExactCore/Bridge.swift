@@ -78,6 +78,7 @@ public struct Batch {
     public var mustFinish: Bool? = nil
     /// Every navigation root's tabs, when they changed (LLP 1115.001 D11).
     public var rootTabs: [RootTabs]? = nil
+    public var routeInspectors: [RouteInspector]? = nil
     /// The kernel transactions it carries, while the runner measures (LLP 1079 D3).
     public var seq: (UInt64, UInt64)?
     /// When `ExactSession.applyInput` marked it as a person's input: on iOS
@@ -112,7 +113,7 @@ public struct Batch {
     /// viewless contents, page facts, the native control state it carries or
     /// the navigation roots' tabs, whose placement the views may not carry.
     /// The presenter resolves an orientation request separately.
-    package var changesScreen: Bool { !ops.isEmpty || controls || facts || rootTabs != nil || controlReads?.isEmpty == false }
+    package var changesScreen: Bool { !ops.isEmpty || controls || facts || rootTabs != nil || routeInspectors != nil || controlReads?.isEmpty == false }
     package init(ops: [BatchOp], timers: Bool, motion: Bool, clock: Double?, error: String?, timerDueMs: Double? = nil, pending: Bool = false, busy: Bool = false) {
         self.ops = ops; self.timers = timers; self.motion = motion; self.clock = clock
         self.error = error; self.timerDueMs = timerDueMs; self.pending = pending

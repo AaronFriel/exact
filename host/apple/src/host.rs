@@ -352,8 +352,9 @@ pub struct Host<D: DataSource> {
     colors_seen: Option<u64>,
     /// The root font size and the window's modes as a batch last said them (`Host::facts_moved`).
     facts_told: Option<(f64, Vec<(String, String)>)>,
-    /// The navigation roots' tabs as a batch last said them (`Host::root_tabs_moved`).
+    /// The navigation roots' tabs as a batch last said them (`Host::navigation_shapes`).
     root_tabs_told: Option<String>,
+    route_inspectors_told: Vec<(ViewId, exact_runner::RouteInspector)>,
     /// The holds as a batch last said them (`Host::wakelock_moved`, `Host::orientation_moved`, `Host::finish_moved`).
     holds_told: colors::Told,
     /// The top-layer boxes covered while closed (`closed.rs`).
@@ -724,6 +725,7 @@ impl<D: DataSource> Host<D> {
             colors_seen: None,
             facts_told: None,
             root_tabs_told: None,
+            route_inspectors_told: Vec::new(),
             holds_told: Default::default(),
             closed: Default::default(),
         };

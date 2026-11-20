@@ -152,6 +152,7 @@ package final class Presenter {
     package lazy var sidebar: any SidebarHosting = NavigationLink.makeSidebar?(self) ?? NoSidebar(self)
     /// Each navigation root's tabs, as the last batch to say them gave them (`takeRootTabs`).
     package var rootTabs: [UInt32: RootTabs] = [:]
+    package var routeInspectors: [UInt32: RouteInspector] = [:]
     /// The head's title goes to the window the app attached, through the
     /// toolbar host that already owns its title (LLP 1048.003 D1).
     func headTitle(_ title: String?) { toolbar.headTitle(title) }
@@ -651,6 +652,7 @@ package final class Presenter {
         defer { resetting = false }
         MainActor.assumeIsolated { HeldState.retire(self) } // before its views leave the map (HeldState.swift)
         WakeLockLink.hold?(self, false); releaseOrientationLock()
+        routeInspectors = [:]
         rootTabs = [:] // the new host's first batch says them again
         cancelPageElementScroll(viewport.contentView)
         resetFragments()
@@ -1080,6 +1082,9 @@ package final class Presenter {
         defer { CATransaction.commit() }
         session?.fieldChrome.presented(batch.layoutProvisional)
         defer { applyLanguage(batch); toolbar.languageApplied(batch); applyWakeLock(batch); applyOrientationLock(batch) }
+        if let inspectors = batch.routeInspectors {
+            routeInspectors = Dictionary(inspectors.map { ($0.route, $0) }, uniquingKeysWith: { first, _ in first })
+        }
         takeRootTabs(batch)
         PaintOrder.begin()
         let post = Self.signposts.beginInterval("apply", "\(batch.ops.count) ops"), phase = HostPhases.shared.begin(.apply)

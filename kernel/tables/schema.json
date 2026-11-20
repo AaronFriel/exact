@@ -6362,6 +6362,10 @@
           "member": "orientation",
           "codec": "orientation"
         },
+        "routeInspectors": {
+          "member": "routeInspectors",
+          "codec": "routeInspectors"
+        },
         "rootTabs": {
           "member": "rootTabs",
           "codec": "rootTabs"

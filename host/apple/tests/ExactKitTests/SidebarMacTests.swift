@@ -117,14 +117,13 @@ final class SidebarMacTests: XCTestCase {
     /// `shown`: ordered in, off every screen, never key and never active.
     /// AppKit shows a hidden sidebar again, and keeps a split view's panes
     /// by name, only for a window that is shown.
-    private func compose(_ view: ExactView, width: CGFloat = 700, autosave: String? = nil, shown: Bool = false) -> ExactSidebarController {
+    private func compose(_ view: ExactView, width: CGFloat = 700, autosave: String? = nil, shown: Bool = false, sidebar: Bool = true) -> ExactSidebarController {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: 500),
                               styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         self.window = window
-        let split = ExactSidebarController(view: view, autosaveName: autosave, minimumPageWidth: 320)
-        split.view.frame = NSRect(x: 0, y: 0, width: width, height: 500)
-        window.contentViewController = split
+        let split = ExactSidebarController(view: view, autosaveName: autosave, minimumPageWidth: 320, sidebar: sidebar)
+        split.install(in: window)
         window.setContentSize(NSSize(width: width, height: 500))
         XCTAssertTrue(view.attachWindowToolbar(to: window))
         if shown {
@@ -174,6 +173,94 @@ final class SidebarMacTests: XCTestCase {
         try press("authored-history")
         XCTAssertTrue(footer.superview === rail)
         if #available(macOS 26, *) { XCTAssertTrue(split.splitViewItems[0].bottomAlignedAccessoryViewControllers.isEmpty) }
+    }
+
+    func testTheRoutesTrailingAsideBecomesTheWindowsInspector() throws {
+        let source = """
+        routes nav
+          document "/"
+            preview "/preview"
+
+        component App
+          action follow(url: string)
+            nav = go(nav, url)
+          action back
+            nav = back(nav)
+          view
+            main navigationKey=`${top(nav).id}` navigationBack="back" navigate=follow width="100%" height="100%"
+              for e in stack(nav) key=e.id
+                row navigationKey=`${e.id}` position="absolute" inset=0 display="flex" flex-direction="row"
+                  column flex=1 min-width=0 testId=`main-${e.name}`
+                    text e.name
+                  if e.name == "document"
+                    aside testId="inspector" width=220 min-width=160 max-width=320
+                      link testId="preview" href=path("preview")
+                        text "Preview"
+        """
+        let session = try boot(size: CGSize(width: 900, height: 500), source: source)
+        let name = "inspector-test-" + UUID().uuidString
+        defer {
+            for key in ["Exact Inspector Hidden ", "Exact Inspector Width ", "NSSplitView Subview Frames "] {
+                UserDefaults.standard.removeObject(forKey: key + name)
+            }
+        }
+        let exact = ExactView(session: session)
+        let split = compose(exact, width: 900, autosave: name, shown: true, sidebar: false)
+        let aside = try node("inspector"), button = try node("preview")
+        let window = try XCTUnwrap(self.window)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            window.layoutIfNeeded()
+            return aside.window === window && aside.frame.height > 400 && button.frame.height > 0
+        }, object: nil)
+        wait(for: [ready], timeout: 5)
+        let inspector = try XCTUnwrap(split.splitViewItems.last(where: { $0.behavior == .inspector }),
+                                      "the trailing aside opens as an AppKit inspector")
+        XCTAssertTrue(aside.isDescendant(of: inspector.viewController.view))
+        XCTAssertEqual(inspector.minimumThickness, 160)
+        XCTAssertEqual(inspector.maximumThickness, 320)
+        XCTAssertEqual(inspector.viewController.view.frame.width, 220, accuracy: 1)
+        XCTAssertTrue(window.toolbar?.items.contains { $0.itemIdentifier == .toggleInspector } == true)
+        let main = try node("main-document")
+        let openWidth = main.frame.width
+        func waitForPane(_ collapsed: Bool, _ condition: @escaping () -> Bool) {
+            let resized = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                window.layoutIfNeeded()
+                return inspector.isCollapsed == collapsed && condition()
+            }, object: nil)
+            wait(for: [resized], timeout: 5)
+        }
+        split.toggleInspector(nil)
+        waitForPane(true) { main.frame.width >= openWidth + 210 }
+        split.toggleInspector(nil)
+        waitForPane(false) { abs(main.frame.width - openWidth) <= 1 }
+        let divider = try XCTUnwrap(split.splitViewItems.indices.dropLast().last { !split.splitViewItems[$0].isCollapsed })
+        split.splitView.setPosition(split.splitView.bounds.width - 260 - split.splitView.dividerThickness, ofDividerAt: divider)
+        waitForPane(false) { abs(aside.frame.width - 260) <= 1 && abs(main.frame.width - openWidth + 40) <= 1 }
+        split.toggleInspector(nil)
+        waitForPane(true) { main.frame.width >= openWidth + 210 }
+        split.release()
+        window.orderOut(nil)
+        let reopened = compose(exact, width: 900, autosave: name, shown: true, sidebar: false)
+        let newWindow = try XCTUnwrap(self.window)
+        let restored = try XCTUnwrap(reopened.splitViewItems.last(where: { $0.behavior == .inspector }))
+        XCTAssertTrue(restored.isCollapsed)
+        reopened.toggleInspector(nil)
+        let shown = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            newWindow.layoutIfNeeded()
+            return aside.window === newWindow && abs(aside.frame.width - 260) <= 1 && !restored.isCollapsed
+        }, object: nil)
+        wait(for: [shown], timeout: 5)
+        let point = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: newWindow.contentView)
+        let hit = try XCTUnwrap(newWindow.contentView?.hitTest(point))
+        XCTAssertTrue(hit === button || hit.isDescendant(of: button), "the pane routes clicks to Preview")
+        let reply = Agent(session: session).tap(["id": Int(button.id)])
+        XCTAssertNil(reply["error"])
+        let preview = try node("main-preview")
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            newWindow.layoutIfNeeded()
+            return preview.window === newWindow && !reopened.splitViewItems.contains { $0.behavior == .inspector && !$0.isCollapsed }
+        }, object: nil)
+        wait(for: [changed], timeout: 5)
     }
 
     func testRestartRecomposesTheWindowWhenTheNewPlanNeedsNoSidebar() throws {
