@@ -4267,8 +4267,8 @@ main navigationKey=`${top(nav).id}` navigationBack="close" navigate=follow displ
   presses its row (`native: "sidebar-row"`).
 - For a footer pinned below the scrolling tabs on Mac and web, put the root tablist and a
   `footer` together as the only children of a `nav` directly inside the navigation root.
-  The footer can contain an account button or other controls. On a narrow web window it
-  disappears when the tabs become a bottom bar. An app-drawn tablist keeps its footer
+  The footer can contain an account button or other controls. Android's Material bottom
+  bar and the narrow web layout hide the footer. An app-drawn tablist keeps its footer
   in the page.
 - On an iPad (iPadOS 18 and later) the same root tablist, placed as above, is UIKit's
   sidebar-adaptable tab bar (`UITabBarController.mode = .tabSidebar`): a sidebar of the

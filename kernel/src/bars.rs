@@ -36,7 +36,9 @@
 //! ([`Kernel::root_tabs`]). A tablist or a panel inside a route is that
 //! route's, never the root's.
 
-use crate::generated::{Appearance, Display, NodeType, PropId, StyleId};
+use crate::generated::{
+    Appearance, Display, FlexDirection, NodeType, PositionType, PropId, StyleId,
+};
 use crate::id::ViewId;
 use crate::kernel::{Kernel, NodeRef};
 use crate::props::PropValue;
@@ -569,6 +571,41 @@ pub struct RootTabs {
     /// tab with the search role. Known from the first frame, before the tab's
     /// panel is built.
     pub search: Option<usize>,
+}
+
+impl RootTabs {
+    /// Whether the platform may place this horizontal bar in a sidebar (LLP 1116.004 D1.1).
+    /// A root-level `nav` may group it with its in-flow footer (LLP 1115.002 item 5).
+    pub fn allows_sidebar(&self, kernel: &Kernel, root: ViewId) -> bool {
+        let (Some(node), Some(bar)) = (kernel.node(root), kernel.node(self.tablist)) else {
+            return false;
+        };
+        let column = |d| matches!(d, FlexDirection::Column | FlexDirection::ColumnReverse);
+        let in_flow = |p| matches!(p, PositionType::Static | PositionType::Relative);
+        if node.style.display != Display::Flex
+            || !column(node.style.flex_direction)
+            || column(bar.style.flex_direction)
+            || !in_flow(bar.layout_position())
+            || bar.props.str(PropId::AccessibilityOrientation) == Some("vertical")
+        {
+            return false;
+        }
+        if bar.parent == Some(root) {
+            return true;
+        }
+        self.footer
+            .and_then(|id| kernel.node(id))
+            .is_some_and(|footer| in_flow(footer.layout_position()))
+            && bar
+                .parent
+                .and_then(|id| kernel.node(id))
+                .is_some_and(|nav| {
+                    in_flow(nav.layout_position())
+                        && (nav.style.display == Display::Block
+                            || nav.style.display == Display::Flex
+                                && column(nav.style.flex_direction))
+                })
+    }
 }
 
 /// Whether a `rel` value holds `token`: HTML's set of space-separated
