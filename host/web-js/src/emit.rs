@@ -18,6 +18,8 @@ use std::fmt::Write as _;
 
 #[path = "answers.rs"]
 mod answers;
+#[path = "arm_templates.rs"]
+mod arm_templates;
 #[path = "commands.rs"]
 mod commands;
 #[path = "each.rs"]
@@ -132,6 +134,8 @@ struct Em<'a> {
     parts: Vec<Option<Parts>>,
     uses: Uses,
     out: String,
+    arm_templates: arm_templates::Templates,
+    arm_element: Option<u32>,
     classes: Vec<String>,
     /// Each distinct set of state looks (LLP 1121 D8), `data-exact-looks` index plus one.
     looks: Vec<Vec<(u8, String)>>,
@@ -252,6 +256,8 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         parts,
         uses: Uses::default(),
         out: String::new(),
+        arm_templates: Default::default(),
+        arm_element: None,
         classes: Vec::new(),
         looks: Vec::new(),
         press_paint: false,
@@ -509,7 +515,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         body.push_str(&mutations::root_then(plan, i, &top, &mut em.uses)?);
     }
     em.out.clear();
-    em.node(sites.root, "$R", &top)?;
+    em.template_scope(true, |em| em.node(sites.root, "$R", &top))?;
     let view = std::mem::take(&mut em.out);
     if let Some(m) = &modes {
         body.push_str(&m.js(plan, &em.classes));
@@ -1101,7 +1107,15 @@ impl Em<'_> {
             } else {
                 "h"
             });
-        let e = format!("e{i}");
+        let status_owner = self.answers.status_owner(i);
+        let e = match &mut self.arm_element {
+            Some(next) if !status_owner => {
+                let name = format!("v{next}");
+                *next += 1;
+                name
+            }
+            _ => format!("e{i}"),
+        };
         let _ = write!(
             self.out,
             "const {e}={h}({parent},\"{element}\",{class},{attrs_js},{text});"
@@ -1110,8 +1124,9 @@ impl Em<'_> {
         let zoomable = exact_runner::uses::zoomable(plan, NodesId(i));
         let parent_of_children = if zoomable {
             self.zoom = true;
-            let _ = write!(self.out, "const z{i}=$zoom({e});");
-            format!("z{i}")
+            let zoom = format!("z{e}");
+            let _ = write!(self.out, "const {zoom}=$zoom({e});");
+            zoom
         } else {
             e.clone()
         };
@@ -1295,9 +1310,10 @@ impl Em<'_> {
                 let f = code::expression(
                     plan,
                     plan.code(plan.arg(a).expr),
-                    &code::evaluation(
+                    &self.site_evaluation(
                         scope,
-                        format!("site {i} {} argument {}", h.event.name(), k + 1),
+                        i,
+                        format!("{} argument {}", h.event.name(), k + 1),
                         false,
                     ),
                     &mut self.uses,
@@ -1446,11 +1462,13 @@ impl Em<'_> {
             let tp = self.uses.rt("tp");
             let _ = write!(self.out, "{tp}({e},{e}=>{{");
         }
-        if virtualized {
-            self.collection_children(i, &e, scope, &edges)?;
-        } else {
-            self.children(self.sites.of_node(i), &parent_of_children, scope)?;
-        }
+        self.template_scope(status_owner || (panel && self.dev_reload), |em| {
+            if virtualized {
+                em.collection_children(i, &e, scope, &edges)
+            } else {
+                em.children(em.sites.of_node(i), &parent_of_children, scope)
+            }
+        })?;
         self.live_time(i, element, &e, scope)?;
         if panel {
             self.out.push_str("});");

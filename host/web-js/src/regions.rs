@@ -75,11 +75,11 @@ impl Em<'_> {
         let subject = self
             .f(
                 row.subject,
-                &code::evaluation(
+                &self.site_evaluation(
                     scope,
+                    region_site(plan, r),
                     format!(
-                        "site {} {} subject",
-                        region_site(plan, r),
+                        "{} subject",
                         match row.kind {
                             RegionKind::Each => "each",
                             RegionKind::When => "when",
@@ -124,13 +124,17 @@ impl Em<'_> {
                     self.out.push_str(&path);
                     let decl = self.owned(*arm, &format!("$a{arm}"), &mut sc, carry.as_deref())?;
                     self.out.push_str(&decl);
-                    self.children(self.sites.of_arm(*arm), "p", &sc)?;
+                    let outer_names = self.arm_element;
+                    self.arm_element = (!self.site_attrs && !self.dev_reload).then_some(0);
+                    let binds = !path.is_empty() || !decl.is_empty() || (k == 0 && bound.is_some());
+                    self.template_scope(binds, |em| em.children(em.sites.of_arm(*arm), "p", &sc))?;
+                    self.arm_element = outer_names;
                     let built = std::mem::replace(&mut self.out, saved);
                     let params = match (&bound, k) {
                         (Some(b), 0) => format!("(p,{b})"),
                         _ => "p".into(),
                     };
-                    bodies.push(format!("{params}=>{{{built}}}"));
+                    bodies.push(self.arm_templates.arm(format!("{params}=>{{{built}}}")));
                 }
                 while bodies.len() < 2 {
                     bodies.push("0".into());
@@ -212,13 +216,10 @@ impl Em<'_> {
             let init = code::expression(
                 plan,
                 plan.code(slot.init),
-                &code::evaluation(
+                &self.site_evaluation(
                     scope,
-                    format!(
-                        "site {} state {:?} initializer",
-                        region_site(plan, plan.arms[arm as usize].region.0),
-                        plan.str(slot.name)
-                    ),
+                    region_site(plan, plan.arms[arm as usize].region.0),
+                    format!("state {:?} initializer", plan.str(slot.name)),
                     true,
                 ),
                 &mut self.uses,
@@ -294,11 +295,11 @@ impl Em<'_> {
         let subject = self
             .f(
                 row.subject,
-                &code::evaluation(
+                &self.site_evaluation(
                     scope,
+                    region_site(plan, r),
                     format!(
-                        "site {} {} subject",
-                        region_site(plan, r),
+                        "{} subject",
                         match row.kind {
                             RegionKind::Each => "each",
                             RegionKind::When => "when",
@@ -333,11 +334,7 @@ impl Em<'_> {
         let pure = crate::reads::pure_key(&key, &item, &index);
         let key = code::called_expression(code::evaluated(
             key,
-            &code::evaluation(
-                &inner,
-                format!("site {} each key", region_site(plan, r)),
-                true,
-            ),
+            &self.site_evaluation(&inner, region_site(plan, r), "each key".into(), true),
             before,
             &mut self.uses,
         ));
@@ -355,7 +352,9 @@ impl Em<'_> {
         let saved = std::mem::take(&mut self.out);
         self.out.push_str(&path);
         self.out.push_str(&rows_decl);
-        self.children(self.sites.of_arm(arms[0]), "p", &inner)?;
+        self.template_scope(true, |em| {
+            em.children(em.sites.of_arm(arms[0]), "p", &inner)
+        })?;
         let built = std::mem::replace(&mut self.out, saved);
         match list {
             Some(opts) => {

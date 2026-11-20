@@ -16,13 +16,13 @@ const command = (bin, args) => {
   return result;
 };
 
-async function pageFor(source, check) {
+async function pageFor(source, check, flags = []) {
   const dir = mkdtempSync(resolve(target, 'shared-derive-'));
   let server, browser;
   try {
     writeFileSync(resolve(dir, 'app.contract'), source);
     command(resolve(target, 'debug/contract'), ['build', resolve(dir, 'app.contract'), '-o', resolve(dir, 'app.plan')]);
-    command(resolve(target, 'debug/exact-web-js'), ['js', resolve(dir, 'app.plan'), '-o', dir]);
+    command(resolve(target, 'debug/exact-web-js'), ['js', resolve(dir, 'app.plan'), '-o', dir, ...flags]);
     const js = readFileSync(resolve(dir, 'app.js'), 'utf8');
     server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch(request) {
       const path = new URL(request.url).pathname.slice(1);
@@ -184,4 +184,80 @@ test('a compiled row call limit names its LoadDerive pc', async () => {
     expect(traps).toEqual(['site 0: text trapped Trap(CallLimit { pc: 19 }): past the 65,536 derive calls one evaluation may take; unset']);
     expect(await page.getByTestId('last').textContent()).toBe('');
   });
+}, 60000);
+
+test('nested slot arms share mount code and keep each row and arm instance', async () => {
+  const layers = 6;
+  const source = [
+    'component App',
+    '  state raised = false',
+    '  state picked = 0',
+    '  state broken = false',
+    '  action flip',
+    '    raised = !raised',
+    '  action overflow',
+    '    broken = true',
+    '  action pick(n: number)',
+    '    picked = n',
+    '  view',
+    '    column',
+    '      button "Toggle" press=flip testId="toggle"',
+    '      button "Overflow" press=overflow testId="overflow"',
+    '      text `${picked}` testId="picked"',
+    '      for n in [4, 9] key=n',
+    ...Array.from({ length: layers }, (_, i) => ' '.repeat(8 + 2 * i) + `Layer${i}(raised=raised)`),
+    ' '.repeat(8 + 2 * layers) + 'button "Only visible leaf" aria-label="row\\u0000s0\\u0000" testId=`leaf-${n}` press=pick(range(broken ? 65537 : n).length)',
+    ...Array.from({ length: layers }, (_, i) => `component Layer${i}
+  props
+    raised: bool
+  slot
+  view
+    if raised
+      column padding=8 testId="layer-${i}"
+        children
+    else
+      column padding=4 testId="layer-${i}"
+        children`),
+  ].join('\n') + '\n';
+  const reports = [];
+  for (const sites of [false, true]) {
+    const traps = [];
+    await pageFor(source, async (page, js) => {
+      if (!sites) {
+        expect(js.split('Only visible leaf').length - 1).toBeLessThanOrEqual(2);
+        for (let i = 0; i < layers; i++) expect(js.split(`"layer-${i}"`).length - 1).toBeLessThanOrEqual(2);
+      }
+      const leaf = page.getByTestId('leaf-9');
+      expect(await leaf.getAttribute('aria-label')).toBe('row\0s0\0');
+      const initial = await leaf.elementHandle();
+      for (const [id, padding] of [[9, 4], [4, 8], [9, 4]]) {
+        await page.getByTestId(`leaf-${id}`).click();
+        expect(await page.getByTestId('picked').textContent()).toBe(String(id));
+        expect(await leaf.evaluate((e, depth) => {
+          const values = [];
+          for (let i = 0; i < depth; i++) {
+            e = e.parentElement;
+            values.push(getComputedStyle(e).paddingTop);
+          }
+          return values;
+        }, layers)).toEqual(Array(layers).fill(`${padding}px`));
+        await page.getByTestId('toggle').click();
+        expect(await initial.evaluate(e => e.isConnected)).toBe(false);
+      }
+      await page.getByTestId('overflow').click();
+      for (let branch = 0; branch < 2; branch++) {
+        await leaf.click();
+        const report = await page.evaluate(async () =>
+          (await import('/rt.js')).journal.filter(line => line.includes('press argument 1')).at(-1));
+        expect(report).toContain('IterationLimit');
+        const site = Number(/site (\d+) press/.exec(report)[1]);
+        if (sites) expect(site).toBe(Number(await leaf.getAttribute('data-site')));
+        traps.push(site);
+        await page.getByTestId('toggle').click();
+      }
+    }, sites ? ['--sites'] : []);
+    expect(traps[0]).not.toBe(traps[1]);
+    reports.push(traps);
+  }
+  expect(reports[0]).toEqual(reports[1]);
 }, 60000);
