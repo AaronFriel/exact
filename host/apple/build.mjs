@@ -623,7 +623,7 @@ async function main(args, lockHeld = false) {
   if (hermesEarly && !hermesEarly.installed) refused.push((await import('../../scripts/exact.mjs')).hermesRefusal(hermesEarly, process.env));
   if (refused.length) { console.error(refused.join('\n')); process.exitCode = 1; return; }
   if (ios && !device && !ipa && !args.includes('--no-install') && !args.includes('--prebuild')) chooseSimulator(args.includes('--sim') ? args[args.indexOf('--sim') + 1] : undefined, { tv, app: app.id, dir: app.dir, hint: '--sim <udid|name> (or EXACT_SIM)' }); // refused before anything compiles, not after (LLP 1156.000 D5)
-  if (!existsSync(resolve(app.target, 'apple-swift'))) { const room = freeSpace(app.dir, [app.target, resolve(process.env.HOME ?? '', '.cache/exact')]); if (room && room.gb < ROOM_GB) console.warn(`host/apple: a first build here; ${room.text}`); } // a cold build (LLP 1156.000 D3)
+  if (!existsSync(resolve(app.target, 'apple-swift'))) { const room = freeSpace(app.dir); if (room && room.gb < ROOM_GB) console.warn(`host/apple: a first build here; ${room.text}`); } // a cold build (LLP 1156.000 D3)
   // A build of this app already running (a --prebuild's) is waited for, as test and agent wait for it, and a background
   // build's failure is said by the next build (scripts/agent-build.mjs `waitForBuild`, `reportPrebuild`).
   const running = !lockHeld && !args.includes('--prebuild') && existsSync(appleArtifacts(app).lock);
