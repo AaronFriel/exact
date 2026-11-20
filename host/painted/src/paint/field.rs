@@ -381,12 +381,13 @@ impl Painter {
         let multiline = node.props.str(PropId::SemanticTag) == Some("textarea");
         let decorations = (!placeholder && multiline)
             .then(|| {
-                FieldDecorations::read(
-                    node.props.str(PropId::Decorations)?,
-                    node.props.str(PropId::DecorationStyles)?,
+                FieldDecorations::cached(
+                    node.props.get(PropId::Decorations)?,
+                    node.props.get(PropId::DecorationStyles)?,
+                    self.field_text
+                        .get(&node.id)
+                        .and_then(|field| field.decorations.as_ref()),
                 )
-                .ok()
-                .map(Rc::new)
             })
             .flatten();
         let (spec, inks, backgrounds, shadows) = match &decorations {
