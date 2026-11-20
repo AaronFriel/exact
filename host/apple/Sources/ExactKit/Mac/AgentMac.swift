@@ -1274,11 +1274,11 @@ extension Agent {
             case let .success(capture):
                 picture = capture
             case let .failure(error):
-                picture = Capture.withGuests(of: [session]) { Capture.picture(of: v) }
+                picture = Capture.withGuests(of: [session]) { Capture.picture(of: v, flipped: v.isFlipped) }
                 captureNote = "glass was not composited: \(error.message); the viewport layer tree was used"
             }
         } else {
-            picture = Capture.withGuests(of: [session]) { Capture.picture(of: v) }
+            picture = Capture.withGuests(of: [session]) { Capture.picture(of: v, flipped: v.isFlipped) }
         }
         let area = presenter.navigation.stackSplit.agentCaptureArea
         if presenter.navigation.stackSplit.active, let full = picture, let image = full.cgImage {
