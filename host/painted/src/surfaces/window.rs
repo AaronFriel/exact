@@ -41,6 +41,7 @@ impl Surfaces {
         self.window_layers = None;
         self.direct_window = None;
         self.startup_device = None;
+        self.preparing_device = None;
         self.window_owner = None;
     }
 
