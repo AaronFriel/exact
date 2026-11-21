@@ -282,7 +282,7 @@ public final class ExactApp {
             for (session, _) in prepared { session.cancelCommit() }
             return result.pending ? .held(result.requests ? "requests" : "module") : .refused("durable commit refused")
         }
-        let batches = zip(prepared, committed).map { pair, batch in (pair.0, pair.0.commit(pair.1, batch: batch)) }
+        let batches = zip(prepared, committed).map { pair, batch in (pair.0, pair.0.commit(pair.1, batch: batch), pair.1.assetChanges) }
         resolver = candidateResolver
         #if EXACT_WIDGET_GALLERY
         NotificationCenter.default.post(name: Notification.Name("ExactWidgetGeneration"), object: self)
@@ -292,9 +292,9 @@ public final class ExactApp {
         lastModule = module
         selectedToken = token
         if let shaderSources { surfaces?.replaceShaders(shaderSources) }
-        for (session, _) in batches { session.awaitingTree = true; session.runtime.held = true } // each report waits for its own tree: one tree may retint the window; each runtime held till its own reset ends (ResetGate)
+        for (session, _, _) in batches { session.awaitingTree = true; session.runtime.held = true } // each report waits for its own tree: one tree may retint the window; each runtime held till its own reset ends (ResetGate)
         MainActor.assumeIsolated { HeldState.swap() } // the hold let go unsaid before the old tree goes, real input none till after (HeldState.swift)
-        for (session, batch) in batches { session.presentCommitted(batch, label: label) }
+        for (session, batch, assets) in batches { session.presentCommitted(batch, label: label, assetChanges: assets) }
         for session in participants { session.apply(session.runtime.deliverySync()) }
         MainActor.assumeIsolated { HeldState.swapping = false }
         rehold()
@@ -950,6 +950,7 @@ public final class ExactSession {
         let text: TextEngine
         let resolver: AssetResolver
         let token: UInt64
+        var assetChanges: [UInt32: Set<String>] = [:]
     }
 
     private(set) var modulePending = false, requestsPending = false
@@ -962,7 +963,6 @@ public final class ExactSession {
         modulePending = false; requestsPending = false; preparationError = nil
         guard state != .destroyed else { return nil }
         if booted { drainFill() } // The candidate compares against the last fully presented tree.
-        keptFocus = booted ? presenter.focusPlace(tree: runtime.ask(exact_tree, "{}")) : nil
         let module = module ?? app.lastModule
         runtime.setProfileResolver(resolver)
         defer { runtime.setProfileResolver(app.resolver) }
@@ -977,22 +977,14 @@ public final class ExactSession {
         core.measure(with: text)
         installControlText()
         requestsPending = batch.requests; if batch.pending { modulePending = true; return nil }
-        // Resolve initially used local payloads before first pixel, without
-        // applying a presenter batch or starting an image/web/GPU operation.
-        for op in batch.ops {
-            let props = op.props
-            if let source = props["src"] ?? props["imageSource"], URL(string: source)?.scheme == nil, !source.hasPrefix("//") {
-                let path = source.components(separatedBy: "?")[0].components(separatedBy: "#")[0]
-                let name = path.hasPrefix("/") ? String(path.dropFirst()) : path
-                if !name.isEmpty { _ = resolver.bytes(name) }
-            }
-        }
+        let assets = prepareAssets(batch, resolver: resolver)
         if let error = batch.error ?? resolver.refusal {
             runtime.discardPlan()
             if !batch.requests { fputs("exact: prepare refused: \(error)\n", stderr); preparationError = error }
             return nil
         }
-        return Prepared(text: candidate, resolver: resolver, token: token)
+        keptFocus = booted && !batch.replacesTree ? presenter.focusPlace(tree: runtime.ask(exact_tree, "{}")) : nil
+        return Prepared(text: candidate, resolver: resolver, token: token, assetChanges: assets)
     }
 
     func commit(_ candidate: Prepared) -> Batch? {
@@ -1028,7 +1020,7 @@ public final class ExactSession {
         return batch
     }
 
-    func presentCommitted(_ batch: Batch, label: String) {
+    func presentCommitted(_ batch: Batch, label: String, assetChanges: [UInt32: Set<String>] = [:]) {
         routerOp = nil
         let restart = booted, kept = keptFocus
         keptFocus = nil
@@ -1042,6 +1034,7 @@ public final class ExactSession {
         sampler?.reset(); frameHealth.reset() // a new runner numbers its transactions afresh (LLP 1079 D3)
         appFileRoots = AppFiles.learn(runtime)
         apply(batch)
+        reloadAssets(assetChanges)
         treeIsIn()
         tellTime()
         refuseUnheardLaunch()
