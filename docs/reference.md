@@ -1890,6 +1890,22 @@ and date only the files the checkout wrote, before any step changes the
 clone. Leave the app's own files their checkout times unless the key names
 the app's commit too.
 
+### Reclaim an idle app's build output
+
+On macOS and Linux, run `bun <exact>/scripts/sweep.mjs clean <app-dir> --dry-run --json`
+to list an outside app’s rebuildable output. Omit `--dry-run` to remove it.
+Exact keeps saved traces, the receipts that the run history points to,
+production bundles and their symbols, build locks, and unrecognized paths.
+A build, dev server or driver using the app’s output keeps it busy. A cleanup
+that starts first holds off new Exact builds until the files have moved.
+The app must own its target directory.
+
+The JSON object has `version: 1`, `status`, `dryRun`, `target` and three lists.
+`remove` gives absolute paths, `kept` gives a path and a reason (`record`,
+`lock` or `unlisted`), and `held` names busy locks or leases. The exit code is
+0 for `ok`, 2 for `refused`, and 1 for `busy` or `failed`. On failure,
+`error` gives the cause and `remove` lists the paths already moved.
+
 ### Import an iOS signing identity on a CI worker
 
 For the iOS recipe, save this as `.ci/sign-ios.sh`. Source it in the build
