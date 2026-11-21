@@ -116,8 +116,14 @@ let raf = null;
 let finishReady;
 const ready = new Promise((resolve) => { finishReady = resolve; });
 
+function reportError(error, entry) {
+  const message = entry ? `surface ${entry.name}: ${error}` : String(error);
+  exact.devError?.(message, entry?.host ?? stem);
+  console.error("exact gpu:", message);
+}
 const delivery = assetDelivery({getModule:() => gpu, live, baseURI:() => document.baseURI,
   devAssets:() => exact.devAssets, delivered(entry, module, error) {
+    if (error && !entry.pendingRestore) reportError(error, entry);
     finishRestore(entry, module, error);
     messages(entry, false); entry.resampleHeld?.(); schedule();
   }});
@@ -465,7 +471,7 @@ function recoverDevice() {
 function flush(module = gpu) {
   if (trapped()) return;
   if (!module || (module === gpu && terminalDevice)) return;
-  if (!module.gpu_flush()) console.error("exact gpu:", module.gpu_error());
+  if (!module.gpu_flush()) reportError(module.gpu_error());
   // A submitted callback can publish after render drained the surface's output.
   if (module === gpu) for (const entry of [...surfaces.values()]) {
     if (entry.id && !entry.terminal && live(entry.view) === entry) messages(entry, false);
@@ -501,7 +507,7 @@ function renderModule(entry, now) {
     recoverDevice();
     return;
   }
-  if (r === 2) console.error("exact gpu:", gpu.gpu_error());
+  if (r === 2) reportError(gpu.gpu_error(), entry);
   const initial = entry.firstFrameSubmittedMs === undefined && !entry.firstFrameFailed ? JSON.parse(gpu.gpu_agent(entry.id, JSON.stringify({op:"state"})) || "null")?.world : null;
   if (initial?.assets?.some(a => a.state === "Failed")) entry.firstFrameFailed = true;
   if (r !== 2 && entry.firstFrameSubmittedMs === undefined && !entry.firstFrameFailed && !initial?.loading?.length) {
@@ -1164,7 +1170,7 @@ const api = {
       const id = entry.id, at = exact.now?.();
       const bind = () => {
         const current = live(view); if (current?.id !== id) return;
-        if (!bindValues(current, gpu, values, at)) console.error("exact gpu:", gpu.gpu_error());
+        if (!bindValues(current, gpu, values, at)) reportError(gpu.gpu_error(), current);
         current.values = values; messages(current); schedule();
       };
       if (recoveringDevice) recoveringDevice.then(bind); else bind();
@@ -1172,7 +1178,7 @@ const api = {
   },
   destroy(view) {
     const entry = surfaces.get(view);
-    if (entry) { cancelAssets(entry); for (const row of entry.children ?? []) restoreChild(row); entry.refusalPage?.remove(); }
+    if (entry) { exact.devError?.(null, entry.host); cancelAssets(entry); for (const row of entry.children ?? []) restoreChild(row); entry.refusalPage?.remove(); }
     if (entry?.id) { retainEdits(entry); gpu.gpu_destroy(entry.id); }
     // The observer would fire once more as the element leaves the page, for
     // a surface the module no longer has (found by the agent smoke, which
@@ -1461,16 +1467,15 @@ try {
 if (loaded) { loadMs = performance.now() - t0; if (stem === "gpu") exact.root.dataset.gpuMs = loadMs.toFixed(1); }
 try {
   const waiting = [...surfaces.values()];
-  const report = error => { exact.devError?.(String(error)); console.error("exact gpu:", error); };
   // Routed, the router delivered this artifact's queued surfaces at registration.
   if (artifact === null) {
     for (const s of exact.pendingSurfaces ?? []) if (s.generation === exact.generation) {
-      try { api.surface(s.id, s.name, s.values); } catch (error) { report(error); }
+      try { api.surface(s.id, s.name, s.values); } catch (error) { reportError(error); }
     }
     exact.pendingSurfaces = [];
     for (const p of exact.pendingPosts ?? []) if (p.generation === exact.generation) api.post(p.name, p.text, p.at);
     exact.pendingPosts = [];
   }
   // A refused initial surface must not prevent independent canvases from loading.
-  for (const entry of waiting) { try { ensure(entry); } catch (error) { report(error); } }
+  for (const entry of waiting) { try { ensure(entry); } catch (error) { reportError(error); } }
 } finally { finishReady(loaded); }

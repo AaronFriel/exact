@@ -162,6 +162,38 @@ test('each GPU drawing element waits for a presented frame, including a second c
   expect(hosts[0].canvas.style.visibility).toBe('');
 });
 
+test.each(['asset', 'render'])('a shader failure during %s reaches development even on a second canvas', async stage => {
+  let read = 0, requested = false, refused = false;
+  const detail = 'assets/avatar.wgsl: fragment pipeline validation failed';
+  const f = await fixture({
+    delivery: { fetch: async () => new Response('shader') },
+    gpu: {
+      gpu_error: () => { read++; return detail; },
+      gpu_render: id => {
+        if (stage !== 'render' || id !== 2 || refused) return 0;
+        refused = true;
+        return 2;
+      },
+      gpu_assets: id => {
+        const load = stage === 'asset' && id === 2 && !requested;
+        if (load) requested = true;
+        return JSON.stringify({ requests: load ? ['avatar.wgsl'] : [], retired: [] });
+      },
+      gpu_asset: () => false,
+    },
+  });
+  const messages = [];
+  f.exact.devError = message => { if (message) messages.push(message); };
+  f.create(1, 'shader');
+  const second = f.create(2, 'shader');
+  await f.exact.gpu.settled();
+  f.frame();
+  expect(read).toBe(1);
+  expect(messages).toEqual([`surface shader: ${detail}`]);
+  expect(f.diagnostics.filter(line => line.includes(detail))).toHaveLength(1);
+  expect(second.canvas.style.visibility).toBe('hidden');
+});
+
 test.each(['render', 'flush'])('a malformed record published during %s leaves other canvases rendering', async stage => {
   const f = await fixture(), first = f.create(1, 'broken'), second = f.create(2, 'healthy');
   const pending = new Map(), order = [];
