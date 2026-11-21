@@ -129,6 +129,16 @@ pub(super) fn inspect(
             .seek(SeekFrom::Start(got as u64))
             .map_err(|_| Refusal::DecodeFailed)?;
     }
+    inspect_png(head, input, encoded_bytes, 0)
+}
+
+/// Inspect the PNG whose first bytes were read at `start` in the source.
+pub(super) fn inspect_png(
+    head: &[u8],
+    input: &mut (impl Read + Seek),
+    encoded_bytes: u64,
+    start: u64,
+) -> Result<Header, Refusal> {
     if head.len() < 33
         || &head[..8] != b"\x89PNG\r\n\x1a\n"
         || head[8..12] != 13u32.to_be_bytes()
@@ -198,7 +208,7 @@ pub(super) fn inspect(
             return Err(Refusal::DecodeFailed);
         }
         input
-            .seek(SeekFrom::Start(end))
+            .seek(SeekFrom::Start(start + end))
             .map_err(|_| Refusal::DecodeFailed)?;
         at = end;
     }
@@ -481,15 +491,21 @@ pub(super) fn decode_rows<R: Read + Seek>(
     if cancelled() {
         return Err(Refusal::Stale);
     }
+    let (start, length) = (0, plan.header.metadata.encoded_bytes);
+    #[cfg(windows)]
+    let (start, length) = plan.header.icon.map_or((start, length), |icon| {
+        (u64::from(icon.offset), u64::from(icon.length))
+    });
     input
-        .seek(SeekFrom::Start(0))
+        .seek(SeekFrom::Start(start))
         .map_err(|_| Refusal::DecodeFailed)?;
     let input = BufReader::with_capacity(
         8192,
         Bounded {
             input,
+            start,
             at: 0,
-            end: plan.header.metadata.encoded_bytes,
+            end: length,
         },
     );
     let mut decoder = png::Decoder::new_with_limits(
@@ -758,6 +774,7 @@ impl AreaPasses {
 // decoder to read beyond the encoded input admitted during metadata inspection.
 struct Bounded<R> {
     input: R,
+    start: u64,
     at: u64,
     end: u64,
 }
@@ -779,7 +796,8 @@ impl<R: Seek> Seek for Bounded<R> {
         if !(0..=i128::from(self.end)).contains(&at) {
             return Err(std::io::ErrorKind::InvalidInput.into());
         }
-        self.at = self.input.seek(SeekFrom::Start(at as u64))?;
+        self.input.seek(SeekFrom::Start(self.start + at as u64))?;
+        self.at = at as u64;
         Ok(self.at)
     }
 }

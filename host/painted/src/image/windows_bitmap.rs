@@ -1,28 +1,13 @@
 //! Bounded metadata for the Windows bitmap and icon codecs.
-use super::png_decode::Header;
+use super::png_decode::{inspect_png, Header};
 use exact_raster::{Metadata, PixelSize, Refusal, MAX_HEADER_BYTES, MAX_SOURCE_PIXELS};
 use std::io::{BufReader, Read, Seek, SeekFrom};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct IconEntry {
-    index: u32,
-    offset: u32,
-    length: u32,
-}
-
-impl IconEntry {
-    pub(super) fn decoder_input(self, bytes: &[u8]) -> Result<(&[u8], u32), Refusal> {
-        let image = bytes
-            .get(self.offset as usize..)
-            .and_then(|tail| tail.get(..self.length as usize))
-            .ok_or(Refusal::DecodeFailed)?;
-        // WIC can refuse a PNG inside an icon that its PNG decoder opens directly.
-        Ok(if image.starts_with(b"\x89PNG\r\n\x1a\n") {
-            (image, 0)
-        } else {
-            (bytes, self.index)
-        })
-    }
+    pub(super) index: u32,
+    pub(super) offset: u32,
+    pub(super) length: u32,
 }
 
 pub(super) fn inspect(
@@ -50,7 +35,34 @@ pub(super) fn inspect(
         encoded_bytes,
         header_bytes,
     });
-    header.icon = icon;
+    if let Some(entry) = icon {
+        // Keep the PNG decoder's sampling and alpha rounding when the icon wraps a PNG.
+        let mut prefix = [0; 33];
+        let len = (entry.length as usize).min(prefix.len());
+        input
+            .seek(SeekFrom::Start(u64::from(entry.offset)))
+            .map_err(|_| Refusal::DecodeFailed)?;
+        input
+            .read_exact(&mut prefix[..len])
+            .map_err(|_| Refusal::DecodeFailed)?;
+        if prefix[..len].starts_with(b"\x89PNG\r\n\x1a\n") {
+            header = inspect_png(
+                &prefix[..len],
+                input,
+                u64::from(entry.length),
+                u64::from(entry.offset),
+            )?;
+            if header.metadata.natural != natural {
+                return Err(Refusal::ConflictingMetadata);
+            }
+            header.metadata.header_bytes += header_bytes;
+            if header.metadata.header_bytes > MAX_HEADER_BYTES {
+                return Err(Refusal::HeaderLimit);
+            }
+            header.metadata.encoded_bytes = encoded_bytes;
+        }
+        header.icon = Some(entry);
+    }
     Ok(Some(header))
 }
 
