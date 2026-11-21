@@ -106,8 +106,7 @@ final class DevPillTests: XCTestCase {
     private var session: ExactSession?
     override func tearDown() { session?.destroy(); session = nil; window?.isHidden = true; window = nil; super.tearDown() }
 
-    private func makeWindow() throws -> (ExactSession, UIWindow) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { throw missing("scene", "the pill is in a scene's window") }
+    private func makeWindow(_ scene: UIWindowScene) -> (ExactSession, UIWindow) {
         let session = ExactApp.shared.makeSession(label: "dev-pill")
         self.session = session
         let window = UIWindow(windowScene: scene), host = UIViewController()
@@ -122,7 +121,8 @@ final class DevPillTests: XCTestCase {
     }
 
     func testThePillSaysTheLoopsStatusAndGoesWhenThePlanComes() throws {
-        let (session, window) = try makeWindow()
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { throw missing("scene", "the pill is in a scene's window") }
+        let (session, window) = makeWindow(scene)
         session.presenter.showDevStatus("Dev loop: building the module producer…")
         let pill = session.presenter.devPill as? UILabel
         if ExactEnv.agentMode { XCTAssertNil(pill, "never under the agent"); return }
@@ -145,7 +145,8 @@ final class DevPillTests: XCTestCase {
         let session = f.session
         let said = { (session.presenter.devPill as? NSTextField)?.stringValue }
         #else
-        let (session, _) = try makeWindow()
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { throw missing("scene", "the pill is in a scene's window") }
+        let (session, _) = makeWindow(scene)
         let said = { (session.presenter.devPill as? UILabel)?.text?.trimmingCharacters(in: .whitespaces) }
         #endif
         let warning = "mutation order failed: signOrder took 150 ms of CPU time over its 100 ms turn budget"
