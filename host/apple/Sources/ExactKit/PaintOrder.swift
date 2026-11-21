@@ -153,10 +153,10 @@ extension NodeView {
         #else
         // A child beside the routes can clear the native navigation view, whose box extends beyond them.
         // Its peers at the navigation rank already in front of that view share the top of the same step.
-        // Equal ranks then paint in subview order, and each positive z-index stays above them.
+        // Tab panels that the native view represents stay on its plane. Equal authored ranks paint in subview order.
         let plane = position(1)
         let lowest = plane == nil ? nil : children.lazy.compactMap { child -> CGFloat? in
-            guard (child as? NodeView)?.clearsNavigation == true, child.siblingPaintRank <= 1 else { return nil }
+            guard (child as? NodeView)?.navigationPaint == .besideRoutes, child.siblingPaintRank <= 1 else { return nil }
             return position(child.siblingPaintRank)
         }.min()
         var pastNavigation = false
@@ -168,7 +168,7 @@ extension NodeView {
             if let plane, let lowest, own <= plane {
                 if rank == 1 && child.paintForeground {
                     pastNavigation = true
-                } else if node?.clearsNavigation == true || (pastNavigation && rank == 1) {
+                } else if node?.navigationPaint == .besideRoutes || (pastNavigation && rank == 1 && node?.navigationPaint != .represented) {
                     depth = plane + 0.0001 + 0.0008 * (plane > lowest ? (own - lowest) / (plane - lowest) : 1)
                 }
             }

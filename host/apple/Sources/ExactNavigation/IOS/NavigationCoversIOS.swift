@@ -90,8 +90,9 @@ extension NavigationHost {
             let below = rows.contains { $0 === child }
             let clears = !ExactEnv.authoredChrome && !routes.isEmpty && !owned.contains(child.id) && !box.isEmpty
                 && box.intersects(area) && (below || PanelSiblings.beside(box, routes, drawn: drawn))
-            if child.clearsNavigation != clears {
-                child.clearsNavigation = clears
+            let paint: NavigationPaintRole = owned.contains(child.id) ? .represented : (clears ? .besideRoutes : .sibling)
+            if child.navigationPaint != paint {
+                child.navigationPaint = paint
                 changed = true
             }
             guard clears else { continue }

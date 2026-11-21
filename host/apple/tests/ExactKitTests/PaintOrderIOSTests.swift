@@ -167,21 +167,25 @@ final class PaintOrderIOSTests: XCTestCase {
         bar.setRank(1)
         panel.setRank(1)
         above.setRank(2)
-        bar.clearsNavigation = true
+        let carrier = NodeView(id: 6, kind: "view", presenter: p)
+        mount.insertSubview(carrier, aboveSubview: bar)
+        carrier.setRank(1)
+        carrier.navigationPaint = .represented
+        bar.navigationPaint = .besideRoutes
         PaintOrder.changed(mount)
 
         func order() -> [UIView] {
             NodeView.hitOrder(mount.subviews).filter { $0 is NodeView || $0 === navigation }
         }
-        XCTAssertEqual(order(), [above, panel, bar, navigation, before])
+        XCTAssertEqual(order(), [above, panel, bar, carrier, navigation, before])
         XCTAssertEqual(panel.paintZPosition, bar.paintZPosition, "equal CSS ranks paint in tree order")
         bar.setRank(0)
         XCTAssertGreaterThan(panel.paintZPosition, bar.paintZPosition)
         XCTAssertGreaterThan(bar.paintZPosition, navigation.layer.zPosition)
-        XCTAssertEqual(order(), [above, panel, bar, navigation, before])
-        bar.clearsNavigation = false
+        XCTAssertEqual(order(), [above, panel, bar, carrier, navigation, before])
+        bar.navigationPaint = .sibling
         PaintOrder.changed(mount)
-        XCTAssertEqual(order(), [above, panel, navigation, before, bar])
+        XCTAssertEqual(order(), [above, panel, carrier, navigation, before, bar])
     }
 
     /// A long-pressed row's context menu: UIKit hides the row and adds its

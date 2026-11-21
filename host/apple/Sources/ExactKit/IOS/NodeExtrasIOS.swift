@@ -4,6 +4,11 @@
 #if os(iOS) || os(tvOS)
 import UIKit
 
+/// How the native navigation container represents this child of its mount.
+package enum NavigationPaintRole {
+    case sibling, besideRoutes, represented
+}
+
 /// A transform handle's contact, which the Drag module keeps: the core asks
 /// only for its pinch, which gesture precedence orders.
 package protocol TransformPinchContact: AnyObject {
@@ -225,9 +230,7 @@ final class NodeExtras {
     /// A control bar over a scroller's content (LLP 1131 D3, D4): the scroller's paint rank, which it is placed
     /// above, and UIKit's edge effect.
     var bandOver: Int64?
-    /// A child beside the routes or below their tab panels: it paints over
-    /// the whole-view native container (`NavigationHost.clearBesideRoutes`).
-    package var clearsNavigation = false
+    var navigationPaint = NavigationPaintRole.sibling
     var edgeInteraction: AnyObject?
     var scrollWritten: String?
     /// A hatched node whose hatch undoes its own additions: its row may be
@@ -500,7 +503,7 @@ extension NodeView {
     package var scrollCollapsed: CGFloat { get { extras?.scrollCollapsed ?? 0 } set { if newValue != 0 || extras != nil { more.scrollCollapsed = newValue } } }
     var scrollWritten: String? { get { extras?.scrollWritten } set { if newValue != nil || extras != nil { more.scrollWritten = newValue } } }
     package var hatchReusable: Bool { get { extras?.hatchReusable ?? false } set { if newValue || extras != nil { more.hatchReusable = newValue } } }
-    package var clearsNavigation: Bool { get { extras?.clearsNavigation ?? false } set { if newValue || extras != nil { more.clearsNavigation = newValue } } }
+    package var navigationPaint: NavigationPaintRole { get { extras?.navigationPaint ?? .sibling } set { if newValue != .sibling || extras != nil { more.navigationPaint = newValue } } }
     /// Where CSS's `scrollTop` 0 is in UIKit's offsets: past the scroller's
     /// top inset when UIKit insets it — a collapsing title's bar, or the bar
     /// over a route's bottom-edge scroller (`reachBottom`), which stays
