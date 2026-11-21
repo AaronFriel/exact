@@ -231,8 +231,8 @@ public final class ExactApp {
     public func reloadConnection() { connection?.reload() }
 
     /// A plan is one app generation: every session accepts before any swaps.
-    /// It waits while a field composes, a pointer is down or a gesture is
-    /// under way, or its module prepares or requests are in flight (LLP
+    /// It waits for marked text unless AppKit can keep its editor. It also
+    /// waits for a press, a gesture, module preparation or requests in flight (LLP
     /// 1029.000.002 D9): the app keeps it, applies it at the first turn
     /// without one, and `lifecycle` hears how it ended.
     @discardableResult
@@ -248,7 +248,7 @@ public final class ExactApp {
     }
 
     /// Prepare and commit in every session now (`applyTogether` holds it first).
-    func commitTogether(_ bytes: Data, label: String, resolver candidateResolver: AssetResolver, token: UInt64, identity: String?, module: ExactModule?, letGo: Bool, commit: () -> Bool) -> ExactApplyResult {
+    func commitTogether(_ bytes: Data, label: String, resolver candidateResolver: AssetResolver, token: UInt64, identity: String?, module: ExactModule?, letGo: Bool, heldFields: (Set<ObjectIdentifier>) -> Void, commit: () -> Bool) -> ExactApplyResult {
         guard !transaction else { return .refused("a replacement is already committing") }
         let module = module ?? lastModule
         let participants = sessions.filter { $0.state != .destroyed }
@@ -266,6 +266,12 @@ public final class ExactApp {
             let requests = participants.contains { $0.requestsPending }
             for session in participants { session.runtime.discardPlan() }
             return pending ? .held(requests ? "requests" : "module") : .refused(participants.lazy.compactMap(\.preparationError).first ?? "the plan was not prepared")
+        }
+        let displaced = Set(prepared.flatMap { $0.1.displacedCompositions })
+        if !displaced.isEmpty {
+            for session in participants { session.runtime.discardPlan() }
+            heldFields(displaced)
+            return .held("composition")
         }
         let surfaces = SurfacesLink.installed
         let shaderSources = surfaces?.shadersLoaded == true ? candidateResolver.shaderSources() : nil
@@ -946,13 +952,6 @@ public final class ExactSession {
         return batch
     }
 
-    struct Prepared {
-        let text: TextEngine
-        let resolver: AssetResolver
-        let token: UInt64
-        var assetChanges: [UInt32: Set<String>] = [:]
-    }
-
     private(set) var modulePending = false, requestsPending = false
     private(set) var preparationError: String? // why the last preparation refused the plan
     /// A replacement holds autofocus while it applies the new tree.
@@ -984,7 +983,7 @@ public final class ExactSession {
             return nil
         }
         keptFocus = booted && !batch.replacesTree ? presenter.focusPlace(tree: runtime.ask(exact_tree, "{}")) : nil
-        return Prepared(text: candidate, resolver: resolver, token: token, assetChanges: assets)
+        return Prepared(text: candidate, resolver: resolver, token: token, assetChanges: assets, displacedCompositions: displacedCompositions(batch))
     }
 
     func commit(_ candidate: Prepared) -> Batch? {
@@ -1051,8 +1050,10 @@ public final class ExactSession {
     /// while an interaction is under way, where `ExactApp.apply` holds.
     @discardableResult
     public func apply(_ bytes: Data, label: String = "plan") -> Bool {
-        guard app.replacements.interactionHold == nil,
-              let candidate = prepare(bytes, resolver: app.resolver), let batch = commit(candidate) else { return false }
+        guard app.replacements.interactionHold(checkMarked: { $0.presenter?.session === self }) == nil,
+              let candidate = prepare(bytes, resolver: app.resolver) else { return false }
+        guard candidate.displacedCompositions.isEmpty else { runtime.discardPlan(); return false }
+        guard let batch = commit(candidate) else { return false }
         app.invalidateDevGeneration()
         presentCommitted(batch, label: label)
         return true

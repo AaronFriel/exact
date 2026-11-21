@@ -26,6 +26,14 @@ package struct SessionLease {
 }
 
 extension ExactSession {
+    struct Prepared {
+        let text: TextEngine
+        let resolver: AssetResolver
+        let token: UInt64
+        var assetChanges: [UInt32: Set<String>] = [:]
+        var displacedCompositions: Set<ObjectIdentifier> = []
+    }
+
     /// A reused view can name new bytes without changing any props. Validate
     /// those names before committing, alongside the names in the batch.
     func prepareAssets(_ batch: Batch, resolver: AssetResolver) -> [UInt32: Set<String>] {

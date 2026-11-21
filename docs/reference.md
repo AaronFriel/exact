@@ -1604,10 +1604,11 @@ text and drag gestures are unavailable.
 ### Replacing an embedded app's plan
 
 `ExactApp.apply` and `applyGeneration` answer `ExactApplyResult`: `.applied`,
-`.held(reason)` or `.refused(error)`. A replacement waits while a field is
-composing text, a pointer is down or a gesture is under way. The host asks
-the platform, not the app's handlers. On macOS that is marked text in a
-window's first responder, a mouse button down in the app, a trackpad
+`.held(reason)` or `.refused(error)`. AppKit keeps marked text when the replacement
+keeps its native editor. A replacement that removes the field or changes its
+native control waits for composition to end. Marked text in an embedder's
+own editor also holds the replacement. Other macOS holds include a mouse
+button down in the app, a trackpad
 gesture's fingers, a tracking loop AppKit runs (a menu, a control's press, a
 scroller) and a gesture recognizer that has begun in a session's window. On
 iOS and tvOS it is a touch UIKit has not ended, a press of a remote's or a

@@ -635,7 +635,7 @@
       ]
     },
     "treeWalks": {
-      "ceiling": 613,
+      "ceiling": 612,
       "sites": [
         "host/apple/Sources/ExactCollections/Collection.swift: guard let parent = (node as? PlatformView)?.superview else { return nil }",
         "host/apple/Sources/ExactCollections/Collection.swift: parent = current.superview",
@@ -1114,7 +1114,6 @@
         "host/apple/Sources/ExactKit/Mac/PresenterMac.swift: let first = root.subviews.first as? NodeView",
         "host/apple/Sources/ExactKit/Mac/PresenterMac.swift: paragraph = node.superview as? NodeView",
         "host/apple/Sources/ExactKit/Mac/PresenterMac.swift: return (root.subviews.first as? NodeView)?.color(\"background_color\", ground) ?? ground",
-        "host/apple/Sources/ExactKit/Mac/PresenterMac.swift: root.subviews.forEach { $0.removeFromSuperview() }",
         "host/apple/Sources/ExactKit/Mac/PresenterMac.swift: var ancestor = preview.superview as? NodeView",
         "host/apple/Sources/ExactKit/Mac/PresenterMac.swift: view = current.superview",
         "host/apple/Sources/ExactKit/Mac/PresenterMac.swift: while containing !== root && containing.superview !== root {",

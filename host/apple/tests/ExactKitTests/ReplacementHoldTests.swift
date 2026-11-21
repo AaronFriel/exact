@@ -139,9 +139,7 @@ final class ReplacementHoldTests: XCTestCase {
         XCTAssertEqual(current.string, "", "undo typing from before the reload")
     }
 
-    /// Exercise the native commit while text is marked. The public apply holds
-    /// composition until this path is qualified on the host (LLP 1029.000.002 D7).
-    func testACommittedReplacementKeepsAppKitsMarkedRangeAndItsClient() throws {
+    func testAnAppReloadKeepsAppKitsMarkedRangeAndItsClient() throws {
         let window = try XCTUnwrap(window)
         let editor = try XCTUnwrap(session.presenter.views.values.first { $0.props["testId"] == "note" }?.textArea)
         XCTAssertTrue(window.makeFirstResponder(editor))
@@ -149,10 +147,8 @@ final class ReplacementHoldTests: XCTestCase {
         editor.setMarkedText("にほん", selectedRange: NSRange(location: 2, length: 0), replacementRange: automatic)
         XCTAssertTrue(editor.hasMarkedText())
         let marked = editor.markedRange(), selected = editor.selectedRange()
-        let candidate = try XCTUnwrap(session.prepare(try after(), resolver: app.resolver))
-        let batch = try XCTUnwrap(session.commit(candidate))
-        XCTAssertTrue(batch.replacesTree)
-        session.presentCommitted(batch, label: "marked text")
+        XCTAssertEqual(app.apply(try after()), .applied)
+        XCTAssertEqual(label(), "after")
         XCTAssertTrue(window.firstResponder === editor)
         XCTAssertTrue(editor.hasMarkedText())
         XCTAssertEqual(editor.markedRange(), marked)
@@ -161,6 +157,62 @@ final class ReplacementHoldTests: XCTestCase {
         editor.insertText("日本", replacementRange: automatic)
         XCTAssertFalse(editor.hasMarkedText())
         XCTAssertEqual(editor.string, "日本")
+    }
+
+    private func removingDraftField() throws -> Data {
+        try TableFixture.plan("""
+        component App
+          state draft = ""
+          view
+            column
+              text "after" testId="label"
+              text draft
+        """)
+    }
+
+    func testChangingRootOrderKeepsTheMarkedEditorInItsWindow() throws {
+        let presenter = session.presenter, window = try XCTUnwrap(window)
+        let editor = try XCTUnwrap(presenter.views.values.first { $0.props["testId"] == "note" }?.textArea)
+        let roots = presenter.root.subviews.compactMap { ($0 as? NodeView)?.id }
+        XCTAssertFalse(roots.isEmpty)
+        XCTAssertTrue(window.makeFirstResponder(editor))
+        editor.setMarkedText("に", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        let sibling: UInt32 = 8500
+        presenter.apply(wireBatch([["op": "create", "id": sibling, "kind": "text"], ["op": "roots", "ids": [sibling] + roots]]))
+        XCTAssertEqual((presenter.root.subviews.first as? NodeView)?.id, sibling)
+        XCTAssertTrue(window.firstResponder === editor)
+        XCTAssertTrue(editor.hasMarkedText())
+    }
+
+    func testAComposingFieldDefersItsNewValueAndWaitsForAChangeOfNativeClass() throws {
+        func plan(type: String, value: String) throws -> Data {
+            try TableFixture.plan("component App\n  view\n    input id=\"entry\" testId=\"entry\" type=\"\(type)\" value=\"\(value)\"\n")
+        }
+        let plain = try plan(type: "text", value: ""), changed = try plan(type: "text", value: "Saved")
+        let secure = try plan(type: "password", value: "Saved")
+        XCTAssertEqual(app.apply(plain), .applied)
+        let node = try XCTUnwrap(session.presenter.views.values.first { $0.props["testId"] == "entry" })
+        let window = try XCTUnwrap(window)
+        XCTAssertTrue(window.makeFirstResponder(try XCTUnwrap(node.field)))
+        let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
+        let range = NSRange(location: NSNotFound, length: 0)
+        editor.setMarkedText("に", selectedRange: NSRange(location: 1, length: 0), replacementRange: range)
+        XCTAssertTrue(session.apply(changed))
+        XCTAssertTrue(session.presenter.views[node.id] === node)
+        XCTAssertTrue(window.firstResponder === editor)
+        XCTAssertTrue(editor.hasMarkedText())
+        XCTAssertEqual(editor.string, "に")
+        editor.insertText("二", replacementRange: range)
+        XCTAssertEqual(editor.string, "Saved")
+
+        editor.setMarkedText("ご", selectedRange: NSRange(location: 1, length: 0), replacementRange: range)
+        XCTAssertEqual(app.apply(secure), .held("composition"))
+        XCTAssertTrue(editor.hasMarkedText())
+        editor.insertText("五", replacementRange: range)
+        waitFor("field remade after composition") {
+            session.presenter.views.values.contains { $0.props["testId"] == "entry" && $0.field is NSSecureTextField }
+        }
+        XCTAssertNil(session.presenter.views[node.id])
     }
 
     func testKeysAcrossReloadsStayInOrderWithinTheDevRestartBudget() throws {
@@ -230,6 +282,7 @@ final class ReplacementHoldTests: XCTestCase {
     func testAnApplyWhileAFieldComposesIsHeldAndCommitsWhenTheCompositionEnds() throws {
         let node = try XCTUnwrap(session.presenter.views.values.first { $0.props["testId"] == "draft" })
         #if os(macOS)
+        let plan = try removingDraftField()
         let window = try XCTUnwrap(self.window)
         XCTAssertTrue(window.makeFirstResponder(try XCTUnwrap(node.field)))
         let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
@@ -237,6 +290,7 @@ final class ReplacementHoldTests: XCTestCase {
         editor.setMarkedText("にほん", selectedRange: NSRange(location: 3, length: 0), replacementRange: none)
         let commit = { editor.insertText("日本", replacementRange: none) }
         #else
+        let plan = try after()
         let field = try XCTUnwrap(node.field)
         XCTAssertTrue(field.becomeFirstResponder())
         field.setMarkedText("にほん", selectedRange: NSRange(location: 3, length: 0))
@@ -245,12 +299,12 @@ final class ReplacementHoldTests: XCTestCase {
         #endif
         XCTAssertTrue(node.fieldComposing)
         var commits = 0
-        let result = app.applyGeneration(ExactGeneration(plan: try after(), assets: app.resolver)) { commits += 1; return true }
+        let result = app.applyGeneration(ExactGeneration(plan: plan, assets: app.resolver)) { commits += 1; return true }
         XCTAssertEqual(result, .held("composition"))
         XCTAssertEqual(app.replacements.reason, "composition")
         waitForMainQueue()
         XCTAssertEqual(label(), "before")
-        XCTAssertEqual(commits, 0, "nothing is prepared or committed during the hold")
+        XCTAssertEqual(commits, 0)
         commit()
         XCTAssertFalse(node.fieldComposing)
         waitFor("the replacement after the composition") { label() == "after" }
@@ -533,7 +587,7 @@ final class ReplacementHoldTests: XCTestCase {
         let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
         editor.setMarkedText("にほん", selectedRange: NSRange(location: 3, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
         liveInputMethod(composing: "にほん")
-        XCTAssertEqual(app.apply(try after()), .held("composition"), "a save in the background waits")
+        XCTAssertEqual(app.apply(try removingDraftField()), .held("composition"), "a save that removes the field waits")
 
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("replacement-hold-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

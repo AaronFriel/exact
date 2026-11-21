@@ -1233,15 +1233,11 @@ package final class Presenter {
                     if !(stage.map { retire(gone, $0) } ?? false) { gone.removeFromSuperview() }
                 }
             case .roots:
-                dialogs.children(root, op.ids.compactMap { views[UInt32($0)] })
-                menus.children(root, op.ids.compactMap { views[UInt32($0)] })
-                root.subviews.forEach { $0.removeFromSuperview() }
-                for r in op.ids.compactMap({ views[UInt32($0)] }) {
-                    if dialogs.owns(r) || menus.owns(r) { continue }
-                    r.prepareToMount()
-                    root.addSubview(r)
-                    regrid(r)
-                }
+                let children = op.ids.compactMap { views[$0] }
+                dialogs.children(root, children)
+                menus.children(root, children)
+                let mounted = children.filter { !dialogs.owns($0) && !menus.owns($0) && !flightHost.isFlying($0) }
+                placeChildren(children, mounted: mounted, in: root, reparented: &reparented)
             case .frame:
                 guard let v = views[id] else { continue }
                 applyFrame(v, NSRect(x: op.x, y: op.y, width: op.w, height: op.h))
@@ -1368,13 +1364,17 @@ package final class Presenter {
         dialogs.children(container, want)
         menus.children(container, want)
         tables.children(id, want)
+        let mounted = want.filter { !dialogs.owns($0) && !menus.owns($0) && !blocks.owns($0) && !tables.owns($0, in: id) && !flightHost.isFlying($0) }
+        placeChildren(want, mounted: mounted, in: container, reparented: &reparented, leaving: leaving)
+    }
+
+    private func placeChildren(_ want: [NodeView], mounted: [NodeView], in container: NSView, reparented: inout Set<UInt32>, leaving: Set<UInt32>? = nil) {
         let wanted = Set(want.map { ObjectIdentifier($0) })
         for child in NodeView.structural(container.subviews) where !wanted.contains(ObjectIdentifier(child)) && !isLeaving(child) && !teardown.holds(child) {
             guard let node = child as? NodeView, leaving?.contains(node.id) != true else { continue }
             reparented.insert(node.id)
             child.removeFromSuperview()
         }
-        let mounted = want.filter { !dialogs.owns($0) && !menus.owns($0) && !blocks.owns($0) && !tables.owns($0, in: id) && !flightHost.isFlying($0) }
         for child in mounted where child.superview !== container {
             reparented.insert(child.id)
             child.rejoinUnderHold()
