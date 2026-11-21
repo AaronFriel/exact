@@ -528,7 +528,8 @@ impl<D: DataSource> Runner<D> {
         if let Err(error @ (DataError::Failed(..) | DataError::Overrun(_))) = &answer {
             let failure = crate::failure::Failure::from_data(error);
             let name = name(&self.plan);
-            let line = if matches!(error, DataError::Overrun(_)) {
+            let overrun = failure.is_overrun();
+            let line = if overrun {
                 format!(
                     "mutation {name} failed: {}; it is not retried",
                     failure.message
@@ -539,7 +540,7 @@ impl<D: DataSource> Runner<D> {
             if self.conclude_send(target) {
                 self.failed_mut[m] = Some(failure);
             }
-            self.alert(line);
+            self.source_alert(line, overrun);
             self.end_write(target, write);
             return Ok(Asked::Failed);
         }

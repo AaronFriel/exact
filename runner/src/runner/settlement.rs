@@ -1036,10 +1036,13 @@ impl<D: DataSource> Runner<D> {
                                 {
                                     let failure = crate::failure::Failure::of(&e);
                                     self.count_failure(i);
-                                    self.alert(super::lines::failed_now(
-                                        self.plan.str(row.name),
-                                        &failure.message,
-                                    ));
+                                    self.source_alert(
+                                        super::lines::failed_now(
+                                            self.plan.str(row.name),
+                                            &failure.message,
+                                        ),
+                                        failure.is_overrun(),
+                                    );
                                     self.resources[i].failed_args = Some(args.clone());
                                     self.resources[i].failed_why = Some(failure);
                                     force.retain(|forced| *forced != i);
@@ -1181,10 +1184,13 @@ impl<D: DataSource> Runner<D> {
                                         effects[i] = RequestEffect::Answered;
                                         pending_res[i] = false;
                                         self.count_failure(i);
-                                        self.alert(super::lines::failed_now(
-                                            self.plan.str(row.name),
-                                            &why.message,
-                                        ));
+                                        self.source_alert(
+                                            super::lines::failed_now(
+                                                self.plan.str(row.name),
+                                                &why.message,
+                                            ),
+                                            why.is_overrun(),
+                                        );
                                         self.resources[i].failed_args = Some(args.clone());
                                         self.resources[i].failed_why = Some(why);
                                     }

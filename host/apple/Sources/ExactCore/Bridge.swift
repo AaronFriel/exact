@@ -88,6 +88,7 @@ public struct Batch {
     public var input: Double? = nil
     /// Failure lines the session writes to the unified log, each once (LLP 1142 D4).
     public var alerts: [String] = []
+    public var budgetWarning: String?
     /// The journal's other lines, for the unified log at a lower level (LLP 1143).
     public var journal: [String] = []
     package var frameWorkTiming: FrameWorkTiming?

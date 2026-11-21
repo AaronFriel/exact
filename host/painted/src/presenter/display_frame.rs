@@ -478,7 +478,7 @@ impl<D: DataSource> Presenter<D> {
     fn activation_refused(&mut self, error: String) {
         self.host.runner_mut().alert(error.clone());
         for line in self.host.runner().take_alerts() {
-            eprintln!("exact: {line}");
+            log_alert(&line);
         }
         self.activation_failed = Some(error);
     }

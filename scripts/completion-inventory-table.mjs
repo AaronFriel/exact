@@ -473,7 +473,7 @@ export const classifications = [
     ["runner:runner/src/runner/overrun.rs", "Runner::is_reask_wait Runner::reask_due_ms"],
     ["runner:runner/src/runner/perf.rs",
       "Runner::alert Runner::count_kernel_layout Runner::failure_counts Runner::measure Runner::measure_from_now Runner::measure_kernel_layouts Runner::measure_later " +
-      "Runner::measure_unless_production Runner::moved Runner::seq Runner::seq_range Runner::take_alerts Runner::take_journal"],
+      "Runner::measure_unless_production Runner::moved Runner::seq Runner::seq_range Runner::take_alerts Runner::take_budget_warning Runner::take_journal"],
     ["runner:runner/src/runner/query.rs", "Runner::bake_warnings"],
     ["runner:runner/src/runner/resource_inspection.rs", "Runner::inspection_digest"],
     ["runner:runner/src/runner/forma.rs", "Runner::forma"],

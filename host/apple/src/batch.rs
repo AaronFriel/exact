@@ -50,12 +50,11 @@ pub struct Batch {
     /// The kernel transactions this batch carries, `"seq":[first,last]`,
     /// when the runner measures (LLP 1079 D3): the frame sampler's join.
     pub seq: Option<(u64, u64)>,
-    /// Failure lines for the platform's log, `"alerts":[…]`, each carried
-    /// once (LLP 1142 D4: [`exact_runner::Runner::take_alerts`]).
+    /// Failure lines for the platform log, each carried once (LLP 1142 D4).
     pub alerts: Vec<String>,
-    /// The journal's other lines, `"journal":[…]`, for the platform's log at
-    /// a lower level (LLP 1143 open question 1:
-    /// [`exact_runner::Runner::take_journal`]).
+    /// The latest overrun for the session's development overlay.
+    pub budget_warning: Option<String>,
+    /// Other journal lines for the platform log at a lower level (LLP 1143).
     pub journal: Vec<String>,
     /// A 2D canvas asked for another frame (LLP 1056 D5).
     canvas: bool,
@@ -439,6 +438,7 @@ impl Batch {
             && self.images.is_empty()
             && self.seq.is_none()
             && self.alerts.is_empty()
+            && self.budget_warning.is_none()
             && self.journal.is_empty()
             && self.announced.is_empty()
             && self.store_status.is_none()
@@ -1204,6 +1204,10 @@ impl Batch {
         }
         if let Some(must) = self.must_finish {
             let _ = write!(s, ",\"mustFinish\":{must}");
+        }
+        if let Some(warning) = &self.budget_warning {
+            s.push_str(",\"budgetWarning\":");
+            quote(warning, &mut s);
         }
         if let Some(inspectors) = &self.route_inspectors {
             let _ = write!(s, ",\"routeInspectors\":{inspectors}");

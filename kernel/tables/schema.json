@@ -6378,6 +6378,10 @@
           "member": "rootTabs",
           "codec": "rootTabs"
         },
+        "budgetWarning": {
+          "member": "budgetWarning",
+          "codec": "optionalString"
+        },
         "alerts": {
           "member": "alerts",
           "codec": "strings"

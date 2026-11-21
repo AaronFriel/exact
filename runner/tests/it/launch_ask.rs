@@ -294,11 +294,16 @@ fn a_mutation_exposes_a_turn_overrun_until_the_person_retries() {
         }
         assert_eq!(r.derive("code"), Some(&Value::str("error")));
         assert_eq!(r.derive("reason"), Some(&Value::str("overrun")));
-        assert!(r.take_alerts().iter().any(|line| {
-            line.contains("mutation saved")
-                && line.contains("turn budget")
-                && line.contains("not retried")
-        }));
+        let warning = r
+            .take_budget_warning()
+            .expect("the development overlay's warning");
+        assert!(
+            warning.contains("mutation saved")
+                && warning.contains("turn budget")
+                && warning.contains("not retried")
+        );
+        assert!(r.take_alerts().contains(&warning));
+        assert_eq!(r.take_budget_warning(), None);
         r.advance(5_000.).unwrap();
         assert!(r.take_requests().is_empty());
         assert_eq!(r.mutation_requests(), 1);

@@ -145,6 +145,7 @@ impl<D: DataSource> Host<D> {
         }
         batch.seq = self.runner.seq_range();
         batch.alerts = self.runner.take_alerts();
+        batch.budget_warning = self.runner.take_budget_warning();
         batch.journal = self.runner.take_journal();
         if let Some(canvas) = self.turn.canvas {
             (canvas.onto)(self, batch);

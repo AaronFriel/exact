@@ -219,7 +219,7 @@ impl Took {
         let wall_ms = (self.wall_ms - self.loading_ms).max(0.0);
         (wall_ms > backstop).then(|| {
             format!(
-                "waited {:.1} ms of wall ({:.1} ms of its own), over the {backstop} ms a turn may take",
+                "waited {:.1} ms of wall ({:.1} ms of CPU), over the {backstop} ms a turn may take with a {budget_ms} ms turn budget",
                 wall_ms, self.own_ms
             )
         })
@@ -295,6 +295,11 @@ mod tests {
             .over(100.0, false)
             .unwrap()
             .contains("over the 1000 ms a turn may take"));
+        assert!(took(2.0, 4000.0).over(400.0, false).is_none());
+        assert_eq!(
+            took(2.0, 4001.0).over(400.0, false).as_deref(),
+            Some("waited 4001.0 ms of wall (2.0 ms of CPU), over the 4000 ms a turn may take with a 400 ms turn budget")
+        );
         // A snapshot's deadline is wall time.
         assert!(took(10.0, 300.0).over(250.0, true).is_some());
         assert!(took(10.0, 200.0).over(250.0, true).is_none());

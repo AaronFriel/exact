@@ -460,6 +460,13 @@ pub struct Presenter<D: DataSource> {
 fn r2(x: f32) -> f64 {
     (x as f64 * 100.0).round() / 100.0
 }
+fn log_alert(line: &str) {
+    #[cfg(target_os = "android")]
+    crate::android::console(exact_runner::Console::Warn, line);
+    #[cfg(not(target_os = "android"))]
+    eprintln!("exact: {line}");
+}
+
 /// The app's `console` lines (LLP 1027.009 D1), the sink of each runner the
 /// presenter shows: on standard error in every build, and on Android, where
 /// standard error is logcat's `exact` tag, under the app's own tag instead
@@ -919,7 +926,7 @@ impl<D: DataSource> Presenter<D> {
         // stderr as well as in the journal. The runner queues none unless it
         // measures, so a production binary prints none.
         for line in self.host.runner().take_alerts() {
-            eprintln!("exact: {line}");
+            log_alert(&line);
         }
         self.restore_scroll_anchors();
         self.alert_sync();

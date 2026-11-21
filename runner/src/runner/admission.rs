@@ -391,9 +391,10 @@ impl<D: DataSource> Runner<D> {
             (true, None) => format!("resource {name}"),
             _ => format!("request {ticket} ({name})"),
         };
-        self.alert(format!(
-            "{request} failed and is no longer pending: {next}: {reason}"
-        ));
+        self.source_alert(
+            format!("{request} failed and is no longer pending: {next}: {reason}"),
+            overrun,
+        );
         if ask_again {
             self.log(super::lines::asked_again(ticket, &name));
         }
