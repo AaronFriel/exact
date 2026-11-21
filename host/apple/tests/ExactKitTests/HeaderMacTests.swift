@@ -446,12 +446,12 @@ final class HeaderMacTests: XCTestCase {
     /// committed tree (LLP 1072 T13): the bar reads the header without it.
     func testABoxHeldByAStagedBatchIsNoPartOfTheBar() throws {
         let p = fixture(extra: view(16, "image", ["imageSource": "assets/logo.png"]) + [children(10, [11, 12, 13, 14, 16])])
-        try node(p, 16).held = true
+        try node(p, 16).stage = .preparing
         XCTAssertTrue(p.toolbar.attach(to: window))
         XCTAssertEqual(window.title, "Library")
         XCTAssertEqual(identifiers(), [back, "exact.command.11", "exact.command.13", "exact.command.14"])
         // Revealed, it is a picture the bar has no place for.
-        try node(p, 16).held = false
+        try node(p, 16).stage = .committed
         p.toolbar.sync()
         XCTAssertEqual(identifiers(), [back])
         p.toolbar.detach()

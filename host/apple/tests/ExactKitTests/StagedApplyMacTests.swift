@@ -314,6 +314,9 @@ final class StagedApplyMacTests: XCTestCase {
             }
             p.apply(original)
             let live = try XCTUnwrap(p.views[9004]), retiring = try XCTUnwrap(p.views[9002])
+            let oldText = try XCTUnwrap(p.views[9003])
+            let native = NSView()
+            oldText.addSubview(native)
             var batch = replacement(rows: rows)
             let into = try XCTUnwrap(batch.ops.firstIndex { $0.op == .children && $0.id == 9100 })
             let from = try XCTUnwrap(batch.ops.firstIndex { $0.op == .children && $0.id == 9001 })
@@ -328,7 +331,14 @@ final class StagedApplyMacTests: XCTestCase {
             p.revealing = plan
             p.apply(plan.reveal())
             p.revealing = nil
+            XCTAssertTrue(oldText.superview === retiring.container)
+            XCTAssertTrue(live.superview === top.container)
+            XCTAssertTrue(retiring.held)
             p.teardown.finish()
+            XCTAssertNil(retiring.superview)
+            XCTAssertNil(oldText.superview)
+            XCTAssertNil(oldText.presenter)
+            XCTAssertTrue(native.superview === oldText)
             XCTAssertTrue(live.superview === top.container)
             XCTAssertEqual(top.structuralChildren.map(\.id), batch.ops[into].ids)
         }

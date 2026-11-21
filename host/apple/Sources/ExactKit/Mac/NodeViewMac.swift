@@ -54,8 +54,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var paintLifted = false
     /// The opacity written while a reveal holds the box off screen (`holdOffstage`).
     var offstageAlpha: CGFloat?
-    /// In a subtree a staged batch prepares or has taken down: outside the committed tree (`StagingMac.swift`).
-    var held = false
+    var stage = Stage.committed
     var paintGhost = false
     var paintGhosts = 0
     weak var paintParent: PaintView?
