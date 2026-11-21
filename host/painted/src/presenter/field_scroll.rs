@@ -91,7 +91,11 @@ mod tests {
     use exact_runner::FieldSelection;
 
     fn fixture(tag: &str, value: &str) -> (Presenter<()>, ViewId) {
-        let source = format!("component App\n  view\n    {tag} testId=\"editor\" value={} width=200 height=64 padding=4 appearance=\"none\" outline=\"none\" font-size=16 line-height=\"24px\" caret-color=\"#ff0000\"\n", serde_json::to_string(value).unwrap());
+        fixture_with_padding(tag, value, 4)
+    }
+
+    fn fixture_with_padding(tag: &str, value: &str, padding: u32) -> (Presenter<()>, ViewId) {
+        let source = format!("component App\n  view\n    {tag} testId=\"editor\" value={} width=200 height=64 padding={padding} appearance=\"none\" outline=\"none\" font-size=16 line-height=\"24px\" caret-color=\"#ff0000\"\n", serde_json::to_string(value).unwrap());
         let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan(&source),
             (),
@@ -272,6 +276,35 @@ mod tests {
         assert_caret_in_field(&mut p, id);
         assert!(p.field_text(id).ends_with('!'));
         assert_eq!(p.scroll_of(id).1, end);
+    }
+
+    #[test]
+    fn horizontal_arrow_keeps_a_caret_visible_in_textarea_padding() {
+        let value = "row text\n".repeat(16) + "final row";
+        for padding in [16, 64] {
+            let (mut p, id) = fixture_with_padding("textarea", &value, padding);
+            p.frame();
+            p.field_key(id, "Home", 1.);
+            p.frame();
+            p.wheel(id, 0., 10000.).unwrap();
+            p.wheel(id, 0., -(padding as f32)).unwrap();
+            p.frame();
+            let before = p.scroll_of(id).1;
+            let cursor = p.field_cursor(id).offset;
+            assert_eq!(cursor, value.len() as u32 - 9);
+            p.field_key(id, "ArrowRight", 2.);
+            p.frame();
+            assert_eq!(p.field_cursor(id).offset, cursor + 1);
+            assert_eq!(p.scroll_of(id).1, before, "bottom padding {padding}");
+
+            p.wheel(id, 0., -100.).unwrap();
+            p.frame();
+            assert!(p.caret_frame().is_none());
+            p.field_key(id, "ArrowRight", 3.);
+            p.frame();
+            assert!(p.caret_frame().is_some());
+            assert!(p.scroll_of(id).1 > before - 100.);
+        }
     }
 
     #[test]

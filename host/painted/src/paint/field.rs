@@ -31,6 +31,7 @@ pub(crate) struct PaintedField {
     pub(crate) value: String,
     spec: Spec,
     content: Rect4,
+    text_clip: Rect4,
     multiline: bool,
     masked: bool,
     origin: (f32, f32),
@@ -139,6 +140,7 @@ impl PaintedField {
         value: &str,
         spec: Spec,
         content: Rect4,
+        text_clip: Rect4,
         multiline: bool,
         masked: bool,
         transform: Transform,
@@ -234,6 +236,7 @@ impl PaintedField {
             value: value.to_owned(),
             spec,
             content,
+            text_clip,
             multiline,
             masked,
             origin,
@@ -267,6 +270,7 @@ impl PaintedField {
             value,
             spec,
             self.content,
+            self.text_clip,
             self.multiline,
             self.masked,
             self.transform,
@@ -307,10 +311,10 @@ impl PaintedField {
         (
             self.transform.pre_translate(x, y),
             (
-                self.content.0 - x,
-                self.content.1 - y,
-                self.content.2,
-                self.content.3,
+                self.text_clip.0 - x,
+                self.text_clip.1 - y,
+                self.text_clip.2,
+                self.text_clip.3,
             ),
         )
     }
@@ -325,29 +329,26 @@ impl PaintedField {
     }
 
     pub(crate) fn reveal_cursor(&self, cursor: Cursor) -> (f32, f32) {
-        let caret = self.geometry.caret(cursor);
-        let origin = self.text_origin(self.scroll);
-        let x = origin.0 - self.content.0 + caret.0;
-        let x = self.scroll.0
-            + if self.scrolls_from_right() {
-                self.content.2 - x - caret.2
+        let (x, y, width, height) = self.place(self.geometry.caret(cursor));
+        let (cx, cy, cw, ch) = self.content;
+        let (vx, vy, vw, vh) = self.text_clip;
+        // A textarea draws into its padding. Scroll a clipped caret back into
+        // the content box, leaving each axis alone while its caret is visible.
+        let delta = |start, end, visible_start, visible_end, content_start, content_end| {
+            if start < visible_start {
+                start - content_start
+            } else if end > visible_end {
+                end - content_end
             } else {
-                x
-            };
-        let y = origin.1 + self.scroll.1 - self.content.1 + caret.1;
-        let reveal = |at: f32, size: f32, offset: f32, port: f32, max: f32| {
-            let next = if at < offset {
-                at
-            } else if at + size > offset + port {
-                at + size - port
-            } else {
-                offset
-            };
-            next.clamp(0., max)
+                0.
+            }
         };
+        let dx = delta(x, x + width, vx, vx + vw, cx, cx + cw);
+        let dy = delta(y, y + height, vy, vy + vh, cy, cy + ch);
+        let dx = if self.scrolls_from_right() { -dx } else { dx };
         (
-            reveal(x, caret.2, self.scroll.0, self.content.2, self.scroll_max.0),
-            reveal(y, caret.3, self.scroll.1, self.content.3, self.scroll_max.1),
+            (self.scroll.0 + dx).clamp(0., self.scroll_max.0),
+            (self.scroll.1 + dy).clamp(0., self.scroll_max.1),
         )
     }
 
@@ -375,7 +376,7 @@ impl PaintedField {
     }
 
     pub(crate) fn caret_frame(&self, cursor: Cursor) -> Rect4 {
-        let caret = super::intersect(self.place(self.geometry.caret(cursor)), self.content);
+        let caret = super::intersect(self.place(self.geometry.caret(cursor)), self.text_clip);
         super::bbox(self.transform, caret)
     }
 
@@ -601,11 +602,14 @@ impl Painter {
             ),
             None => Cow::Borrowed(std::slice::from_ref(&base)),
         };
+        let padding = inset_sides(outer, computed.border_widths());
+        let text_clip = if multiline { padding.rect } else { content };
         let mut field = PaintedField::new(
             paragraph.clone(),
             value,
             spec,
             content,
+            text_clip,
             multiline,
             node.props.str(PropId::Type) == Some("password"),
             ts,
@@ -617,7 +621,6 @@ impl Painter {
         let translation = field.scroll_translation(field.scroll);
         ox += translation.0;
         oy += translation.1;
-        let padding = inset_sides(outer, computed.border_widths());
         self.backend.push_clip(&padding, ts);
         let selection = walk.scene.selection.filter(|_| focused);
 
@@ -720,7 +723,6 @@ impl Painter {
             let painted = material::FieldText::painted(&paragraph, (ox, oy), ts);
             self.labels.value(node.id, painted);
         }
-        let text_clip = if multiline { padding.rect } else { content };
         if let Some(shadows) = shadows {
             let ink = self.capture_field_ink(
                 walk.scene.kernel,
