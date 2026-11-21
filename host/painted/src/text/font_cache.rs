@@ -128,11 +128,13 @@ fn style_of(s: &str) -> Option<FontStyle> {
     })
 }
 
-/// `$XDG_CACHE_HOME` or `$HOME/.cache`, `exact/fonts-<dir hash>`.
+/// `exact/fonts-<dir hash>` under `$XDG_CACHE_HOME` or `$HOME/.cache`, or on
+/// Windows without either, under the local app data folder.
 fn cache_file(dir: &Path) -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))?;
+    let base = crate::picker::xdg_base("XDG_CACHE_HOME", ".cache");
+    #[cfg(windows)]
+    let base = base.or_else(|| crate::picker::local_app_data().ok());
+    let base = base?;
     let mut h = std::collections::hash_map::DefaultHasher::new();
     HEADER.hash(&mut h);
     dir.hash(&mut h);
@@ -229,4 +231,45 @@ fn parse(text: &str, key: u64) -> Option<Vec<Described>> {
             })
         })
         .collect()
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_default_cache_file_without_home_or_xdg() {
+        const CHILD: &str = "EXACT_WINDOWS_FONT_CACHE_TEST";
+        if std::env::var_os(CHILD).is_none() {
+            // Unset, empty and relative: none of them is a cache base.
+            for value in [None, Some(""), Some("cache")] {
+                let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+                child
+                    .args([
+                        "--exact",
+                        "text::font_cache::tests::windows_default_cache_file_without_home_or_xdg",
+                    ])
+                    .env(CHILD, "1")
+                    .env_remove("LOCALAPPDATA");
+                for variable in ["HOME", "XDG_CACHE_HOME"] {
+                    match value {
+                        Some(value) => child.env(variable, value),
+                        None => child.env_remove(variable),
+                    };
+                }
+                let output = child.output().unwrap();
+                assert!(
+                    output.status.success(),
+                    "{value:?}: {}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            return;
+        }
+
+        let cache = cache_file(Path::new(r"C:\Windows\Fonts")).unwrap();
+        let base = crate::picker::local_app_data().unwrap().join("exact");
+        assert_eq!(cache.parent(), Some(base.as_path()));
+    }
 }
