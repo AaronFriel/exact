@@ -1062,7 +1062,7 @@ const moduleImports = code => new Bun.Transpiler({ loader: 'js' }).scanImports(c
 const publicDependency = (from, specifier) => posix.resolve('/', posix.dirname(from), specifier).slice(1);
 // The files the build copies for `roots` and their imports: each one's name, the bytes it is written with, and the
 // names it gives other files. A dependency with no source here is one the build writes itself (checked when written).
-async function lazyModules(roots) {
+async function lazyModules(roots, omit = []) {
   const { webHostFiles } = await import('../../scripts/app.mjs');
   // These modules were built for this JS runtime and have already passed its
   // production gate. The wasm inventory belongs to a different build.
@@ -1083,6 +1083,7 @@ async function lazyModules(roots) {
     const names = [];
     if (code != null) for (const specifier of [...moduleImports(code), ...literalModuleURLs(code)]) {
       const dependency = publicDependency(name, specifier);
+      if (omit.includes(dependency)) continue;
       if (dependency.startsWith('..')) throw new Error(`${name}: lazy dependency leaves the build root: ${specifier}`);
       const sibling = resolve(dirname(from), specifier);
       names.push(dependency);
@@ -1116,7 +1117,8 @@ const storageLazy = files || moduleStorage || extensionFiles || pageModules || s
     extensionFiles && resolve(gen, 'modules.js'), (pageModules || extensionFiles) && resolve(gen, 'native.js')].filter(Boolean)
     .flatMap(seed => literalModuleURLs(readFileSync(seed, 'utf8'))).map(specifier => specifier.replace(/^\.\//, ''))) : null;
 // gpu-glue.js names itself (its timing filter) and the GPU files it loads by names it makes: none of them is renamed.
-const gpuLazy = hasGpuArtifacts ? await lazyModules(['gpu-glue.js', ...(declaredGpu.length ? ['gpu-modules.js'] : [])]) : null;
+const gpuLazy = hasGpuArtifacts ? await lazyModules(['gpu-glue.js', ...(declaredGpu.length ? ['gpu-modules.js'] : [])],
+  manifest.game?.render?.workers === true ? [] : ['gpu-jobs.js']) : null;
 const copiedNames = new Set([...storageLazy?.values() ?? [], ...gpuLazy?.values() ?? []].flatMap(file => file.names));
 // The leaf modules the plan uses, built at once: Markdown's pieces, the
 // motion engine (host/web-js/motion), the Markdown editor's rules

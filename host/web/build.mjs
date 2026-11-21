@@ -783,6 +783,10 @@ let gpuNote = gpu.note;
 if (gpu.built) {
   copyHostFiles('gpu');
   if (gpuModules(app.manifest, 'web').length) copyHostFiles('gpuModules');
+  if (app.manifest.game?.render?.workers === true) {
+    copyHostFiles('gpuJobs');
+    gpuNote += `, ${Object.keys(webHostFiles('gpuJobs')).join(', ')}`;
+  }
   gpuNote += ', on demand';
   // A game's world surfaces, by name, as its GPU build declared them (`.shells/surfaces.json`): a browser without
   // WebGPU shows the refusal page over these and no other canvas (gpu-refusal.js, LLP 1139.003 D1).

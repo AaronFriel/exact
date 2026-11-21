@@ -1,8 +1,135 @@
 import { expect, test } from 'bun:test';
 import { fixture } from './surface.mjs';
+import { createTransport } from '../gpu-jobs.js';
 import { chromium, suiteBrowser } from '../../../scripts/agent-launch.mjs';
 import { need } from '../../../scripts/coverage.mjs';
 import { decodePng } from '../../../scripts/png.mjs';
+
+test('the GPU loads when its initializer returns nothing', async () => {
+  let loads = 0;
+  await fixture({ loadModule: true, gpuLoad: () => loads++ });
+  expect(loads).toBe(1);
+});
+
+test('the GPU loads when setting up the worker binding throws', async () => {
+  let loads = 0;
+  const gpu = {
+    default: () => ({ memory: new WebAssembly.Memory({ initial: 1 }) }),
+    exact_game_worker_module() {},
+  };
+  // The fixture's global has no pagehide listener API.
+  const f = await fixture({ loadModule: true, gpu, gpuLoad: () => loads++ });
+  expect(loads).toBe(1);
+  expect(f.diagnostics.some(message => message.includes('using inline jobs'))).toBe(true);
+});
+
+test('a rejected worker script load removes the binding and warns', async () => {
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  const bindingRemoved = Promise.withResolvers();
+  let loads = 0;
+  const f = await fixture({
+    loadModule: true,
+    gpu: { default: () => ({ memory }), exact_game_worker_module() {} },
+    globals: { addEventListener() {}, removeEventListener: bindingRemoved.resolve },
+    loadJobs: async () => { throw new Error('worker script unavailable'); },
+    gpuLoad: () => loads++,
+  });
+  f.exact.gpu.jobs.get(memory).start(['mesh']);
+  await bindingRemoved.promise;
+  expect(f.exact.gpu.jobs.has(memory)).toBe(false);
+  expect(loads).toBe(1);
+  expect(f.diagnostics.filter(message => message.includes('worker script unavailable'))).toHaveLength(1);
+});
+
+test('a module that declines the worker transport removes its binding and pagehide listener', async () => {
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  const listeners = new Map();
+  let imports = 0;
+  const f = await fixture({
+    loadModule: true,
+    gpu: { default: () => ({ memory }), exact_game_worker_module() {} },
+    globals: {
+      addEventListener(name, listener) { listeners.set(name, listener); },
+      removeEventListener(name, listener) {
+        expect(listeners.get(name)).toBe(listener);
+        listeners.delete(name);
+      },
+    },
+    loadJobs: () => { imports++; },
+  });
+  expect(listeners.has('pagehide')).toBe(true);
+  f.exact.gpu.jobs.get(memory).discard();
+  expect(f.exact.gpu.jobs.has(memory)).toBe(false);
+  expect(listeners.has('pagehide')).toBe(false);
+  expect(imports).toBe(0);
+});
+
+test.each([
+  ['readyMs includes script import time', 4100],
+  ['worker readiness shares the import deadline', 5100],
+  ['a late script import creates no workers', null],
+])('%s', async (_name, readyAt) => {
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  const script = Promise.withResolvers(), timers = new Map(), workers = [], warnings = [];
+  let now = 0, timer = 0;
+  const clock = {
+    now: () => now,
+    setTimeout(fn, ms) { timers.set(++timer, { at: now + ms, fn }); return timer; },
+    clearTimeout(id) { timers.delete(id); },
+  };
+  const advance = at => {
+    now = at;
+    for (const [id, timer] of timers) {
+      if (timer.at > now) continue;
+      timers.delete(id);
+      timer.fn();
+    }
+  };
+  class Worker {
+    constructor() { workers.push(this); }
+    postMessage() {}
+    terminate() {}
+  }
+  const f = await fixture({
+    loadModule: true,
+    gpu: { default: () => ({ memory }), exact_game_worker_module() {} },
+    globals: { addEventListener() {}, removeEventListener() {} },
+    performance: clock,
+    setTimeout: clock.setTimeout,
+    clearTimeout: clock.clearTimeout,
+    loadJobs: () => script.promise,
+  });
+  const binding = () => f.exact.gpu.jobs.get(memory);
+  advance(100);
+  binding().start(['mesh']);
+  expect(binding().events(1)).toEqual([0, []]);
+  advance(readyAt === null ? 5200 : 3100);
+  if (readyAt === null) {
+    expect(binding()).toBeUndefined();
+    expect(f.diagnostics.filter(message => message.includes('using inline jobs'))).toHaveLength(1);
+  }
+  script.resolve({ createTransport: options => createTransport({
+    ...options, ...clock, Worker, cores: 1, warn: message => warnings.push(message),
+  }) });
+  await script.promise;
+
+  if (readyAt === null) {
+    expect(binding()?.events(1) ?? [-1, []]).toEqual([-1, []]);
+    expect(workers).toHaveLength(0);
+  } else {
+    expect(workers).toHaveLength(1);
+    advance(readyAt);
+    workers[0].onmessage({ data: { ready: true, version: 1, names: ['mesh'] } });
+    if (readyAt < 5100) {
+      expect(binding().events(1)).toEqual([1, []]);
+      expect(binding().report()[4]).toBe(4000);
+    } else {
+      expect(binding().events(1)).toEqual([-1, []]);
+      expect(warnings).toHaveLength(1);
+    }
+  }
+  if (readyAt === null) expect(f.diagnostics.filter(message => message.includes('using inline jobs'))).toHaveLength(1);
+});
 
 test('each GPU drawing element waits for a presented frame, including a second canvas of one surface', async () => {
   const f = await fixture();

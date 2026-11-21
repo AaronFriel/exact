@@ -18,13 +18,16 @@ import { chooseTier, TIERS } from "./gpu-tier.js";
 import { showRefusal } from "./gpu-refusal.js";
 const artifact = new URL(import.meta.url).searchParams.get("artifact");
 const stem = artifact ?? "gpu";
-let gpu;
+let gpu, stopJobs;
 const quarantines = new WeakMap();
 const trapped = (module = gpu) => quarantines.get(module)?.reply;
 const refusal = (message, subsystem = "gpu") => ({error:String(message), refused:{host:"web", subsystem, message:String(message)}});
 function retainTrap(error, module = gpu) {
   if (!(error instanceof WebAssembly.RuntimeError)) throw error;
-  if (!trapped(module)) { console.error(error); quarantines.set(module, {reply:refusal(error), error}); }
+  if (!trapped(module)) {
+    console.error(error); quarantines.set(module, {reply:refusal(error), error});
+    if (module === gpu) stopJobs?.();
+  }
   return trapped(module);
 }
 // Asset callbacks and exported entries share only their own instance's quarantine.
@@ -1302,13 +1305,57 @@ async function loadShaders(module) {
   }
   return exact.devAssets === null ? rows : shaderRows(exact.devAssets, module);
 }
+function bindWorkerJobs(module, memory, glue) {
+  const bindings = exact.gpu.jobs ??= new WeakMap();
+  let lane, startedAt, timer, closed = false;
+  const pagehide = event => { if (!event.persisted) stopJobs?.(); };
+  globalThis.addEventListener('pagehide', pagehide);
+  stopJobs = () => {
+    if (closed) return;
+    closed = true;
+    stopJobs = undefined;
+    clearTimeout(timer);
+    bindings.delete(memory);
+    lane?.close();
+    globalThis.removeEventListener('pagehide', pagehide);
+  };
+  const fallback = error => {
+    if (closed) return;
+    stopJobs();
+    console.warn('exact: GPU jobs: using inline jobs', error);
+  };
+  const importTimedOut = () => fallback('worker script import timed out');
+  bindings.set(memory, {
+    discard: stopJobs,
+    events: () => [0, []],
+    start(names) {
+      if (closed || startedAt !== undefined) return;
+      startedAt = performance.now();
+      const deadline = startedAt + 5000;
+      timer = setTimeout(importTimedOut, 5000);
+      import('./gpu-jobs.js').then(({ createTransport }) => {
+        if (closed) return;
+        if (performance.now() >= deadline) return importTimedOut();
+        clearTimeout(timer);
+        lane = createTransport({ module: module.exact_game_worker_module(), glue });
+        lane.start(names, startedAt);
+        bindings.set(memory, lane);
+      }).catch(fallback);
+    },
+  });
+}
+
 // Only development uses function-scoped bindgen glue: no immortal module-map
 // entry owns a candidate's Wasm memory. Production remains the static ES module.
-async function loadModule(version) {
+async function loadModule(version, first = true) {
   if (!version) {
-    const module = await import(`./${stem}.js`);
-    await module.default({ module_or_path: new URL(`./${stem}_bg.wasm`, import.meta.url) });
+    const glue = new URL(`./${stem}.js`, import.meta.url).href;
+    const module = await import(glue);
+    const exports = await module.default({ module_or_path: new URL(`./${stem}_bg.wasm`, import.meta.url) });
     if (typeof module.gpu_child_view !== "function") throw new Error("GPU module is missing gpu_child_view");
+    if (first) try {
+      if (typeof module.exact_game_worker_module === "function" && exports?.memory) bindWorkerJobs(module, exports.memory, glue);
+    } catch (error) { console.warn('exact: GPU jobs: using inline jobs', error); }
     return module;
   }
   const response = await fetch(new URL(`./${stem}.js?g=${version}`, import.meta.url));
@@ -1322,7 +1369,7 @@ async function swap(version) {
   await ready;
   await recoveringDevice;
   if (loaded && version === api.version) return { ms: 0, errors: [] };
-  const start = performance.now(), next = guardedModule(await loadModule(version)), staged = [];
+  const start = performance.now(), next = guardedModule(await loadModule(version, false)), staged = [];
   let lost = false;
   const carrier = { worldCarry: exact.worldCarry };
   try {
@@ -1371,6 +1418,7 @@ async function swap(version) {
     surfaces.set(entry.view, entry);
     if (old.id) { retainEdits(old, oldModule); oldModule.gpu_destroy(old.id); }
   }
+  stopJobs?.();
   oldModule?.gpu_unload(); gpu = next; loaded = true; resetRecovery();
   // The replacement has its own device: the failure of the one it replaced no longer describes it.
   delete api.recovery;
@@ -1404,6 +1452,7 @@ try {
   api.version = version;
   loaded = true;
 } catch (error) {
+  stopJobs?.();
   if (!trapped()) gpu?.gpu_unload(); gpu = undefined;
   const failure = failureOutcome(error);
   terminalRecovery({...failure, status:"no device"});
