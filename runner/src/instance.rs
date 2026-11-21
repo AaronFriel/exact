@@ -19,10 +19,13 @@ mod document;
 mod find;
 mod foresee;
 mod keys;
+mod list_places;
 pub mod looks;
 mod owners;
 pub(crate) mod place;
 mod retained;
+pub(crate) use list_places::CandidateLists;
+pub use list_places::RetainedLists;
 pub use owners::OwnerInst;
 pub use retained::RetainedViews;
 mod rare;
@@ -422,6 +425,7 @@ pub struct InstanceWork {
 
 /// Per-commit evaluation context and deterministic work counters.
 pub struct Update<'a> {
+    pub(crate) list_seeds: Option<&'a CandidateLists>,
     /// The environment every expression sees.
     pub env: Env<'a>,
     /// Run-time installed-family stack ids shared across commits in a session.
@@ -537,6 +541,7 @@ impl<'a> Update<'a> {
             reuse: false,
             scratch: vm::Scratch::default(),
             frame_buffers: Vec::new(),
+            list_seeds: None,
             scroll_padding: None,
             scroll_margin: None,
             cell_margins: None,

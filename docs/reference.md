@@ -2340,6 +2340,12 @@ under one parent are matched in source order. A parent element with a unique
 literal `id` keeps its place when reordered. Moving the component under a new
 parent starts fresh state.
 
+When a native plan reloads, a virtualized list at the same source place opens
+at the row key and offset the reader last saw. If that key is gone, the list
+uses the next surviving key from the old window, then the previous one.
+It returns to the start if none survive. A reader at the start stays there,
+and a list following its end stays at the end.
+
 The JS development reload restores reading anchors and focus, including a field's
 selection range and direction when its text matches. A field may regain focus after
 its resource answers; reader focus cancels pending focus and selection. Scrolling
