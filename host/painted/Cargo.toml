@@ -86,8 +86,10 @@ iana-time-zone = "0.1"
 # texture the host reads back. vello 0.10 pins wgpu 29; the on-demand GPU
 # module (`gpu/`) is on 30 — two builds of wgpu until vello moves, never one
 # device shared (the module is a separate artifact).
-vello = "0.10"
-wgpu = { version = "29", default-features = false, features = ["wgsl", "metal", "vulkan"] }
+# The native presenter requests Backends::PRIMARY. Enabling Vello's wgpu
+# defaults would also link OpenGL, which that adapter request excludes.
+vello = { version = "0.10", default-features = false, features = ["wgpu"] }
+wgpu = { version = "29", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "metal", "vulkan"] }
 
 # Android presents into the window's swapchain (gpu/present.rs).
 [target.'cfg(target_os = "android")'.dependencies]
