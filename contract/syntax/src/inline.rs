@@ -25,12 +25,14 @@ use std::rc::Rc;
 
 pub mod calls;
 mod derives;
+mod place;
 mod subst;
 #[cfg(test)]
 mod tests;
 mod use_node;
 
 pub use derives::resolved_derives;
+use place::Siblings;
 use subst::{renamed_locals, subst_expr, subst_stmts, Subst};
 
 fn err<T>(
@@ -43,12 +45,6 @@ fn err<T>(
         message: message.into(),
         span,
     })
-}
-
-/// A name use `n` gives a child's declaration. `#` cannot
-/// appear in an authored identifier, so no author's name can collide with it.
-pub fn lifted(name: &str, n: u32) -> String {
-    format!("{name}#{n}")
 }
 
 /// The sources a child may read itself: the device's facts, which hold no
@@ -77,7 +73,7 @@ pub fn inline(file: &File) -> Result<Vec<Node>, SyntaxError> {
 
 /// The expanded root (LLP 1017 P4c): its view inlined, plus the
 /// `state`s and `action`s of every stateful child use, renamed apart with
-/// the use's number, each owned by the instance it belongs to ([`Owner`]);
+/// the use's place, each owned by its instance ([`Owner`]);
 /// a child's `derive` is substituted at each read in this view. Lowering may
 /// replace those reads with loads of one executable row per use.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -453,6 +449,7 @@ fn expand_with_sites(
             .map(|c| c.name.clone())
             .into_iter()
             .collect(),
+        place: place::root(&source.name),
         site_depth: 0,
         provides: Vec::new(),
         fill: None,
@@ -502,7 +499,7 @@ fn expand_with_sites(
         None => &source.view,
     };
     let renamed = rename_nodes(source_view, &BTreeMap::new(), 0, &discarded_slots);
-    let view = inline_nodes(&renamed, &mut subst, &mut ctx).unwrap_or_default();
+    let view = inline_nodes(&renamed, &mut subst, &mut ctx, None).unwrap_or_default();
     root.view = view;
     let mut owners = vec![Owner::Root; root.states.len()];
     let mut state_instances = vec![0; root.states.len()];
@@ -577,6 +574,8 @@ struct Ctx<'a> {
     /// The components whose views are being inlined, outermost first: a use
     /// of one of them is recursion, which never terminates.
     path: Vec<String>,
+    /// The structural name of the rendering site (LLP 1029.000.002 D1).
+    place: String,
     /// Emitted view/region sites above the node being expanded. A component
     /// use and a slot's `children` are replaced, so neither consumes a site.
     site_depth: usize,
@@ -678,7 +677,16 @@ fn inline_nodes(
     nodes: &[Node],
     subst: &mut Subst<'_, Expr>,
     ctx: &mut Ctx<'_>,
+    siblings: Option<&mut Siblings>,
 ) -> Result<Vec<Node>, SyntaxError> {
+    let mut fresh;
+    let siblings = match siblings {
+        Some(siblings) => siblings,
+        None => {
+            fresh = Siblings::for_nodes(nodes, subst);
+            &mut fresh
+        }
+    };
     let mut out = Vec::with_capacity(nodes.len());
     for n in nodes {
         let is_site = !matches!(n, Node::Use { .. } | Node::Children { .. });
@@ -691,6 +699,8 @@ fn inline_nodes(
             continue;
         }
         ctx.site_depth += usize::from(is_site);
+        let parent = ctx.place.len();
+        siblings.append_step(&mut ctx.place, n, subst);
         match n {
             Node::Use { .. } => out.extend(use_node::inline_use(n, subst, ctx)?),
             Node::Children { span } => match ctx.fill.clone() {
@@ -703,7 +713,7 @@ fn inline_nodes(
                     let outer_path = std::mem::replace(&mut ctx.path, fill.path.clone());
                     let mut site =
                         Subst::new(&fill.subst, ctx.records).with_value_only(&fill.value_only);
-                    let nodes = inline_nodes(&fill.nodes, &mut site, ctx);
+                    let nodes = inline_nodes(&fill.nodes, &mut site, ctx, None);
                     ctx.provides = provides;
                     ctx.fill = outer_fill;
                     ctx.instance = outer_instance;
@@ -773,7 +783,7 @@ fn inline_nodes(
                 // arm does, so that state starts when the tab is built.
                 let children = if panel {
                     let tag = ctx.tag();
-                    let then = ctx.in_arm(tag, 0, |ctx| inline_nodes(children, subst, ctx));
+                    let then = ctx.in_arm(tag, 0, |ctx| inline_nodes(children, subst, ctx, None));
                     then.map(|then| {
                         vec![Node::When {
                             tag,
@@ -784,7 +794,7 @@ fn inline_nodes(
                         }]
                     })
                 } else {
-                    inline_nodes(children, subst, ctx)
+                    inline_nodes(children, subst, ctx, None)
                 };
                 ctx.tabs = tabs;
                 if windowed {
@@ -810,8 +820,10 @@ fn inline_nodes(
                 ..
             } => {
                 let tag = ctx.tag();
-                let then = ctx.in_arm(tag, 0, |ctx| inline_nodes(then, subst, ctx));
-                let otherwise = ctx.in_arm(tag, 1, |ctx| inline_nodes(otherwise, subst, ctx));
+                let then = ctx.in_arm(tag, 0, |ctx| inline_nodes(then, subst, ctx, Some(siblings)));
+                let otherwise = ctx.in_arm(tag, 1, |ctx| {
+                    inline_nodes(otherwise, subst, ctx, Some(siblings))
+                });
                 out.push(Node::When {
                     tag,
                     cond: subst_expr(cond, subst),
@@ -840,7 +852,7 @@ fn inline_nodes(
                     Some(false) => {}
                     None => ctx.repeats.push(Repeat::Each(*span)),
                 }
-                let body = ctx.in_arm(tag, 0, |ctx| inline_nodes(body, subst, ctx));
+                let body = ctx.in_arm(tag, 0, |ctx| inline_nodes(body, subst, ctx, None));
                 match routed {
                     Some(true) => drop(ctx.router_rows.pop()),
                     Some(false) => {}
@@ -864,8 +876,10 @@ fn inline_nodes(
                 ..
             } => {
                 let tag = ctx.tag();
-                let body = ctx.in_arm(tag, 0, |ctx| inline_nodes(&some.1, subst, ctx));
-                let none = ctx.in_arm(tag, 1, |ctx| inline_nodes(none, subst, ctx));
+                let body = ctx.in_arm(tag, 0, |ctx| {
+                    inline_nodes(&some.1, subst, ctx, Some(siblings))
+                });
+                let none = ctx.in_arm(tag, 1, |ctx| inline_nodes(none, subst, ctx, Some(siblings)));
                 out.push(Node::Match {
                     tag,
                     subject: subst_expr(subject, subst),
@@ -875,6 +889,7 @@ fn inline_nodes(
                 })
             }
         }
+        ctx.place.truncate(parent);
         ctx.site_depth -= usize::from(is_site);
     }
     Ok(out)

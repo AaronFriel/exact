@@ -937,7 +937,16 @@ component Editor
     let js = crate::emit::emit(&plan, false, false).unwrap().js;
     assert_eq!(js.matches("tp(").count(), 2, "{js}");
     let dev = crate::emit::emit(&plan, false, true).unwrap().js;
-    assert!(dev.contains(r#"$devSig("draft#1"+"@"+e"#), "{dev}");
+    let draft = plan
+        .slots
+        .iter()
+        .map(|s| plan.str(s.name))
+        .find(|s| s.starts_with("draft#"))
+        .unwrap();
+    assert!(
+        dev.contains(&format!(r#"$devSig({draft:?}+"@"+e"#)),
+        "{dev}"
+    );
 }
 
 /// The boot's settlement asks `exactMIDI` and `exactTransport`, so their

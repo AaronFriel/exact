@@ -2331,8 +2331,13 @@ replacement's clock in milliseconds, and `dropped`, the root slots that could no
 `"gesture"`, `"module"` or `"requests"`), or is null.
 Each entry has `what: "state"`, `name`, and `why`: `"no place"` when the slot is gone,
 or `"type changed"` when its value does not fit the new declaration. The replacement's
-first journal line gives the same report. Component state, view identity, composition
-and Undo preservation are later pieces of that LLP.
+first journal line gives the same report.
+
+A component outside a conditional, loop, or lazy tab panel keeps its state when
+a use of a different component is inserted above it. Uses of the same component
+under one parent are matched in source order. A parent element with a unique
+literal `id` keeps its place when reordered. Moving the component under a new
+parent starts fresh state.
 
 The JS development reload restores reading anchors and focus, including a field's
 selection range and direction when its text matches. A field may regain focus after
