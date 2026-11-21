@@ -168,7 +168,7 @@ pub(crate) fn boot_phase(name: &str) {
     }
 }
 
-pub(super) fn run<D: DataSource + Default + 'static>(
+pub(super) fn run<D: DataSource + Default + 'static, const DEVELOPMENT: bool>(
     name: &str,
     opening: crate::Window,
     plan: &[u8],
@@ -270,7 +270,7 @@ pub(super) fn run<D: DataSource + Default + 'static>(
         eprintln!("exact-windows: EXACT_AGENT_WINDOW_TAP requires a measured window run");
         return 1;
     }
-    if !config.windowed() {
+    if DEVELOPMENT && !config.windowed() {
         crate::displays::install_headless();
         return crate::clipboard::run_headless::<D>(&mut config, started);
     }

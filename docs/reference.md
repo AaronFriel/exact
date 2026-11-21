@@ -75,7 +75,13 @@ the build refuses and names the SDK and `"cpu"` remedies.
 `agent windows`, `test windows` and `verify windows` explicitly select CPU
 for their headless drives unless `EXACT_PAINTER` is set. Those screenshots
 do not qualify the window's composition path.
-A direct `EXACT_SMOKE=1` launch uses the app's painter choice.
+A direct `EXACT_SMOKE=1` development launch uses the app's painter choice.
+`bun exact.mjs windows --release` packages a production binary and omits the
+headless driver. To measure an optimized build under the driver, set
+`EXACT_UPDATE_TRUST=development` when running the same command.
+A hand-written TypeScript app shell can pass the bake's `ADMIT_AGENT` constant
+to `exact_windows::run_baked::<AppData, ADMIT_AGENT>` with its window, plan,
+receipt and composed packages.
 A Windows login item started with `--login hidden` paints its offscreen launch
 frame on the CPU and opens the selected painter when its window first draws.
 Linux and Android still opt into ink per platform; Android refuses it until

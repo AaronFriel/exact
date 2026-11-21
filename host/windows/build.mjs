@@ -134,6 +134,7 @@ if (import.meta.main) {
   prepareShaders(app.manifest);
   const target = bakeTarget('windows');
   const profile = args.includes('--release') ? 'release' : 'gpu-dev';
+  const trust = process.env.EXACT_UPDATE_TRUST ?? (profile === 'release' ? 'production' : 'development');
   // The executable's icon (LLP 1163 D6), which the app crate's build script links. Made again only
   // when the picked file changes, since a new file relinks the executable; its source's digest is kept beside it.
   let icon;
@@ -151,7 +152,7 @@ if (import.meta.main) {
   // A running copy holds its executable and DLL open, so another directory lets
   // a second copy be packaged beside it.
   const output = outAt >= 0 ? resolve(args[outAt + 1]) : resolve(process.env.EXACT_WINDOWS_OUTPUT ?? resolve(app.dir, 'dist-windows'));
-  const build = buildBake(app, 'windows', target, { profile, env: { ...developmentBuildEnv(app), EXACT_WINDOWS_ICON_RES: iconRes }, capture(build) {
+  const build = buildBake(app, 'windows', target, { profile, env: { ...developmentBuildEnv(), EXACT_UPDATE_TRUST: trust, EXACT_WINDOWS_ICON_RES: iconRes }, capture(build) {
     mkdirSync(output, { recursive: true });
     const exe = build.products.find(product => product.path.endsWith(`${app.crate('windows')}.exe`));
     if (!exe) throw new Error('Windows bake produced no executable');

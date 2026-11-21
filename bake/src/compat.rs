@@ -213,6 +213,11 @@ pub struct Compat {
 }
 
 impl Compat {
+    /// Whether this binary admits the development driver, including when its store level is zero.
+    pub fn admits_agent(&self) -> bool {
+        self.embedded["trust"] == "development"
+    }
+
     /// `{"id":…,"inputs":{…},"delivery":{"activate":…,"channel":…,"origin":…}}`,
     /// canonical (sorted keys within each value), the id first, one line plus
     /// a newline. The runner reads `id`, `store.L`, and `executors` from this

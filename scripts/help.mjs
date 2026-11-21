@@ -607,7 +607,7 @@ Ports    none; send makes one HTTPS request. Runs to completion.`,
   windows: {
     line: 'build for Windows into dist-windows/ (--run opens it)',
     usage: 'bun exact.mjs windows [--run] [--release] [--out <dir>] [--json]',
-    flags: [['--run', 'open it when built: here, until it quits; from SSH, on the signed-in desktop, returning once its window is up'], ['--release', 'the release profile (default gpu-dev)'], ['--out <dir>', 'package into <dir> instead of dist-windows/, e.g. beside a copy still running'], jsonBuilt('', '; not with --run')],
+    flags: [['--run', 'open it when built: here, until it quits; from SSH, on the signed-in desktop, returning once its window is up'], ['--release', 'build for distribution. Set EXACT_UPDATE_TRUST=development for an optimized build you can drive'], ['--out <dir>', 'package into <dir> instead of dist-windows/, e.g. beside a copy still running'], jsonBuilt('', '; not with --run')],
     body: 'Needs Windows and the MSVC Rust target; test windows and agent windows build first when the build is stale, and\ndrive it headless. A build closes the copy the last --run opened from the same directory.\nPorts    none. Runs to completion; with --run here, until the app quits.',
     example: 'bun exact.mjs windows --run',
   },

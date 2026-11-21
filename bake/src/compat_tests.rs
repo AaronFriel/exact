@@ -1069,6 +1069,7 @@ fn production_trust_requires_keys_and_has_a_distinct_cohort() {
         "a missing updater has no key or trust epoch"
     );
     assert_eq!(changed.embedded["trust"], "development");
+    assert!(!zero.admits_agent() && changed.admits_agent());
     manifest.json["deploy"]["store"] = serde_json::json!({"linux":"A"});
     manifest.json["deploy"]["signing"]["keys"] =
         serde_json::json!({"k":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="});

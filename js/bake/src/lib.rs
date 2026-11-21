@@ -336,7 +336,8 @@ fn build_sources(
     )?;
     if platform == "windows" {
         metadata.push_str(&format!(
-            "/// The window the app opens in (`host.windows.window`).\npub fn window() -> exact_windows::Window {{ {} }}\n",
+            "pub const ADMIT_AGENT: bool = {};\n/// The window the app opens in (`host.windows.window`).\npub fn window() -> exact_windows::Window {{ {} }}\n",
+            compat.admits_agent(),
             manifest.windows_window()?
         ));
     }

@@ -399,7 +399,11 @@ test('Windows test, agent and verify allocate private outputs before preparing c
   expect(result.status, result.stderr).toBe(0);
 });
 
-test('Windows packaging and preparation use the selected executable after Cargo output changes', async () => {
+test.each([
+  [[], undefined, 'development'],
+  [['--release'], undefined, 'production'],
+  [['--release'], 'development', 'development'],
+])('Windows packaging selects the executable and trust for %j with %s trust', async (args, trust, expected) => {
   const { copyFileSync } = await import('node:fs');
   const { windowsBuild } = await import('./agent-build.mjs');
   const source = readFileSync(resolve(import.meta.dir, '../host/windows/build.mjs'), 'utf8');
@@ -411,11 +415,12 @@ test('Windows packaging and preparation use the selected executable after Cargo 
   try {
     process.env.EXACT_WINDOWS_OUTPUT = build.env.EXACT_WINDOWS_OUTPUT;
     const path = resolve(dir, 'fixture-windows.exe'); writeFileSync(path, 'first executable');
-    const env = { process: { platform: 'win32', argv: [], env: build.env }, guardFlags: () => [], resolveApp: () => app, prepareShaders() {},
+    const env = { process: { platform: 'win32', argv: [], env: { ...build.env, EXACT_UPDATE_TRUST: trust } }, guardFlags: () => args, resolveApp: () => app, prepareShaders() {},
       bakeTarget: () => 'x86_64-pc-windows-msvc', pickIcon: () => null, resolve, mkdirSync, developmentBuildEnv: () => build.env,
       copyFileSync, readFileSync, writeFileSync, createHash, windowsFile: () => 'fixture.exe', closeOpened() {}, syncStaticTree() {}, copyShaders() {},
       writePackagedReceipt() {}, unclaimedNote: () => null, console: { log() {} },
       buildBake(app, kind, target, options) {
+        expect(options.env.EXACT_UPDATE_TRUST).toBe(expected);
         const receipt = { products: [{ path, sha256: createHash('sha256').update('first executable').digest('hex') }], compat: {} };
         options.capture(receipt); writeFileSync(path, 'later executable'); return receipt;
       },
