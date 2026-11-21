@@ -873,7 +873,8 @@ export const classifications = [
     ["painted:host/painted/src/lib.rs", "set_event_waker"],
     ["painted:host/painted/src/raster.rs", "Raster::new"],
     ["painted:host/painted/src/surfaces/apple.rs", "Boot::deadline Boot::new Boot::poll Boot::refused"],
-    ["painted:host/painted/src/zone.rs", "agent_time launch_place local_offset_minutes local_offset_minutes#definition:2"],
+    ["painted:host/painted/src/zone.rs", "agent_time launch_place local_offset_minutes"],
+    ["painted:host/painted/src/zone/windows.rs", "local_offset_minutes"],
   ]),
   group("delivery", ["durable operation"], "app/update stream and resolved signed module artifact", "durable",
     "host/painted/src/delivery.rs Module resolves local or replacement signed artifacts. Applying a resolved artifact to the current session is a separate operation.", [
