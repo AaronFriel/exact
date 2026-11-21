@@ -805,7 +805,7 @@ each defaults to the humanised `kind` when omitted.
 
 On Android 12 and later a row with a `system*` family is a home-screen widget
 (LLP 1126.003): `systemSmall` is two cells square, `systemMedium` four by two,
-`systemLarge` and `systemExtraLarge` four square, and it resizes from there. The
+`systemLarge`, `systemExtraLarge` and `systemExtraLargePortrait` four square, and it resizes from there. The
 same component is laid out at the launcher's size in the system's colours, and
 the same `refresh` keeps its timeline. Accessory families have no Android
 counterpart. What the launcher's views cannot draw yet (a gradient, a rounded or
@@ -984,8 +984,8 @@ profile to the named one's method, and an Ad Hoc pair must cover the same
 devices.
 
 On macOS, `bun host/apple/build.mjs --run` packages the app's widgets in
-`Contents/PlugIns`. The Mac keeps `systemSmall`, `systemMedium`, `systemLarge`
-and `systemExtraLarge`; if no families remain it builds no extension. Live
+`Contents/PlugIns`. The Mac keeps `systemSmall`, `systemMedium`, `systemLarge`,
+`systemExtraLarge` and `systemExtraLargePortrait`; if no families remain it builds no extension. Live
 Activities do not create a Mac extension. The extension uses the same runtime
 framework and snapshot driver, in its own sandbox with outbound network access.
 The app keeps its existing sandbox policy and loads the reload arm on demand.

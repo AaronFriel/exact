@@ -726,6 +726,27 @@ final class HeaderMacTests: XCTestCase {
         XCTAssertNotEqual(names[0], names[1])
     }
 
+    func testUnchangedStatusItemKeepsItsImageAcrossBatches() throws {
+        let status = ["menuPlacement": "status"]
+        let p = fixture(extra: symbolButton(17, "Two", "2.circle", status) + [children(15, [17])])
+        defer { p.statusItems.reset() }
+        var symbol = "2.circle"
+        p.buttonFace = { id in
+            var face = ButtonFace()
+            if id == 17 { face.symbol = symbol }
+            return face
+        }
+        p.statusItems.sync()
+        let item = try XCTUnwrap(p.statusItems.items[17])
+        let before = try XCTUnwrap(item.button?.image)
+        p.apply(wireBatch([children(15, [17])]))
+        XCTAssertTrue(item.button?.image === before, "unchanged status item keeps its NSImage across batches")
+        symbol = "3.circle"
+        p.apply(wireBatch([children(15, [17])]))
+        let after = try XCTUnwrap(item.button?.image)
+        XCTAssertFalse(after === before, "changed status item symbol updates its NSImage")
+    }
+
     /// A header's button that opens a menu is AppKit's menu item: the menu
     /// is the item's own to pop up, filled from the popover's rows as it
     /// opens, after the button's own press; a chosen row presses its
