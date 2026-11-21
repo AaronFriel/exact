@@ -3361,6 +3361,8 @@ Syntax is only the first layer. In particular:
   a record, a list of records or a state holding an action is
   `type-persist-type` (keep app data in a source), a child's state
   `type-persist-child`, a derive `syntax-persist-derive`.
+  `persist window` uses the same types and limit and restores the value in the
+  window that saved it. A fresh window uses the initializer.
 - An action sends one mutation at most once on any path: a second send forgets
   the first's reply (LLP 1016 D5), so it is `analyze-send-twice` — unless the
   mutation is `queue`, whose sends each wait their turn (LLP 1092 D6), or

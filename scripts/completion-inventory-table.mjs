@@ -745,7 +745,7 @@ export const classifications = [
     ["runner:runner/src/runner.rs", "Runner::take_store_writes"],
     ["runner:runner/src/runner/resources.rs", "Runner::resource_reads_store Runner::store Runner::store_names"],
     ["runner:runner/src/runner/kept.rs", "Runner::adopt_store Runner::data_ready Runner::data_ready_after_store Runner::forget_unread_kept Runner::store_changed"],
-    ["runner:runner/src/runner/persist.rs", "Runner::persisted Runner::read_only_store"],
+    ["runner:runner/src/runner/persist.rs", "Runner::persisted Runner::read_only_store Runner::window_state"],
     ["runner:runner/src/store.rs", "Store::read_only"],
     ["web:host/web/src/abi.rs", "exact_store"],
   ]),

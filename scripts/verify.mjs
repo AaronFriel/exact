@@ -246,7 +246,7 @@ export const draftFields = (before, after, touched, states) => typedFields(befor
 export function persistedStates(dir) {
   const names = [];
   for (const line of (readIn(dir, 'app.contract') ?? '').split('\n')) {
-    const m = line.replace(/\s\/\/.*$/, '').match(/^\s*state\s+([A-Za-z_][\w-]*)\s*(?::[^=]*)?=.*\spersist\s*$/);
+    const m = line.replace(/\s\/\/.*$/, '').match(/^\s*state\s+([A-Za-z_][\w-]*)\s*(?::[^=]*)?=.*\spersist(?:\s+window)?\s*$/);
     if (m) names.push(m[1]);
   }
   return names;

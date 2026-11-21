@@ -54,6 +54,7 @@ impl<D: DataSource> Host<D> {
 
     pub(super) fn quiet_collection_key(&self) -> Option<[u64; 8]> {
         if self.stored
+            || self.window_state_changed
             || !self.preload_content.is_empty()
             || !self.engine.quiescent()
             || self.engine.spatial()

@@ -598,6 +598,14 @@ write wins. Calls in exclusive branches
 A derive is not mutable storage, an async effect, or a timer. Derive cycles are
 refused. Avoid unnecessary state that can be calculated from existing values.
 
+### Window state and shared settings
+
+Use `state conversation = "" persist window` for a selection that belongs to
+one window. The browser keeps it in `sessionStorage`. Reloading the tab restores
+it. An independent tab or a link with `target="_blank"` starts fresh. A named
+window with an opener initially receives a copy and then keeps its own values.
+AppKit and UIKit restore the values when the system restores the window or scene.
+
 ### A remembered setting: `persist`
 
 A root `state` that ends in `persist` is kept across launches (LLP 1116 D5), as

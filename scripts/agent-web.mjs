@@ -85,7 +85,10 @@ export function storedScript(env, origin) {
   const install = (origin, entries) => {
     if (window !== window.top || location.origin !== origin) return;
     globalThis.__exactSeedStored = prefix => {
-      for (const [name, json] of entries) localStorage.setItem(prefix + name, json);
+      for (const [name, json] of entries) {
+        const storage = name.startsWith('#window.') ? sessionStorage : localStorage;
+        storage.setItem(prefix + name, json);
+      }
       delete globalThis.__exactSeedStored;
     };
   };
@@ -631,8 +634,10 @@ async function openWebUnlocked({
         await frame();
         contact = null;
         dragged = null;
-        await evaluate('sessionStorage.clear()');
-        if (!keep) await call('Storage.clearDataForOrigin', { origin: page.origin, storageTypes: 'all' });
+        if (!keep) {
+          await evaluate('sessionStorage.clear()');
+          await call('Storage.clearDataForOrigin', { origin: page.origin, storageTypes: 'all' });
+        }
         const destination = withEpoch(withFaults(keep ? await evaluate('location.href') : page.href, failFetch), epoch);
         await installFaults(failFetch ?? (keep ? undefined : facts.failFetch ?? ''));
         const previousLoader = documentLoader,

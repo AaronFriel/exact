@@ -218,7 +218,7 @@ pub fn run(file: &Path, options: &Options) -> Result<bool, String> {
     }
     delivery.walks = options.walks;
     let originals = located.len();
-    if plan.slots.iter().any(|s| s.persist) {
+    if plan.slots.iter().any(|s| s.is_persisted()) {
         for i in 0..originals {
             let l = &located[i];
             let scripted = crate::stored_variant(&l.scripted);

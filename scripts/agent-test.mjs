@@ -2,6 +2,7 @@
 // turns a file's `test` blocks into steps, and this drives them through the
 // session the operations use (`agent.mjs`'s `open`). `agent.mjs` re-exports it.
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { connect } from 'node:net';
 import { homedir } from 'node:os';
@@ -816,7 +817,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
     for (const st of t.steps) {
       if (st.op === 'before-data') beforeData = true;
       else if (st.op === 'fresh') reset = st;
-      else if (st.op === 'stored') stored.push([st.name, st.json]);
+      else if (st.op === 'stored') stored.push([st.window ? '#window.' + st.name : st.name, st.json]);
       else if (st.op === 'fail-fetch') { early(st); facts.failFetch = [facts.failFetch, st.times == null ? st.prefix : `${st.prefix}\t${st.times}`].filter(Boolean).join('\n'); if (st.times != null) armed.set(st.prefix, st.line); }
       else if (st.op === 'answer-fetch') facts.failFetch = [facts.failFetch, faultSpecOf([{prefix: st.prefix, hits: 0, armed: true, response: st.response}])].filter(Boolean).join('\n');
       else if (st.op === 'size') facts.size = [st.width, st.height];
@@ -916,7 +917,17 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       const failFetch = now.faults ? faultSpecOf(now.faults) : undefined;
       facts.epoch = await reached();
       if (s.host === 'web') { await s.carrier.reset({ keep: true, failFetch, epoch: facts.epoch }); s.now = 0; s.contact = null; resetLogs(s); }
-      else { await s.close(); s = await open({ host, browser, plan, ...facts, failFetch: failFetch ?? facts.failFetch, env: { ...(env ?? {}), ...fixture }, app, webDist, device, phone, reader, url, storage: store, touch: fingers, chrome: bars, scale, port, ax }); }
+      else {
+        const environment = { ...(env ?? {}), ...fixture };
+        if (now.store?.some(name => name.startsWith('exact.state.#window.'))) {
+          const id = randomUUID().replaceAll('-', '');
+          const reply = await s.op({ op: 'saveWindow', id });
+          if (!reply.saved) throw new Error(reply.error ?? 'reload: could not save the window');
+          environment.EXACT_AGENT_RESTORE_WINDOW = id;
+        }
+        await s.close();
+        s = await open({ host, browser, plan, ...facts, failFetch: failFetch ?? facts.failFetch, env: environment, app, webDist, device, phone, reader, url, storage: store, touch: fingers, chrome: bars, scale, port, ax });
+      }
       s.notes = notes;
       // A module's permission is the runner's, which starts again, as a phone keeps a granted one across a restart.
       for (const [name, value] of Object.entries({ ...media, ...permissions })) {

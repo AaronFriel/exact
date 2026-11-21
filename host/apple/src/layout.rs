@@ -86,6 +86,10 @@ impl<D: DataSource> Host<D> {
         batch.facts = self.facts_moved();
         batch.landing = self.runner.data_timer_landing();
         batch.stored = std::mem::take(&mut self.stored);
+        if std::mem::take(&mut self.window_state_changed) {
+            batch.window_state =
+                Some(serde_json::to_string(&self.runner.window_state()).expect("string map"));
+        }
         batch.announced = self.runner.store().take_announced();
         batch.wakelock = self.wakelock_moved();
         batch.orientationlock = self.orientation_moved();

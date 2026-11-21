@@ -1424,11 +1424,8 @@ fn state_relations_accept_inequality_and_paths() {
 
 #[test]
 fn state_relations_check_both_path_types_before_running() {
-    let dir = crate::scratch::Scratch::new(
-        std::env::current_dir()
-            .unwrap()
-            .join(format!("target/state-types-{}", std::process::id())),
-    );
+    let path = format!("target/state-types-{}", std::process::id());
+    let dir = crate::scratch::Scratch::new(std::path::absolute(path).unwrap());
     let app = dir.join("app.contract");
     std::fs::write(
         &app,
@@ -1450,6 +1447,10 @@ component App
 "#,
     )
     .unwrap();
+    let check = |line: &str| {
+        let source = format!("test \"relation\"\n  expect state {line}\n");
+        contract::resolve_test_states_path(&app, &mut contract::tests(&source).unwrap())
+    };
     for line in [
         "n == state doubled",
         "n != state rows.0.id",
@@ -1463,8 +1464,7 @@ component App
         "saved.id == state n",
         "n == state other.id",
     ] {
-        let tests = contract::tests(&format!("test \"valid\"\n  expect state {line}\n")).unwrap();
-        contract::check_test_states_path(&app, &tests).unwrap();
+        check(line).unwrap();
     }
     for (line, left, right) in [
         ("n == state word", "number", "string"),
@@ -1475,9 +1475,7 @@ component App
         ("n in state n", "number", "number"),
         ("saved == state wordResult", "option<Row>", "option<string>"),
     ] {
-        let source = format!("test \"invalid\"\n  expect state {line}\n");
-        let tests = contract::tests(&source).unwrap();
-        let errors = contract::check_test_states_path(&app, &tests).unwrap_err();
+        let errors = check(line).unwrap_err();
         assert_eq!(errors[0].id, "type-test-state");
         assert_eq!(errors[0].span.line, 2);
         for ty in [left, right] {

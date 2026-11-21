@@ -1021,6 +1021,7 @@ impl Parser {
             }
             "stored" => Step::Stored {
                 name: self.ident()?.0,
+                window: false,
                 value: self.json_value()?,
                 span,
             },

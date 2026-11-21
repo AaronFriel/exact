@@ -326,6 +326,7 @@ pub struct Host<D: DataSource> {
     pending_store_writes: Vec<exact_runner::StoreWrite>,
     /// A store write landed since the last batch was written (`Batch::stored`).
     stored: bool,
+    window_state_changed: bool,
     pending_store_stamps: std::collections::BTreeMap<String, exact_data::secrets::Stamp>,
     /// What the disk held for each owed name when its write first failed.
     pending_store_bases: std::collections::BTreeMap<String, Option<Vec<u8>>>,
@@ -579,6 +580,15 @@ impl<D: DataSource> Host<D> {
         } else {
             exact_runner::page::Platform::Ios
         };
+        let window_state_changed = plan
+            .slots
+            .iter()
+            .any(|row| row.persist == exact_plan::PersistScope::Window)
+            || carried.is_some_and(|c| {
+                c.store
+                    .iter()
+                    .any(|(k, _)| k.starts_with(exact_runner::Store::WINDOW_STATE))
+            });
         let runner = platform.boot(|| {
             Runner::boot_with_delivery_linked(
                 links.runner,
@@ -727,6 +737,7 @@ impl<D: DataSource> Host<D> {
             secrets,
             pending_store_writes: Vec::new(),
             stored: false,
+            window_state_changed,
             pending_store_stamps: Default::default(),
             pending_store_bases: Default::default(),
             reported_store_failures: BTreeSet::new(),

@@ -359,6 +359,8 @@ public final class ExactSession {
     /// A callback from an older generation is dropped.
     public var generation: Int { runtime.completionLease.generation }
     let storeRefresh = SessionStoreRefresh()
+    public internal(set) var windowState = [String: String]()
+    public var windowStateDidChange: (() -> Void)?
     var activatedGeneration: Int?
     /// The generation whose deferred data has activated (or failed to): the
     /// agent's `clock data` waits for it before a test's first step.

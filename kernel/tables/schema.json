@@ -6330,6 +6330,10 @@
           "member": "landing",
           "codec": "bool"
         },
+        "windowState": {
+          "member": "windowState",
+          "codec": "modes"
+        },
         "stored": {
           "member": "stored",
           "codec": "bool"

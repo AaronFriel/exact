@@ -2,6 +2,7 @@ import { host, loadAfterPaint, localAssetURL, agentMode, now, collections, follo
 import { send, applyBatch } from "./commit.js";
 import { navigation, launchLocation, launchVisits, reportTime, reportPlace, preferences, updateCode, foldBits, appRootFontSize, releaseAssets, afterPaint, grantOrigins, modalLayers, inertAncestor, editMenu } from "../navigation.js";
 import { setInputReady } from "./input.js";
+import { WINDOW_STATE } from "../navigation/store.js";
 import { startClock } from "./flow.js";
 import { forgetList } from "./views.js";
 import { engagement } from "../engagement.js";
@@ -623,14 +624,22 @@ export async function main() {
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key?.startsWith("exact.secret.")) {
+        if (key?.startsWith("exact.secret.") && !key.slice("exact.secret.".length).startsWith(WINDOW_STATE)) {
           kept.push(key.slice("exact.secret.".length), localStorage.getItem(key) ?? "");
-        } else if (key?.startsWith("exact.state.")) {
+        } else if (key?.startsWith("exact.state.") && !key.startsWith(WINDOW_STATE)) {
           kept.push(key, localStorage.getItem(key) ?? "");
         }
       }
     } catch (e) {
       console.warn("exact: store", String(e));
+    }
+    try {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith(WINDOW_STATE)) kept.push(key, sessionStorage.getItem(key) ?? "");
+      }
+    } catch (e) {
+      console.warn("exact: window state", String(e));
     }
     if (kept.length) {
       host.wasm.exact_store(writeIn(kept.join("\0")));

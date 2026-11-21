@@ -751,7 +751,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
             (!facts.is_empty(), facts.as_str()),
             (em.symbols.0, "import{symbols as $symbols}from\"./symbols.js\";"),
             (modes.is_some(), "import{modes as $modes,Sx}from\"./modes.js\";"),
-            (plan.slots.iter().any(|s| s.persist), "import{stored as $stored,keep as $keep}from\"./persist.js\";"),
+            (plan.slots.iter().any(|s| s.is_persisted()), "import{stored as $stored,keep as $keep}from\"./persist.js\";"),
             (exact_runner::uses::chooses_locale(plan), "import{localeSlot as $localeSlot,setLocale as $setLocale}from\"./chosen.js\";"),
             (plan.format.is_some(), "import{formats as $formats,formatSlot as $formatSlot}from\"./format-locale.js\";"),
         ]

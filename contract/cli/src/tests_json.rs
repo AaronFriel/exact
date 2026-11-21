@@ -191,9 +191,17 @@ fn step_json(step: &Step, s: &mut String) {
         Step::Seed { seed, .. } => {
             s.push_str(&format!("{{\"op\":\"seed\",\"value\":{seed}"));
         }
-        Step::Stored { name, value, .. } => {
+        Step::Stored {
+            name,
+            value,
+            window,
+            ..
+        } => {
             s.push_str("{\"op\":\"stored\",\"name\":");
             q(name, s);
+            if *window {
+                s.push_str(",\"window\":true");
+            }
             s.push_str(",\"json\":");
             q(value, s);
         }

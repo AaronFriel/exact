@@ -545,7 +545,7 @@ pub fn uses(plan: &Plan) -> Uses {
     // declared source its network (LLP 1162.001 D3).
     if plan.resources.iter().any(|r| r.reader || r.keep)
         || !plan.fetches.is_empty()
-        || plan.slots.iter().any(|s| s.persist)
+        || plan.slots.iter().any(|s| s.is_persisted())
     {
         uses = uses.with(Capability::Io);
     }
@@ -1014,8 +1014,9 @@ mod grant_tests {
 
     #[test]
     fn persisted_slots_link_storage_without_resources() {
+        use exact_plan::PersistScope;
         use exact_plan::{asm::Asm, builder::PlanBuilder, TypeKind};
-        for persist in [false, true] {
+        for persist in [PersistScope::None, PersistScope::App, PersistScope::Window] {
             let mut b = PlanBuilder::new(exact_kernel::SCHEMA_DIGEST, 1);
             let boolean = b.primitive(TypeKind::Bool);
             let mut initial = Asm::new();
@@ -1034,7 +1035,7 @@ mod grant_tests {
             );
             assert_eq!(
                 super::uses(&b.finish().unwrap()).has(Capability::Io),
-                persist
+                persist != PersistScope::None
             );
         }
     }

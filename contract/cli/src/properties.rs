@@ -44,8 +44,11 @@ pub fn check_properties(
     }
 }
 
-/// Check state path operands against the app's inferred declaration types.
-pub fn check_test_states_path(path: &Path, tests: &[TestDecl]) -> Result<(), Vec<CompileError>> {
+/// Resolve stored fixtures to the app's scopes and check state comparisons against its types.
+pub fn resolve_test_states_path(
+    path: &Path,
+    tests: &mut [TestDecl],
+) -> Result<(), Vec<CompileError>> {
     use contract_syntax::{StateComparison as C, StateOperand};
     use contract_types::{Ty, TypeError};
     fn relations<'a>(steps: &'a [Step], out: &mut Vec<&'a Step>) {
@@ -61,13 +64,26 @@ pub fn check_test_states_path(path: &Path, tests: &[TestDecl]) -> Result<(), Vec
         }
     }
     let mut steps = Vec::new();
-    for test in tests {
-        relations(&test.steps, &mut steps);
+    let mut stored = Vec::new();
+    for step in tests.iter_mut().flat_map(|test| &mut test.steps) {
+        match step {
+            Step::Stored { name, window, .. } => stored.push((name, window)),
+            step => relations(std::slice::from_ref(step), &mut steps),
+        }
+    }
+    if steps.is_empty() && (stored.is_empty() || !path.is_file()) {
+        return Ok(());
+    }
+    let (file, expanded) = property_program(path)?;
+    for (name, window) in stored {
+        *window = expanded
+            .root
+            .persistence(name)
+            .is_some_and(|state| state.window);
     }
     if steps.is_empty() {
         return Ok(());
     }
-    let (file, _) = property_program(path)?;
     let checked = contract_types::check_all(
         &file,
         false,

@@ -64,7 +64,7 @@ mod surface;
 use surface::fact_shape;
 mod symbols;
 pub use contract_analyze::SuggestionCheck;
-pub use properties::check_test_states_path;
+pub use properties::resolve_test_states_path;
 pub use properties::{
     check_properties, check_properties_path, check_suggestions_path, properties, property_program,
     resolve_properties_path, tests,

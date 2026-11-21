@@ -77,11 +77,11 @@ pub struct Batch {
     /// A timer's continuation an advance released is still out
     /// (`Runner::data_timer_landing`): the agent's jump waits for its reply.
     pub landing: bool,
-    /// A store write the batch's commits made has landed (`Host::persist`):
-    /// the app's other sessions refresh (LLP 1030.004 D2).
+    /// A shared write landed. Other sessions refresh (LLP 1030.004 D2).
     pub stored: bool,
-    /// Topics the batch's durable writes announced, for the app's other
-    /// sessions (LLP 1030.004 D2).
+    /// The window's restorable slots as JSON, at boot and whenever they change.
+    pub window_state: Option<String>,
+    /// Topics this batch's durable writes announced to other sessions (LLP 1030.004 D2).
     pub announced: Vec<String>,
     /// Whether a displayed element holds the wake lock, when that changed
     /// (`Host::wakelock_moved`, LLP 1125 D11).
@@ -445,6 +445,7 @@ impl Batch {
             && !self.controls
             && !self.layout_provisional
             && !self.facts
+            && self.window_state.is_none()
             && !self.stored
             && self.wakelock.is_none()
             && self.orientationlock.is_none()
@@ -1166,35 +1167,24 @@ impl Batch {
             }
             s.push(']');
         }
-        if self.spatial {
-            s.push_str(",\"spatial\":true");
+        for (key, present) in [
+            ("spatial", self.spatial),
+            ("frames", self.frames),
+            ("presentOnly", self.present_only),
+            ("canvasOwed", self.canvas_owed),
+            ("replacesTree", self.replaces_tree),
+            ("layoutProvisional", self.layout_provisional),
+            ("controls", self.controls),
+            ("facts", self.facts),
+            ("landing", self.landing),
+            ("stored", self.stored),
+        ] {
+            if present {
+                let _ = write!(s, r#","{key}":true"#);
+            }
         }
-        if self.frames {
-            s.push_str(",\"frames\":true");
-        }
-        if self.present_only {
-            s.push_str(",\"presentOnly\":true");
-        }
-        if self.canvas_owed {
-            s.push_str(",\"canvasOwed\":true");
-        }
-        if self.replaces_tree {
-            s.push_str(",\"replacesTree\":true");
-        }
-        if self.layout_provisional {
-            s.push_str(",\"layoutProvisional\":true");
-        }
-        if self.controls {
-            s.push_str(",\"controls\":true");
-        }
-        if self.facts {
-            s.push_str(",\"facts\":true");
-        }
-        if self.landing {
-            s.push_str(",\"landing\":true");
-        }
-        if self.stored {
-            s.push_str(",\"stored\":true");
+        if let Some(archive) = &self.window_state {
+            let _ = write!(s, r#","windowState":{archive}"#);
         }
         if let Some(held) = self.wakelock {
             let _ = write!(s, ",\"wakelock\":{held}");

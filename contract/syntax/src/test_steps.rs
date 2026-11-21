@@ -261,6 +261,8 @@ pub enum Step {
     Stored {
         /// The state name, including names used by earlier builds.
         name: String,
+        /// The app declares this state with `persist window`.
+        window: bool,
         /// The value as JSON text.
         value: String,
         /// Where.
