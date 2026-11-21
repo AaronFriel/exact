@@ -1,7 +1,7 @@
 //! The instanced painter's adapter. @ref LLP 1149 D1.2, D2, D3.1.
 use crate::image::Bitmap;
 use crate::paint::border::BorderFill;
-use crate::paint::{Backend, FrameTarget, GradientPaint, Rect4, Shape, POINTER};
+use crate::paint::{Backend, CanvasUpdate, FrameTarget, GradientPaint, Rect4, Shape, POINTER};
 use crate::raster::tiny_path as path;
 use crate::text::{Paragraph, RunPaint, TextEngine};
 use exact_ink::atlas::Atlas;
@@ -662,11 +662,26 @@ impl Backend for Ink {
         self.accept(result);
     }
     fn canvas(&mut self, pixels: &Arc<Pixmap>, dst: Rect4, clips: &[Shape], ts: Transform) {
+        self.canvas_frame(pixels, None, dst, clips, ts);
+    }
+    fn canvas_frame(
+        &mut self,
+        pixels: &Arc<Pixmap>,
+        update: Option<CanvasUpdate>,
+        dst: Rect4,
+        clips: &[Shape],
+        ts: Transform,
+    ) {
         self.observe_transform(ts);
         let size = [pixels.width(), pixels.height()];
         // A canvas is drawn at its own device-pixel size: no mip chain unless shrunk.
         let mipmapped = images::minified(size, dst, self.device_transform(ts));
-        let result = self.images.pixmap(&mut self.device, pixels, mipmapped);
+        let result = match update {
+            Some(update) => self
+                .images
+                .canvas(&mut self.device, pixels, update, mipmapped),
+            None => self.images.pixmap(&mut self.device, pixels, mipmapped),
+        };
         if let Some(texture) = self.accept(result) {
             self.picture(
                 texture,

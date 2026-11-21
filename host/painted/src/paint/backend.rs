@@ -277,6 +277,17 @@ pub trait Backend {
     fn surface_image(&mut self, pixels: Arc<Pixmap>, dst: Rect4);
     /// Composite a 2D canvas's bitmap into `dst`, clipped (LLP 1056 D7).
     fn canvas(&mut self, pixels: &Arc<Pixmap>, dst: Rect4, clips: &[Shape], ts: Transform);
+    /// Composite a canvas snapshot whose changed backing pixels are known.
+    fn canvas_frame(
+        &mut self,
+        pixels: &Arc<Pixmap>,
+        _update: Option<CanvasUpdate>,
+        dst: Rect4,
+        clips: &[Shape],
+        ts: Transform,
+    ) {
+        self.canvas(pixels, dst, clips, ts);
+    }
     /// Split an untransformed full-window canvas from the UI, if supported.
     /// A refusal leaves the painter unchanged.
     fn split_window_canvas(&mut self, _dst: Rect4, _clips: &[Shape], _ts: Transform) -> bool {

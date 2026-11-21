@@ -927,7 +927,7 @@ export const classifications = [
     ["painted:host/painted/src/gpu/images.rs", "ImageCache::begin ImageCache::brush"],
     ["painted:host/painted/src/gpu/present.rs", "current_window set_window"],
     ["painted:host/painted/src/ink.rs", "Ink::from_device Ink::info Ink::new"],
-    ["painted:host/painted/src/ink/images.rs", "Images::begin Images::bitmap Images::pin Images::pixmap Images::unpin"],
+    ["painted:host/painted/src/ink/images.rs", "Images::begin Images::bitmap Images::canvas Images::pin Images::pixmap Images::unpin"],
     ["painted:host/painted/src/ink/stats.rs", "counter_state Ink::statistics StatisticsReader::read"],
     ["painted:host/painted/src/paint.rs",
       "bbox content_size object_fit Painter::backend Painter::flow_failures Painter::last_frame_ms " +
