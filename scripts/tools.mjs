@@ -48,7 +48,7 @@ export const hostTriple = () => TRIPLES[`${process.platform}-${process.arch}`] ?
 
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const home = (env) => env.HOME ?? env.USERPROFILE ?? homedir();
-const cacheDir = (env = process.env) => resolve(home(env), '.cache/exact/tools', hostTriple());
+const cacheDir = (env = process.env, triple = hostTriple()) => resolve(home(env), '.cache/exact/tools', triple);
 const pin = () => Bun.TOML.parse(readFileSync(resolve(ROOT, 'rust-toolchain.toml'), 'utf8')).toolchain.channel;
 const short = (commit) => commit?.slice(0, 12) ?? 'an unknown commit';
 
@@ -66,8 +66,8 @@ export function fetchedAllowed(env = process.env) {
 }
 
 /** The sets in this machine's cache, newest first, each `{ dir, manifest }`. */
-function sets(env = process.env) {
-  const dir = cacheDir(env);
+function sets(env = process.env, triple = hostTriple()) {
+  const dir = cacheDir(env, triple);
   let names;
   try { names = readdirSync(dir).filter(n => !n.includes('.')); } catch { return []; }
   return names.flatMap(name => {
@@ -259,35 +259,58 @@ function inputsOf({ depInfo, buildDirs, skip, recipe }) {
   return [...files].sort();
 }
 
-/** `bun scripts/tools.mjs keep`: build this checkout's tool set and keep it in the machine's cache (D4.1). */
-async function keep() {
+const LINUX_TOOLS = 'x86_64-unknown-linux-gnu';
+
+/** Build all seven products for one machine. The Mac producer also builds the Linux
+ * executables with Zig. The four wasm modules are identical for both machines. */
+async function keep(triple = hostTriple()) {
   if (rustMissing()) throw new Error(`tools keep builds the set, with Rust: install it with rustup (https://rustup.rs) and the pinned toolchain ${pin()}`);
-  const triple = /^host: (.+)$/m.exec(spawnSync('rustc', ['-vV'], { cwd: ROOT, encoding: 'utf8' }).stdout ?? '')?.[1];
-  if (triple !== hostTriple()) throw new Error(`rustc builds for ${triple}, and this machine's tool sets are ${hostTriple()}'s`);
+  const host = /^host: (.+)$/m.exec(spawnSync('rustc', ['-vV'], { cwd: ROOT, encoding: 'utf8' }).stdout ?? '')?.[1];
+  if (host !== hostTriple()) throw new Error(`rustc builds for ${host}, and this machine's tool sets are ${hostTriple()}'s`);
+  const cross = triple !== host;
+  if (cross && !(host === 'aarch64-apple-darwin' && triple === LINUX_TOOLS)) throw new Error(`cannot build a ${triple} tool set on ${host}`);
   const commit = spawnSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
   const target = process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : resolve(ROOT, 'target');
   const env = cargoEnvironment();
   delete env.RUSTUP_TOOLCHAIN;
-  const products = {}, files = new Map();
-  // The two executables at host-dev, each built alone, as the dev loop builds its design reader.
-  for (const crate of ['contract', 'exact-web-js']) {
-    console.log(`tools: building ${crate} (host-dev)`);
-    const built = spawnSync('cargo', ['build', '-q', '--profile', 'host-dev', '-p', crate, '--bin', crate], { cwd: ROOT, env, stdio: 'inherit' });
-    if (built.status !== 0) throw new Error(`${crate} did not build`);
-    const product = resolve(target, 'host-dev', `${crate}${EXE}`);
-    files.set(crate, product);
-    products[crate] = { file: crate, crate, profile: 'host-dev', toolchain: pin(),
-      inputs: inputsOf({ depInfo: resolve(target, 'host-dev', `${crate}.d`), buildDirs: [resolve(target, 'host-dev/build')], skip: [target], recipe: ['rust-toolchain.toml', '.cargo/config.toml'] }) };
+  const recipe = ['rust-toolchain.toml', '.cargo/config.toml'];
+  if (cross) {
+    recipe.push('scripts/tools.mjs', 'scripts/rustc/exact-linux-cc');
+    env.PATH = [resolve(ROOT, 'scripts/rustc'), env.PATH].join(':');
+    env.CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = 'exact-linux-cc';
+    env.CRATE_CC_NO_DEFAULTS = '1';
+    env.CC_x86_64_unknown_linux_gnu = 'exact-linux-cc';
+    env.CXX_x86_64_unknown_linux_gnu = 'exact-linux-cc -x c++';
   }
-  // The filesystem helper, which the web build's file inventory runs, built as scripts/filesystem.mjs builds it.
-  console.log('tools: building exact-filesystem');
-  const helper = builtFilesystemHelper(), helperBuilt = resolve(helper.directory, `debug/exact-filesystem${EXE}`);
-  // A capture it took without building is checked by its inputs; the dep-info read here must be that build's.
-  if (!existsSync(helperBuilt) || sha(readFileSync(helperBuilt)) !== sha(readFileSync(helper.path))) throw new Error(`${helperBuilt} is not the helper ${helper.path}, so its dep-info cannot name that helper's inputs`);
-  files.set('exact-filesystem', helper.path);
-  products['exact-filesystem'] = { file: 'exact-filesystem', crate: 'exact-filesystem', profile: 'dev', toolchain: pin(),
-    inputs: inputsOf({ depInfo: resolve(helper.directory, 'debug/exact-filesystem.d'), buildDirs: [resolve(helper.directory, 'debug/build')], skip: [target],
-      recipe: ['rust-toolchain.toml', '.cargo/config.toml', 'scripts/filesystem.mjs', 'scripts/rustc/exact-rustc'] }) };
+  const products = {}, files = new Map();
+  for (const crate of ['contract', 'exact-web-js', 'exact-filesystem']) {
+    const nativeHelper = !cross && crate === 'exact-filesystem';
+    const profile = nativeHelper ? 'dev' : 'host-dev';
+    console.log(`tools: building ${crate} (${triple}, ${profile})`);
+    let directory, file, buildDirs, inputs = recipe;
+    if (nativeHelper) {
+      const helper = builtFilesystemHelper();
+      directory = resolve(helper.directory, 'debug');
+      file = helper.path;
+      // A reused capture must still match the build whose dep-info we read.
+      const binary = resolve(directory, crate + EXE);
+      if (!existsSync(binary) || sha(readFileSync(binary)) !== sha(readFileSync(file))) throw new Error(`${binary} is not the helper ${file}, so its dep-info cannot name that helper's inputs`);
+      buildDirs = [resolve(directory, 'build')];
+      inputs = [...recipe, 'scripts/filesystem.mjs', 'scripts/rustc/exact-rustc'];
+    } else {
+      const args = [cross ? 'rustc' : 'build', '--locked', '-q', '--profile', profile, '-p', crate, '--bin', crate];
+      if (cross) args.push('--target', triple, '--', '-C', 'strip=symbols');
+      const built = spawnSync('cargo', args, { cwd: ROOT, env, stdio: 'inherit' });
+      if (built.status !== 0) throw new Error(`${crate} did not build for ${triple}`);
+      directory = resolve(target, cross ? triple : '', profile);
+      file = resolve(directory, crate + EXE);
+      buildDirs = [resolve(directory, 'build')];
+      if (cross) buildDirs.push(resolve(target, profile, 'build'));
+    }
+    files.set(crate, file);
+    products[crate] = { file: crate, crate, profile, toolchain: pin(),
+      inputs: inputsOf({ depInfo: resolve(directory, crate + '.d'), buildDirs, skip: [target], recipe: inputs }) };
+  }
   const { leafRecipes } = await import('../host/web-js/module.mjs');
   for (const leaf of await leafRecipes()) {
     files.set(leaf.name, leaf.wasm);
@@ -306,7 +329,7 @@ async function keep() {
   }
   const manifest = { version: 1, triple, commit, source: 'built', built: Date.now(), products, metadata: recordMetadata() };
   const id = sha(JSON.stringify(Object.entries(products).map(([name, product]) => [name, product.inputs, product.closure, product.workspace]))).slice(0, 24);
-  const dir = cacheDir(), entry = resolve(dir, id), making = `${entry}.${process.pid}`;
+  const dir = cacheDir(process.env, triple), entry = resolve(dir, id), making = `${entry}.${process.pid}`;
   rmSync(making, { recursive: true, force: true });
   mkdirSync(making, { recursive: true });
   for (const [name, file] of files) {
@@ -315,7 +338,7 @@ async function keep() {
     // The executables are kept stripped; the profile is not, so its builds stay incremental.
     if (!name.endsWith('.wasm')) {
       chmodSync(kept, 0o755);
-      if (spawnSync('strip', [kept]).status !== 0) console.warn(`tools: ${name} kept unstripped (strip failed)`);
+      if (!cross && spawnSync('strip', [kept]).status !== 0) console.warn(`tools: ${name} kept unstripped (strip failed)`);
     }
     const bytes = readFileSync(kept);
     products[name].sha256 = sha(bytes);
@@ -325,7 +348,7 @@ async function keep() {
   rmSync(entry, { recursive: true, force: true });
   renameSync(making, entry);
   // The newest four sets of this triple: a set is about 100 MB.
-  for (const { dir: old } of sets().slice(4)) rmSync(old, { recursive: true, force: true });
+  for (const { dir: old } of sets(process.env, triple).slice(4)) rmSync(old, { recursive: true, force: true });
   console.log(`tools: kept the set for ${short(commit)} in ${entry.replace(homedir(), '~')}`);
   for (const [name, product] of Object.entries(products)) console.log(`  ${name}: ${(product.size / 1e6).toFixed(1)} MB, ${product.inputs.length} inputs`);
   return { dir: entry, manifest };
@@ -556,13 +579,14 @@ async function publish(args) {
   } else await publishRevision(ROOT, origin, privateKey, cleanRevision(ROOT));
 }
 
-const USAGE = `usage: bun scripts/tools.mjs keep
+const USAGE = `usage: bun scripts/tools.mjs keep [--target <triple>]
        bun scripts/tools.mjs publish --origin <directory> --key <producer.pem> [--watch [--worktree <directory>]]
 
 keep  build this checkout's tool set (the Contract compiler, the web compiler, the
       filesystem helper and the web's four leaf modules) from its committed sources, and keep it in
-      ~/.cache/exact/tools/${hostTriple()}/, where a checkout with the same input bytes
-      takes it in place of building with Rust (LLP 1174).
+      ~/.cache/exact/tools/<triple>/, where a checkout with the same input bytes
+      takes it in place of building with Rust (LLP 1174). On Apple Silicon,
+      --target x86_64-unknown-linux-gnu builds a Linux set with Zig for glibc 2.31 or later.
 publish  sign and publish this revision’s tool set, or record its commit against a matching published set.
          --watch follows origin/main in a dedicated detached worktree, publishing the tip first
          and filling skipped commits newest first. The default worktree is a sibling named
@@ -573,7 +597,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // Not awaited at the top level: this module is in an import cycle with filesystem.mjs, and with a top-level await
   // a dynamic import of a module in that cycle waits for this module's evaluation, so `keep` never finishes.
   if (verb === 'keep' || verb === 'publish') {
-    (verb === 'keep' ? keep() : publish(args)).catch((error) => { console.error(`tools: ${error.message}`); process.exit(1); });
+    const run = async () => {
+      if (verb === 'publish') return publish(args);
+      const { values } = parseArgs({ args, options: { target: { type: 'string' } } });
+      return keep(values.target);
+    };
+    run().catch((error) => { console.error(`tools: ${error.message}`); process.exit(1); });
   } else {
     console.log(USAGE);
     process.exit(verb === '--help' || verb === '-h' ? 0 : 2);
