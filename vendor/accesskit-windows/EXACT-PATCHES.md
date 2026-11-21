@@ -90,3 +90,7 @@ rerun those tests; the upstream suite alone does not cover the patch.
 10. **`text.rs`, UI Automation text ranges.** At a line boundary,
     `ScrollIntoView(false)` aligns the last included text run with the bottom
     of the field. A collapsed range keeps its insertion position.
+11. **`text.rs`, UI Automation range bounds.** `GetBoundingRectangles`
+    clips each text run to its scrolling ancestors and returns the visible
+    portion of each selected line in screen coordinates. A collapsed range
+    returns no rectangles.

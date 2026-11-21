@@ -277,6 +277,19 @@ impl PaintedField {
         (self.origin.0 + translation.0, self.origin.1 + translation.1)
     }
 
+    pub(crate) fn text_placement(&self) -> (Transform, Rect4) {
+        let (x, y) = self.text_origin(self.scroll);
+        (
+            self.transform.pre_translate(x, y),
+            (
+                self.content.0 - x,
+                self.content.1 - y,
+                self.content.2,
+                self.content.3,
+            ),
+        )
+    }
+
     pub(crate) fn aligned_line_y(&self, offset: u32, top: bool) -> f32 {
         let (_, y, _, height) = self.geometry.caret(Cursor {
             offset,
