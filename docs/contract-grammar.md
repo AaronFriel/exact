@@ -2417,8 +2417,8 @@ action wheeled(e: WheelEvent)
 scroll wheel=wheeled …
 ```
 
-`drop` is DOM's `drop` of files dragged in from outside the app (Finder, the
-desktop) onto the innermost node that declares it: its `DragEvent` is
+`drop` is DOM's `drop` of files dragged in from outside the app (Finder, Explorer
+or the desktop) onto the innermost node that declares it: its `DragEvent` is
 `offsetX`, `offsetY`, `files` (a `string[]` of `doc:` handles minted as a
 picker's are, LLP 1069.010
 D1, readable under `fs.read doc:/`) and the modifiers. Files of any type are
@@ -2427,10 +2427,11 @@ taken, and a dropped folder is a folder's handle (`fs.stat` says
 path. A file drag over an `input` or a `textarea` inside such a node (or
 declaring `drop` itself) is the node's, as on the web, where its listener
 prevents the field's own drop: the field inserts no path text. A text drag,
-and a file drag over a field with no `drop` above it, stay the field's. Web
-(a browser without `getAsFileSystemHandle` hands read-only copies) and macOS;
-iOS, Linux, Windows, Android and the terminal have none. The driver's `tap
-<target> drop <path…>` drags files and folders in.
+and a file drag over a field with no `drop` above it, stay the field's. Web,
+macOS and Windows deliver files in the order the source supplies them. A
+browser without `getAsFileSystemHandle` hands the app read-only copies.
+iOS, Linux, Android and the terminal have no external file drops. The
+driver's `tap <target> drop <path…>` drags files and folders in.
 
 `dragenter` and `dragleave` are DOM's, as a node hears them when it ignores
 moves between its own descendants (the `currentTarget.contains(relatedTarget)`
@@ -2459,8 +2460,8 @@ column dragenter=entered dragleave=left drop=took position="relative"
       text "Drop files to attach" role="status"
 ```
 
-Web and macOS, as `drop`. The driver's `tap <target> dragenter <path…>`
-brings a drag of those files over the target and leaves it there (for a
+Web, macOS and Windows support these events. The driver's
+`tap <target> dragenter <path…>` brings a drag of those files over the target and leaves it there (for a
 screenshot); `tap <target> drop <path…>` drops it, and `tap <target>
 dragleave` takes it away undropped.
 

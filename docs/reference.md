@@ -5560,7 +5560,8 @@ column dragenter=entered dragleave=left drop=took
 | macOS | yes: every file URL Finder drags, a field forwarding the drag to its `drop` node | file URLs, else PNG or TIFF data written as `image.png` |
 | iOS | none (declared; the driver's drag forms answer `unsupported`) | file URLs, else the pasteboard's image as `image.png` |
 | tvOS | none | empty: tvOS has no pasteboard |
-| Linux, Windows, Android, terminal | none (declared; Linux and Windows drivers refuse by name) | empty: these hosts paste text only |
+| Windows | yes, files and folders in Explorer selection order, including over an editable field | empty (text only) |
+| Linux, Android, terminal | none | empty (text only) |
 
 The driver: `tap <target> drop <path…>` (files and folders), `tap <target>
 dragenter <path…>` and `tap <target> dragleave`, `type <target> paste --file

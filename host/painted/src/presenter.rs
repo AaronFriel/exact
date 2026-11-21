@@ -59,6 +59,7 @@ mod field_pointer;
 mod field_scroll;
 #[cfg(test)]
 mod field_tests;
+mod file_drop;
 #[cfg(test)]
 mod frame_target_tests;
 mod group;
@@ -288,6 +289,7 @@ pub struct Presenter<D: DataSource> {
     pub(crate) fields: BTreeMap<ViewId, field::FieldMark>,
     field_history: history::Histories,
     field_drag: Option<field_pointer::Drag>,
+    file_drag: file_drop::FileDrag,
     mouse_selection: reader_selection::MouseSelection,
     #[cfg(any(target_os = "android", test))]
     reader_selection: Option<reader_selection::Selection>,
@@ -632,6 +634,7 @@ impl<D: DataSource> Presenter<D> {
             fields: BTreeMap::new(),
             field_history: Default::default(),
             field_drag: None,
+            file_drag: Default::default(),
             mouse_selection: Default::default(),
             #[cfg(any(target_os = "android", test))]
             reader_selection: None,
