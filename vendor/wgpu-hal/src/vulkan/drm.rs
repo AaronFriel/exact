@@ -216,12 +216,38 @@ impl super::Instance {
             "Failed to find suitable display mode".to_string(),
         ))?;
 
+        let planes = unsafe {
+            display_instance.get_physical_device_display_plane_properties(physical_device)
+        }
+        .map_err(|e| crate::InstanceError::with_source("Get Vulkan display planes".into(), e))?;
+        let selected = planes.get(plane as usize).ok_or_else(|| {
+            crate::InstanceError::new(format!("Unknown Vulkan display plane {plane}"))
+        })?;
+        let caps = unsafe {
+            display_instance.get_display_plane_capabilities(
+                physical_device,
+                mode.display_mode,
+                plane,
+            )
+        }
+        .map_err(|e| {
+            crate::InstanceError::with_source("Get Vulkan display plane capabilities".into(), e)
+        })?;
+        if !caps
+            .supported_alpha
+            .contains(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE)
+        {
+            return Err(crate::InstanceError::new(
+                "Display plane lacks opaque scanout".into(),
+            ));
+        }
         let create_info = vk::DisplaySurfaceCreateInfoKHR::default()
             .display_mode(mode.display_mode)
             .image_extent(mode.parameters.visible_region)
             .transform(vk::SurfaceTransformFlagsKHR::IDENTITY)
             .alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE)
-            .plane_index(plane);
+            .plane_index(plane)
+            .plane_stack_index(selected.current_stack_index);
 
         let raw = unsafe { display_instance.create_display_plane_surface(&create_info, None) }
             .map_err(|error| {
@@ -230,6 +256,25 @@ impl super::Instance {
         let mut surface = self.create_surface_from_vk_surface_khr(raw, None);
         surface.drm_display = Some(acquired);
         Ok(surface)
+    }
+}
+
+impl super::Surface {
+    /// Label the next queue presentation on this swapchain for `vkWaitForPresentKHR`.
+    /// Returns false if the swapchain is unconfigured, lacks the extension, or
+    /// already has a label waiting for a presentation.
+    ///
+    /// # Safety
+    ///
+    /// The device must have the `presentId` feature enabled. Each ID must be
+    /// greater than every ID previously presented on this swapchain.
+    pub unsafe fn set_next_present_id(&self, id: core::num::NonZeroU64) -> bool {
+        self.swapchain.write().as_mut().is_some_and(|chain| {
+            chain
+                .as_any_mut()
+                .downcast_mut::<super::swapchain::NativeSwapchain>()
+                .is_some_and(|chain| chain.set_next_present_id(id))
+        })
     }
 }
 

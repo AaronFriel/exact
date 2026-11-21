@@ -366,6 +366,15 @@ the DRM descriptor open and releases the display when surface creation fails or
 the surface is dropped. [Vulkan DRM display queries](https://docs.vulkan.org/refpages/latest/refpages/source/vkGetDrmDisplayEXT.html)
 and [display acquisition](https://docs.vulkan.org/refpages/latest/refpages/source/vkAcquireDrmDisplayEXT.html).
 
+## 19. Identify a queued Vulkan presentation on Linux
+
+A caller that enabled the Vulkan `presentId` feature can label the next
+presentation on its swapchain. The native queue passes that ID to Vulkan once.
+This lets a DRM carrier wait for the corresponding page flip, including when
+the app goes idle after presenting a single frame. Surface creation keeps the
+selected plane’s stack position and checks that it supports opaque output.
+[Vulkan presentation IDs](https://docs.vulkan.org/refpages/latest/refpages/source/VkPresentIdKHR.html).
+
 ## Updating
 
 Take the new archive whole, reapply the marked places (`git diff` against the
