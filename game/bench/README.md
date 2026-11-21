@@ -1888,3 +1888,39 @@ fill.
 
 In Chrome the lane is inline and the row is the `jobs=off` row: an inline lane
 adds no throughput.
+
+### Mac Studio with the jobs lane, 2026-11-21
+
+Mac Studio (Apple M5 Ultra, 36 cores), macOS 27.2.1, on Metal, `host-dev`, a
+1280 × 720 window on a 1920 × 1080 display at 60 Hz (the rows of 2026-11-18 were
+read at 75 Hz and are not comparable), radius 40, `move=fly`, uncalibrated. Three
+windows of 60 s after 20 s of warm-up; a range is the windows' range. `jobs=off`
+beside `jobs=on` with the fixture's job queue at 32 KiB (`bf61e9d6f`) and at
+256 KiB (branch commit `7c5363e71`, the tree of the change that set it).
+
+| Switches | `jobs` | Operations a window | `prepare` p50, p95 | `prepare` share | Frames past the deadline | Frames a window | Refill p50 | First fill |
+|---|---|---|---|---|---|---|---|---|
+| `light=8000 compare=on` | off | 3,985,200 | 0.02–0.2, 13.1–13.2 ms | 29 % | 75–93 | 3,598–3,599 | 400 ms | 14.5 s |
+| `light=8000 compare=on` | on, 32 KiB | 2,540,504–2,540,832 | 0.4–0.5, 1.5–2.0 ms | 4 % | 0 | 3,598–3,600 | 1,300 ms | 14.8 s |
+| `light=8000 compare=on` | on, 256 KiB | 3,985,200 | 0.8–0.9, 3.8 ms | 7 % | 0–9 | 3,597–3,600 | 417 ms | 14.5 s |
+| game guess | off | 3,987,103–3,987,126 | 12.9, 15.6 ms | 67–68 % | 1,428–1,440 | 3,524–3,525 | 550 ms | 28.3 s |
+| game guess | on, 32 KiB | 2,369,304–2,375,439 | 6.0–6.1, 6.8–7.4 ms | 31–32 % | 1–3 | 3,599–3,600 | 1,400 ms | not in 60 s |
+| game guess | on, 256 KiB | 3,987,806–3,987,826 | 5.1–5.2, 6.6–8.3 ms | 23–24 % | 0–2 | 3,599 | 417 ms | 14.6 s |
+| meshing alone | off | 97,200 | 0.01, 5.9–6.0 ms | 7 % | 0–10 | 3,598–3,600 | 183 ms | 14.3 s |
+| meshing alone | on, 256 KiB | 97,200 | 0.02, 1.9–2.0 ms | 3 % | 0 | 3,598 | 200 ms | 14.3 s |
+
+The game guess is `light=96000 compare=on vertex=64 blend=window edits=4`. A flight
+asks 3.99 million operations a window with the reuse compare and 97,200 without.
+
+With a 32 KiB queue the lane relieved the frame thread and fell behind: the pool
+finished each frame's fill before the next and stood idle (`renderHooks.jobs` read
+`queued: 0, running: 0` at every window's end), completing two thirds of what
+`jobs=off` did, with a refill longer than the 800 ms crossing at the game guess.
+On the Pixel 5 the same queue was never empty: its workers were the limit.
+
+With 256 KiB the lane completes the flight. `prepare` at p95 falls from 13.1 ms
+to 3.8 ms, from 15.6 ms to 6.6–8.3 ms at the game guess, and from 5.9 ms to 1.9 ms
+with meshing alone. At the game guess the 75 frames a window that `jobs=off` drops
+are drawn, the refill falls from 550 ms to 417 ms and the first fill halves. At
+the two lighter workloads the refill is one frame longer: a result is installed in
+the frame after it is made, and both lanes install at most 64 units a frame.

@@ -107,8 +107,11 @@ than cores.
   last unit for section work when sections are pending and none has run.
   Each result costs one unit, even when a compare batch has fewer than 64
   sections. After the frame's units, the hook refills the pool's queue up
-  to 32 KiB, past the deadline if needed. That step selects and submits work.
-  Lighting and meshing run on the workers.
+  to 256 KiB, past the deadline if needed. That holds about five frames of
+  radius-40 flight submissions at 60 Hz. Lighting and meshing run on the workers.
+  A pool may be starved if `renderHooks.jobs` shows `queued: 0, running: 0`
+  at the end of successive benchmark windows, `sectionsPending` stays above
+  zero, and a matched `jobs=off` run completes more operations.
 - With `inflight=keep` on either lane, a kept stale mesh finishes its crossing
   and its repair is separate work.
 - On a canvas that rests, pending jobs can keep the canvas drawing and ticking
@@ -118,10 +121,9 @@ than cores.
   under the agent's clock or on WebAssembly. A hook that uses jobs declares
   a positive allowance. This fixture takes at most 64 results per frame
   within its current allowance and takes the first result of a late frame
-  past the deadline. It caps queued inputs at 32
-  KiB and holds completed outputs at a 32 MiB threshold. The queue budget
-  covers metadata and references to already resident padded inputs. The
-  completion threshold prevents a radius-40 window of 64-byte vertices
+  past the deadline. It holds completed outputs at a 32 MiB threshold. The
+  queue budget covers metadata and references to already resident padded
+  inputs. The completion threshold prevents a radius-40 window of 64-byte vertices
   from accumulating in CPU memory while uploads wait. Up to four running
   meshes can finish after the threshold is reached.
 - `itemsDrawn` counts submitted sections once across the opaque and blended

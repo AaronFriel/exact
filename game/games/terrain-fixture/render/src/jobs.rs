@@ -8,7 +8,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 const LIMITS: Limits = Limits {
-    queued_bytes: 32 * 1024,
+    // Holds about five frames of radius-40 flight submissions at 60 Hz (LLP 1182.000 D9).
+    queued_bytes: 256 * 1024,
     running: 4,
     completed_bytes: 32 * 1024 * 1024,
     take_per_frame: <Passes as exact_game_render::Hooks>::ALLOWANCE as usize,

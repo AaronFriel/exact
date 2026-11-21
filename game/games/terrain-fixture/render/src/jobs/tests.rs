@@ -114,6 +114,140 @@ fn flying(jobs: bool) -> WorkloadSettings {
     }
 }
 
+struct PoolResults {
+    queue: Jobs<Input>,
+    submitted: Vec<SectionWork>,
+    refused_bytes: Option<usize>,
+}
+
+impl PoolResults {
+    fn new(queue: Jobs<Input>) -> Self {
+        Self {
+            queue,
+            submitted: Vec::new(),
+            refused_bytes: None,
+        }
+    }
+
+    fn prepare(&mut self, passes: &mut Passes, pending: &mut PendingJobs, tick: u64) {
+        passes.prepare_job_units(
+            pending,
+            self,
+            &Prepare {
+                gpu: None,
+                time: &hook_time(64, false),
+                tick,
+                hz: 60,
+                camera: passes.settings.motion.eye(tick, 60).to_array(),
+            },
+            Lane::Pool,
+        );
+    }
+}
+
+impl Iterator for PoolResults {
+    type Item = Done<Output>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Keep workers stopped so admission is independent of their timing.
+        None
+    }
+}
+
+impl Results for PoolResults {
+    fn submit(
+        &mut self,
+        key: u64,
+        generation: u64,
+        priority: i32,
+        input: Input,
+    ) -> Result<(), Full<Input>> {
+        let kind = input.work[0].kind;
+        if let Err(Full(input)) = self.queue.submit(key, generation, priority, input) {
+            self.refused_bytes = Some(input.bytes());
+            return Err(Full(input));
+        }
+        self.submitted.push(kind);
+        Ok(())
+    }
+
+    fn sample_retained_bytes(&mut self) -> (usize, usize) {
+        self.queue.sample_retained_bytes()
+    }
+}
+
+fn finish_mesh(passes: &mut Passes, tick: u64) {
+    let work = passes.workload.next_jobs(passes.settings, tick, 60);
+    assert_eq!(work.len(), 1);
+    assert_eq!(work[0].kind, SectionWork::Mesh);
+    passes.apply_job(None, &work, Output::Mesh(Candidate::default()));
+}
+
+#[test]
+fn jobs_pool_fills_at_least_sixty_four_jobs_with_compares_pending() {
+    let settings = WorkloadSettings {
+        radius: 40,
+        light: 8000,
+        ..flying(true)
+    };
+    let mut passes = Passes::default();
+    let time = hook_time(64, false);
+    passes.begin_work(settings, 0, 60, &time);
+    let start = settings.window(0, 60);
+    for _ in start.sections() {
+        finish_mesh(&mut passes, 0);
+    }
+    let tick = 27;
+    passes.begin_work(settings, tick, 60, &time);
+    let entering = settings.window(tick, 60).entering(Some(start)).count();
+    for _ in 0..entering - 4 {
+        finish_mesh(&mut passes, tick);
+    }
+
+    let TerrainJobs { queue, mut pending } = passes.jobs.take().unwrap();
+    let mut results = PoolResults::new(queue);
+    results.prepare(&mut passes, &mut pending, tick);
+    assert_eq!(results.submitted.first(), Some(&SectionWork::Mesh));
+    assert_eq!(results.submitted.last(), Some(&SectionWork::Compare));
+    let report = results.queue.report();
+    assert!(
+        report.queued >= 64,
+        "one fill queued {} jobs",
+        report.queued
+    );
+    let limit = 256 * 1024;
+    let refused = results
+        .refused_bytes
+        .expect("queue should refuse a compare batch");
+    assert!(
+        report.queued_bytes <= limit && report.queued_bytes + refused > limit,
+        "{} bytes queued before refusing {refused} more",
+        report.queued_bytes
+    );
+    results.prepare(&mut passes, &mut pending, tick);
+    assert_eq!(results.queue.report().queued_bytes, report.queued_bytes);
+}
+
+#[test]
+fn jobs_pool_admits_one_oversize_job_when_empty() {
+    let mut passes = Passes::default();
+    let settings = WorkloadSettings {
+        jobs: true,
+        ..WorkloadSettings::default()
+    };
+    passes.begin_work(settings, 0, 60, &hook_time(64, false));
+    let queue = Jobs::new(Limits {
+        queued_bytes: 1,
+        ..LIMITS
+    });
+    let mut results = PoolResults::new(queue);
+    results.prepare(&mut passes, &mut PendingJobs::default(), 0);
+    let report = results.queue.report();
+    assert_eq!(report.queued, 1);
+    assert!(report.queued_bytes > 1);
+    assert!(results.refused_bytes.is_some());
+}
+
 #[test]
 fn jobs_flying_with_one_unit_retires_sections_before_more_results() {
     let drive = |jobs| {
