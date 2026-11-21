@@ -230,6 +230,8 @@ browserTest('an opaque preparation frame leaves the fallback and children visibl
       const adapter = await navigator.gpu.requestAdapter();
       device = await adapter.requestDevice();
     }
+    export function gpu_reduced_motion() {}
+    export function gpu_unload() { device?.destroy(); }
     export function gpu_child_view() {} export function gpu_seekable() {}
     export function gpu_shader_names() { return '[]'; } export function gpu_shaders_clear() {}
     export function gpu_create(name, canvas) {
@@ -272,9 +274,6 @@ browserTest('an opaque preparation frame leaves the fallback and children visibl
     globalThis.exact = {views:new Map([[1,document.getElementById('delayed')],[2,document.getElementById('immediate')]]),
       root:document.body,now:()=>0,devAssets:[],generation:0,writeIn:text=>text,
       wasm:{exact_surface_record(text){records.push(text);}},send(){}};
-    await import('/gpu-glue.js');
-    exact.gpu.surface(1,'delayed',[]); exact.gpu.surface(2,'immediate',[]);
-    await exact.gpu.settled(); globalThis.ready = true;
   </script>`;
   const server = Bun.serve({hostname:'127.0.0.1',port:0,fetch(request) {
     const path = new URL(request.url).pathname;
@@ -293,7 +292,13 @@ browserTest('an opaque preparation frame leaves the fallback and children visibl
       return [[32,32],[96,32],[4,4]].map(([x,y]) => [...data.slice((y*width+x)*4,(y*width+x)*4+4)]);
     };
     await page.goto(server.url.href);
-    await page.waitForFunction(() => globalThis.ready);
+    await page.evaluate(async () => {
+      await import('/gpu-glue.js');
+      if (exact.gpu.recovery) throw new Error(exact.gpu.recovery.error);
+      exact.gpu.surface(1, 'delayed', []);
+      exact.gpu.surface(2, 'immediate', []);
+      await exact.gpu.settled();
+    });
     expect(await page.evaluate(() => renderCounts[1])).toBeGreaterThan(0);
     expect(await pixels()).toEqual([[208,32,64,255],[0,255,0,255],[32,64,208,255]]);
     await page.evaluate(async () => { completeFrame(1); exact.gpu.surface(1,'delayed',[]); await exact.gpu.settled(); });
