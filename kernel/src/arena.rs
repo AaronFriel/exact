@@ -768,6 +768,11 @@ impl NodeArena {
         out: &mut Vec<TextRun<'a>>,
         boundary: &mut crate::text::case::WordBoundary,
     ) {
+        let rows = if self.strong_text(slot) {
+            rows.stronger()
+        } else {
+            rows
+        };
         let s = slot as usize;
         match self.node_types[s] {
             NodeType::TextInput => {

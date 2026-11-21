@@ -59,6 +59,15 @@ pub fn bolder(weight: u16) -> u16 {
 }
 
 impl NodeArena {
+    /// HTML's strong importance increases the inherited weight when the
+    /// element leaves its own weight unsaid (HTML §15.3.4).
+    pub(super) fn strong_text(&self, slot: u32) -> bool {
+        self.props(slot).str(crate::PropId::SemanticTag) == Some("strong")
+            && !self.style(slot).mask.has(StyleId::FontWeight)
+            && !self.style(slot).written.has(StyleId::FontWeight)
+            && self.text_style_start(slot).is_none()
+    }
+
     /// The text style `slot`'s own `font-size` names, and whether the `font`
     /// shorthand named it.
     pub(crate) fn named_text_style(&self, slot: u32) -> Option<(u8, bool)> {

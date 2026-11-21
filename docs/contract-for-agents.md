@@ -2280,15 +2280,22 @@ A literal `role` must name a concrete ARIA role, or it is refused.
 ([combobox recipe](recipes/combobox.md)); the web exposes it, and other hosts carry it
 without using it.
 
-HTML names Contract spells otherwise (the compiler names each): `div` is `column`,
-`row` or `view`; `span`, `p`, `strong`, `em`, `b` and `i` are `text`; `h1`–`h6` are
-headings, as written; `label` is `text` beside its field, which
-`aria-label` (or `aria-labelledby`) names; `img` is `image`; `a` is `link`; `ul`,
-`ol` and `li` are a `list` or a `column` of rows; `title` and `meta` are `head
-title=… description=…`; a `table` is `view display="grid"` with
-`grid-template-columns` (or a `column` of `row`s); there is no `form` (a field's
-Enter is its `submit`) and no `details` (keep `open` in state, show the body `if
-open`). A view chooses with `if`, as an action does; a count is
+Content pages can use `p`, `strong`, `em`, `blockquote`, `ul`, `ol` and `li`.
+The web emits the corresponding HTML elements in the built page and when the
+app updates it. A paragraph holds a string or text runs. Lists hold `li`
+elements, including items from a keyed `for`. Write `li "First"` for a simple
+item, or nest paragraphs and another list inside it. Use `list` for a scrolling
+app list. Tables and description lists also emit their HTML elements.
+
+Contract spells a few HTML names differently. Write `view` for a plain
+`div`, or `column` and `row` for flex layout. A plain `text` becomes a
+`div` on the web and a `span` inside another text. Write `h1` through `h6`
+for headings, `image` for `img`, and `link` for `a`. Give a field an
+`aria-label`, or use `aria-labelledby` with the ID of its visible label.
+Set the document title and description with `head title=… description=…`.
+A field's Enter runs its `submit` action. For a disclosure, keep `open` in
+state, show the body `if open`, and toggle it from a button.
+A view chooses with `if`, as an action does; a count is
 `xs.length`, never `count`, `len` or `.size`; a resource's placeholder is `else
 empty()` (`[]` for a list), never `else []`. A component
 call uses parentheses; a built-in element uses space-separated attributes.

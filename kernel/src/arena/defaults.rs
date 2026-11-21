@@ -508,6 +508,9 @@ impl NodeArena {
             crate::text::TextStyle::from_rows(&self.styles[slot as usize], |rows, take| {
                 self.copy_inherited(slot, rows, take)
             });
+        if self.strong_text(slot) {
+            style.font_weight = crate::text::css_bolder(style.font_weight);
+        }
         self.embolden(slot, &mut style);
         style
     }
