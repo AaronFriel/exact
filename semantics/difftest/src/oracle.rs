@@ -49,6 +49,9 @@ pub struct Oracle {
     /// The app's grant lines, which admit a native module's calls; none
     /// unless a test sets them.
     pub grants: String,
+    /// Commands taken from the runner while a key was routed, kept for the
+    /// observation to print (`crate::observe::apply`).
+    pub(crate) commands: Vec<exact_runner::Command>,
     /// What a test's `answer source` lines set, by source: the answer to
     /// every call of it, a record's unnamed fields the seed's.
     answers: Rc<RefCell<Vec<SourceAnswer>>>,
@@ -85,6 +88,7 @@ impl Oracle {
             launch: Default::default(),
             grants: String::new(),
             answers: Rc::default(),
+            commands: Vec::new(),
         }
     }
 
@@ -156,6 +160,7 @@ impl Oracle {
             launch: self.launch.clone(),
             grants: self.grants.clone(),
             answers: self.answers.clone(),
+            commands: Vec::new(),
         }
     }
 

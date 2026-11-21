@@ -1214,7 +1214,10 @@ is the slider's accessibility increment or decrement, the call VoiceOver's
 swipe makes; its halves are that step's keydown with the move, then its
 keyup, and a held key's repeats move it again);
 `down` and `up` are the two halves, and `for <ms>` holds it that long on the
-virtual clock (`down` or `up` together with `for` is refused). `reload` restarts the app on the store it had: the
+virtual clock (`down` or `up` together with `for` is refused). `contract verify`
+delivers a key press to a box or text and its ancestors, including the release.
+Tab and keys on controls or elements with `press` stop verification at that step
+(`semantics/README.md`). `reload` restarts the app on the store it had: the
 web page reloads its current URL in the same profile, keeping Back and Forward
 entries; each separate test starts with an isolated history. A native app
 relaunches on the same scratch store with a fresh navigation stack. On Linux,

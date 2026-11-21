@@ -25,6 +25,28 @@ pub enum Event {
     /// A test's `answer source` line after boot: the source answers this
     /// JSON from now on, and every resource reading it is asked again.
     Answer(String, String),
+    /// A key pressed with the element with this `testId` focused, by its
+    /// chord (`"Escape"`, `"Shift+Enter"`). Keydown and keyup each follow
+    /// the receiving element's path (`crate::observe`).
+    Key(String, String),
+}
+
+/// The modifier keys named in a chord stay held through the press. The
+/// pressed modifier itself changes on each edge, as in a host event.
+pub(crate) fn key_press(chord: &str) -> [exact_runner::KeyboardEvent; 2] {
+    let down = exact_runner::KeyboardEvent::chord(chord);
+    let up = down.clone();
+    let mut edges = [down, up];
+    for (event, pressed) in edges.iter_mut().zip([true, false]) {
+        match event.key.as_str() {
+            "Shift" => event.held.shift = pressed,
+            "Control" => event.held.ctrl = pressed,
+            "Alt" => event.held.alt = pressed,
+            "Meta" => event.held.meta = pressed,
+            _ => {}
+        }
+    }
+    edges
 }
 
 /// What a corpus test expects of the runner after the steps before it.
@@ -140,6 +162,11 @@ pub fn lean_events(events: &[Event], oracle: Option<&crate::oracle::Oracle>) -> 
 }
 
 impl Event {
+    /// Whether a host lands the event's work as an input's (`InputLand`).
+    pub fn is_input(&self) -> bool {
+        matches!(self, Event::Tap(_) | Event::Type(..) | Event::Key(..))
+    }
+
     /// The step's label, exactly as `Contract.Observe.ScriptEvent.label` prints it.
     pub fn label(&self) -> String {
         match self {
@@ -154,6 +181,11 @@ impl Event {
             }
             Event::Land | Event::InputLand => "land".into(),
             Event::Answer(source, json) => format!("answer source {source} with {json}"),
+            Event::Key(t, k) => format!(
+                "type {} key {}",
+                crate::observe::quote(t),
+                crate::observe::quote(k)
+            ),
         }
     }
 
@@ -173,6 +205,20 @@ impl Event {
                 string(&self.label()),
                 string(calls)
             ),
+            Event::Key(target, chord) => {
+                let edges = key_press(chord);
+                let name = string(&edges[0].key);
+                let [down, up] = edges.map(|key| {
+                    let held = key.held;
+                    format!("(.record \"KeyboardEvent\" [(.str {name}), (.bool {}), (.bool {}), (.bool {}), (.bool {}), (.str \"\"), (.bool false), (.bool false)])",
+                        held.shift, held.ctrl, held.alt, held.meta)
+                });
+                format!(
+                    "(.keyPress {} {name} {} {down} {up})",
+                    string(target),
+                    string(&self.label())
+                )
+            }
         }
     }
 }
@@ -286,7 +332,7 @@ pub fn test_case(
             if matches!(item, Item::Event(_)) {
                 delivery.events.push(step.span());
             }
-            let input = matches!(item, Item::Event(Event::Tap(_) | Event::Type(_, _)));
+            let input = matches!(&item, Item::Event(e) if e.is_input());
             items.push(item);
             if input {
                 items.push(Item::Event(Event::InputLand));
@@ -329,7 +375,7 @@ pub fn test_case(
     if let Some((span, kind, _)) = script.delivery.stopped.as_ref().filter(|(_, kind, _)| {
         matches!(
             kind.as_str(),
-            "clock (mutation bound)" | "clock until (not met)"
+            "clock (mutation bound)" | "clock until (not met)" | KEY_DEFAULT
         )
     }) {
         script.delivery.taken = t
@@ -368,6 +414,13 @@ fn deliver(step: &Step) -> Result<Option<Item>, String> {
         Step::AnswerSource { source, value, .. } => {
             Item::Event(Event::Answer(source.clone(), value.clone()))
         }
+        Step::Key {
+            target,
+            key,
+            phase: None,
+            duration: None,
+            ..
+        } => Item::Event(Event::Key(target.clone(), key.clone())),
         Step::Clock { arg, span } if arg.starts_with("until ") => until(arg, *span)?,
         Step::Clock { arg, .. } if arg == "data" => Item::Event(Event::Land),
         Step::Clock { arg, .. } => match arg.strip_prefix('+').map(str::parse::<f64>) {
@@ -438,6 +491,10 @@ fn deliver(step: &Step) -> Result<Option<Item>, String> {
     }))
 }
 
+/// The kind of a key step whose default at its target is the host's: the
+/// block stops there (`crate::settle::expand`).
+pub(crate) const KEY_DEFAULT: &str = "type key (a control's default)";
+
 fn until(arg: &str, span: contract_syntax::Span) -> Result<Item, String> {
     let (path, rest) = arg
         .strip_prefix("until state ")
@@ -460,6 +517,7 @@ fn delivered_kind(kind: &str) -> bool {
         "Tap"
             | "Type"
             | "AnswerSource"
+            | "Key"
             | "Clock"
             | "ExpectState"
             | "ExpectText"
@@ -513,6 +571,9 @@ fn step_kind(step: &Step) -> String {
         } if *form != contract_syntax::TapForm::Press || !modifiers.is_empty() => {
             "tap (not a plain press)".into()
         }
+        Step::Key {
+            phase, duration, ..
+        } if phase.is_some() || duration.is_some() => "type key (held)".into(),
         other => kind_name(other.kind()),
     }
 }
@@ -610,7 +671,7 @@ mod tests {
             ("pass fetch \"https://example.test\"", "pass fetch"),
             ("back", "back"),
             ("close", "close"),
-            ("type \"add\" key \"Enter\"", "type key"),
+            ("type \"add\" key \"Enter\" down", "type key (held)"),
             ("tap \"add\" hover", "tap (not a plain press)"),
             ("pick \"file\" cancel", "pick"),
             ("resize 800x600", "resize"),

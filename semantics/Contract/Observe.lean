@@ -93,6 +93,17 @@ structure Ran where
   action : String
   out : Outcome
 
+private def runHandler (p : Program) (o : Oracle) (c : Config) (n : VNode) (a : String)
+    (args : List Expr) (payload : List Value) : (Config × Outcome) × List Ran :=
+  let env : Env := ({ prog := p, slots := c.slots, derives := c.settled.derives,
+                      resources := c.settled.resources, rows := rowSlots c.store n.rows,
+                      now := c.now, idle := c.settled.idle } : Env).withOwned
+  match evalList fuel env false n.locals args with
+  | .error e => ((c, .refused e), [⟨"handler", a, .refused (.refused ("arguments refused: " ++ why e))⟩])
+  | .ok vs =>
+    let result := runAction p o c a (vs ++ payload) n.rows
+    (result, [⟨"handler", a, result.2⟩])
+
 /-- `dispatch` with the action attempted, including a refusal of its arguments. -/
 def dispatchTrace (p : Program) (o : Oracle) (c : Config) (target : String) (event : String)
     (payload : Option Value) : (Config × Outcome) × List Ran :=
@@ -105,17 +116,11 @@ def dispatchTrace (p : Program) (o : Oracle) (c : Config) (target : String) (eve
     | .some (_, a, args) =>
       if payload.isSome && n.control.isSome then
         ((c, .refused (.unsupported s!"a payload for a `{n.control.getD ""}` control")), []) else
-      let env : Env := ({ prog := p, slots := c.slots, derives := c.settled.derives,
-                          resources := c.settled.resources, rows := rowSlots c.store n.rows,
-                          now := c.now, idle := c.settled.idle } : Env).withOwned
-      match evalList fuel env false n.locals args with
-      | .error e => ((c, .refused e), [⟨"handler", a, .refused (.refused ("arguments refused: " ++ why e))⟩])
-      | .ok vs =>
-        let result := runAction p o c a (vs ++ payload.toList) n.rows
-        (result, [⟨"handler", a, result.2⟩])
+      runHandler p o c n a args payload.toList
 
 /-- `advance` with each attempted commit, in scheduling order. -/
-def advanceTrace (p : Program) (o : Oracle) (c : Config) (t : F64) : (Config × Outcome) × List Ran :=
+def advanceTrace (p : Program) (o : Oracle) (c : Config) (t : F64)
+    (applyChanges : Bool := false) : (Config × Outcome) × List Ran :=
   let due (c : Config) : Option (Timer × Nat) :=
     (c.timers.zipIdx).foldl (fun best (tm, i) =>
       if tm.next ≤ t then
@@ -162,12 +167,12 @@ def advanceTrace (p : Program) (o : Oracle) (c : Config) (t : F64) : (Config × 
       match due c with
       | .none => finish c
       | .some (tm, i) =>
-        if tm.change && n + 1 < timerFireLimit then ((c, .ok), []) else
+        if tm.change && !applyChanges && n + 1 < timerFireLimit then ((c, .ok), []) else
         let timers := c.timers.set i tm.fired
         let c := { c with timers, now := if tm.change && tm.next < c.now then c.now else tm.next }
         match timerCommit p o c tm with
         | (c, .ok) =>
-          let (result, ran) := if tm.change then ((c, .ok), []) else go n c
+          let (result, ran) := if tm.change && !applyChanges then ((c, .ok), []) else go n c
           (result, ⟨"task", tm.action, .ok⟩ :: ran)
         | (c, out) => ((c, out), [⟨"task", tm.action, out⟩])
   if t < c.now then ((c, .ok), []) else go timerFireLimit c
@@ -326,6 +331,44 @@ def stepTrace (p : Program) (o : Oracle) (c : Config) : Event → (Config × Out
   | .clock ms => advanceTrace p o c (c.now + ms)
   | .other t e v => dispatchAtTrace p o c t e v
 
+/-- The root-to-target path in the view that receives a keyboard event. -/
+private def keyPath (id : String) : List VNode → Option (List VNode)
+  | [] => .none
+  | n@{ children, .. } :: rest =>
+    if n.testId == .some id then .some [n] else
+    match keyPath id children with
+    | .some path => .some (n :: path)
+    | .none => keyPath id rest
+
+private def keyPhase (p : Program) (o : Oracle) (c : Config) (out : Outcome)
+    (handlers : List (VNode × String)) (payload : List Value) : (Config × Outcome) × List Ran := Id.run do
+  let mut current := c
+  let mut status := out
+  let mut ran := []
+  for (node, event) in handlers do
+    if current.poisoned then break
+    if let .some (_, name, args) := node.handlers.find? (·.1 == event) then
+      let arity := ((p.actions.find? (·.name == name)).map (·.params.length)).getD 0
+      let before := current.commands.length
+      let ((next, result), attempts) := runHandler p o current node name args (payload.take (arity - args.length))
+      current := next
+      ran := ran ++ attempts
+      if let .ok := status then status := result
+      if (current.commands.drop before).any (·.1 == "stopPropagation") then break
+  return ((current, status), ran)
+
+private def keyPress (p : Program) (o : Oracle) (c : Config) (target key : String) (downInfo upInfo : Value) :
+    (Config × Outcome) × List Ran := Id.run do
+  if (findTestId target c.view).isNone then
+    return ((c, .refused (.refused s!"no element `{target}`")), [])
+  let ((ready, due), timers) := advanceTrace p o c c.now true
+  let path := (keyPath target ready.view).getD (ready.view.take 1)
+  let down := path.map (·, "keycapture") ++ path.reverse.map (·, "key")
+  let ((pressed, status), downs) := keyPhase p o ready due down [.str key, downInfo]
+  let up := (keyPath target pressed.view).getD (pressed.view.take 1)
+  let (result, ups) := keyPhase p o pressed status (up.reverse.map (·, "keyup")) [.str key, upInfo]
+  return (result, timers ++ downs ++ ups)
+
 /-- Script delivery includes `land`; the event type used by the existing theorems stays unchanged. -/
 inductive ScriptEvent where
   | tap (target : String)
@@ -334,6 +377,7 @@ inductive ScriptEvent where
   | other (target event : String) (payload : Option Value)
   | land
   | answerSource (source label : String) (calls : Oracle)
+  | keyPress (target key label : String) (down up : Value)
 
 /-- Replace the answers to this source. Other sources keep their answers and host facts. -/
 def ScriptEvent.oracle (resources : List ResourceDecl) (o : Oracle) : ScriptEvent → Oracle
@@ -347,11 +391,11 @@ def ScriptEvent.event : ScriptEvent → Option Event
   | .change t s => .some (.change t s)
   | .clock ms => .some (.clock ms)
   | .other t e v => .some (.other t e v)
-  | .land | .answerSource .. => .none
+  | .land | .answerSource .. | .keyPress .. => .none
 
 def ScriptEvent.label (e : ScriptEvent) : String :=
   match e with
-  | .answerSource _ label _ => label
+  | .answerSource _ label _ | .keyPress _ _ label _ _ => label
   | _ => e.event.map Event.label |>.getD "land"
 
 #guard ScriptEvent.land.label == "land"
@@ -445,6 +489,9 @@ def runScript (p : Program) (o : Oracle) (events : List ScriptEvent) : List Stri
     o := e.oracle p.resources o
     let before := c.commands.length
     let (label, result, twin, ran) := match e, e.event with
+      | .keyPress target key label down up, _ =>
+        let (result, ran) := keyPress p o c target key down up
+        (label, result, result, ran)
       | .answerSource source label _, _ =>
         let (result, ran) := sourceChanged p o c source
         (label, result, result, ran)

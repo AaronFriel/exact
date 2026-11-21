@@ -806,6 +806,13 @@ def cfindTestId (id : String) : List CVNode → Option CVNode
       | .some m => .some m
       | .none => cfindTestId id rest
 
+private def callHandler (p : CProgram) (o : Oracle) (c : CConfig) (h : CHandler)
+    (payload : List Value) : CConfig × Outcome :=
+  let ce : CEnv := { prog := p, root := rootEnv p c.slots c.settled c.now, store := c.store }
+  match forceAll fuel ce h.args with
+  | .error e => (c, .refused e)
+  | .ok vs => crunAction p o c h.frame h.action (vs ++ payload)
+
 def cdispatch (p : CProgram) (o : Oracle) (c : CConfig) (target : String) (event : String)
     (payload : Option Value) : CConfig × Outcome :=
   if c.poisoned then (c, .refused (.refused "poisoned")) else
@@ -817,13 +824,11 @@ def cdispatch (p : CProgram) (o : Oracle) (c : CConfig) (target : String) (event
     | .some h =>
       if payload.isSome && n.control.isSome then
         (c, .refused (.unsupported s!"a payload for a `{n.control.getD ""}` control")) else
-      let ce : CEnv := { prog := p, root := rootEnv p c.slots c.settled c.now, store := c.store }
-      match forceAll fuel ce h.args with
-      | .error e => (c, .refused e)
-      | .ok vs => crunAction p o c h.frame h.action (vs ++ payload.toList)
+      callHandler p o c h payload.toList
 
 /-- `Contract.advance`, with the root's actions run as above. -/
-def cadvance (p : CProgram) (o : Oracle) (c : CConfig) (t : F64) : CConfig × Outcome :=
+def cadvance (p : CProgram) (o : Oracle) (c : CConfig) (t : F64)
+    (applyChanges : Bool := false) : CConfig × Outcome :=
   let due (c : CConfig) : Option (Timer × Nat) :=
     (c.timers.zipIdx).foldl (fun best (tm, i) =>
       if tm.next ≤ t then
@@ -857,11 +862,11 @@ def cadvance (p : CProgram) (o : Oracle) (c : CConfig) (t : F64) : CConfig × Ou
         -- as `advance` and the runner's `needs_apply` return: one due after
         -- other fires waits for the next step, and one that fires ends
         -- this step at its own time, or at `now` when it is overdue.
-        if tm.change && n + 1 < timerFireLimit then (c, .ok) else
+        if tm.change && !applyChanges && n + 1 < timerFireLimit then (c, .ok) else
         let timers := c.timers.set i tm.fired
         let c := { c with timers, now := if tm.change && tm.next < c.now then c.now else tm.next }
         match crunAction p o c .root tm.action [] with
-        | (c, .ok) => if tm.change then (c, .ok) else go n c
+        | (c, .ok) => if tm.change && !applyChanges then (c, .ok) else go n c
         | (c, out) => (c, out)
   if t < c.now then (c, .ok) else go timerFireLimit c
 
@@ -916,6 +921,40 @@ def csourceChanged (p : CProgram) (o : Oracle) (c : CConfig) (source : String) :
     | .error e => ({ c with settled := st, poisoned := true }, .poisoned e)
     | .ok (view, live) => ({ c with settled := st, view, store := live }, .ok)
 
+private def ckeyPath (id : String) : List CVNode → Option (List CVNode)
+  | [] => .none
+  | n@{ children, .. } :: rest =>
+    if n.testId == .some id then .some [n] else
+    match ckeyPath id children with
+    | .some path => .some (n :: path)
+    | .none => ckeyPath id rest
+
+private def ckeyPhase (p : CProgram) (o : Oracle) (c : CConfig) (out : Outcome)
+    (handlers : List (CVNode × String)) (payload : List Value) : CConfig × Outcome := Id.run do
+  let mut current := c
+  let mut status := out
+  for (node, event) in handlers do
+    if current.poisoned then break
+    if let .some h := node.handlers.find? (·.event == event) then
+      let arity := ((p.actionIn h.frame h.action).map (·.params.length)).getD 0
+      let before := current.commands.length
+      let (next, result) := callHandler p o current h (payload.take (arity - h.args.length))
+      current := next
+      if let .ok := status then status := result
+      if (current.commands.drop before).any (·.1 == "stopPropagation") then break
+  return (current, status)
+
+private def ckeyPress (p : CProgram) (o : Oracle) (c : CConfig) (target key : String) (downInfo upInfo : Value) :
+    CConfig × Outcome := Id.run do
+  if (cfindTestId target c.view).isNone then
+    return (c, .refused (.refused s!"no element `{target}`"))
+  let (ready, due) := cadvance p o c c.now true
+  let path := (ckeyPath target ready.view).getD (ready.view.take 1)
+  let down := path.map (·, "keycapture") ++ path.reverse.map (·, "key")
+  let (pressed, status) := ckeyPhase p o ready due down [.str key, downInfo]
+  let up := (ckeyPath target pressed.view).getD (pressed.view.take 1)
+  return ckeyPhase p o pressed status (up.reverse.map (·, "keyup")) [.str key, upInfo]
+
 /-- Observe the same script against the unexpanded component tree. -/
 def crun (p : CProgram) (o : Oracle) (events : List Observe.ScriptEvent) : List String := Id.run do
   let rp := rootProgram p
@@ -930,6 +969,7 @@ def crun (p : CProgram) (o : Oracle) (events : List Observe.ScriptEvent) : List 
     let before := c.commands.length
     o := e.oracle rp.resources o
     let (c', out) := match e, e.event with
+      | .keyPress target key _ down up, _ => ckeyPress p o c target key down up
       | .answerSource source _ _, _ => csourceChanged p o c source
       | _, some event => cstep p o c event
       | _, none => (c, Outcome.ok)

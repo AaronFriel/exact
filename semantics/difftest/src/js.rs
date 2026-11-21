@@ -129,6 +129,16 @@ fn event(e: &Event) -> String {
             string(source),
             string(&e.label())
         ),
+        Event::Key(target, chord) => {
+            let edges = crate::script::key_press(chord).map(|key| {
+                serde_json::json!({
+                    "key": key.key, "shiftKey": key.held.shift, "ctrlKey": key.held.ctrl,
+                    "altKey": key.held.alt, "metaKey": key.held.meta,
+                    "code": key.code, "repeat": key.repeat, "isComposing": key.is_composing
+                })
+            });
+            serde_json::json!({"target": target, "label": e.label(), "key": edges}).to_string()
+        }
     }
 }
 

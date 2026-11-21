@@ -621,3 +621,156 @@ fn an_answer_the_source_cannot_give_is_refused_by_name() {
         "code: 7 is not a string"
     );
 }
+
+const KEYED: &str = r#"component App
+  state closed = false
+  state note = ""
+  action keys(key: string)
+    if key == "Escape"
+      closed = true
+      note = "closed-by-key"
+  action released(key: string)
+    if key == "F2"
+      note = "renaming"
+  action typed(value: string)
+    note = value
+  action save
+    note = "saved"
+  view
+    column key=keys testId="window"
+      column keyup=released testId="release"
+      column press=save key=keys testId="pressable"
+      input value=note input=typed key=keys testId="note"
+      button "Save" press=save key=keys testId="save"
+"#;
+
+#[test]
+fn a_tests_key_press_runs_its_handlers_unless_its_default_is_the_hosts() {
+    let tests = r#"test "Escape closes the window"
+  expect state closed == false
+  type "window" key "Escape"
+  expect state closed == true
+
+test "a key at a field types into it, which the host does"
+  type "note" key "Escape"
+  expect state closed == true
+
+test "the host activates a pressable box"
+  type "pressable" key "Enter"
+
+test "the host moves focus"
+  type "window" key "Shift+Tab"
+"#;
+    let source = format!("{KEYED}\n{tests}");
+    let scripts = script::scripted("keys", &source, None).unwrap();
+    let closes = &scripts[0];
+    assert!(
+        closes.delivery.stopped.is_none(),
+        "{:?}",
+        closes.delivery.stopped
+    );
+    assert_eq!(
+        closes.case.events,
+        [
+            script::Event::Key("window".into(), "Escape".into()),
+            script::Event::InputLand
+        ]
+    );
+    assert_eq!(
+        closes.case.events[0].label(),
+        r#"type "window" key "Escape""#
+    );
+    crate::expectations(closes).unwrap();
+    for (script, reason) in scripts[1..]
+        .iter()
+        .zip(["TextInput", "press handler", "focus"])
+    {
+        let (_, kind, why) = script.delivery.stopped.as_ref().unwrap();
+        assert_eq!(kind, "type key (a control's default)");
+        assert!(why.contains(reason), "{why}");
+        assert!(script.case.events.is_empty());
+    }
+}
+
+#[test]
+fn a_walk_presses_the_keys_its_key_handlers_hold() {
+    let base = script::Case {
+        name: "keys".into(),
+        seed: Some(3),
+        source: KEYED.into(),
+        events: Vec::new(),
+        path: None,
+        stored: false,
+        prerendered: false,
+        launch: Default::default(),
+        answers: Vec::new(),
+    };
+    let plan = compile(&base).unwrap();
+    let source = format!("{KEYED}\ntest \"focus traversal\"\n  type \"window\" key \"Tab\"\n");
+    let tests = contract_syntax::parse(&source).unwrap().tests;
+    let inputs = crate::walk::Inputs::new(&source, tests.into_iter());
+    let walk = crate::walk::generate(&plan, &base, None, 3, 0, 40, &inputs);
+    let keys: Vec<_> = walk
+        .scripted
+        .case
+        .events
+        .iter()
+        .filter_map(|e| match e {
+            script::Event::Key(target, key) => Some((target.as_str(), key.as_str())),
+            _ => None,
+        })
+        .collect();
+    let expected = [("window", "Escape"), ("release", "F2")];
+    for key in expected {
+        assert!(keys.contains(&key), "{keys:?}");
+    }
+    assert!(keys.iter().all(|k| expected.contains(k)), "{keys:?}");
+    for action in ["keys", "released"] {
+        assert!(walk.rendered.contains(action));
+        assert!(walk
+            .observation
+            .iter()
+            .any(|line| line.starts_with("ran handler") && line.contains(action)));
+    }
+}
+
+#[test]
+fn a_key_runs_capture_outermost_first_then_bubbles_until_a_stop() {
+    let source = include_str!("../../corpus/edge/keyboard-propagation.contract");
+    for s in script::scripted("route", source, None).unwrap() {
+        assert!(
+            s.delivery.stopped.is_none(),
+            "{}: {:?}",
+            s.case.name,
+            s.delivery.stopped
+        );
+        crate::expectations(&s).unwrap_or_else(|e| panic!("{}: {e}", s.case.name));
+    }
+}
+
+/// Work due at the keydown fires first, as it does before any input, so a
+/// change task the boot armed does not hold the key back.
+#[test]
+fn a_key_waits_for_no_change_task_due_before_it() {
+    let source = r#"component App
+  state closed = false
+  state seen = 0
+  action bump
+    seen = seen + 1
+  action keys(key: string)
+    if key == "Escape"
+      closed = true
+  task watch when not closed key=closed
+    change(bump)
+  view
+    column key=keys testId="window"
+      text `${seen}` testId="seen"
+
+test "Escape closes the window"
+  type "window" key "Escape"
+  expect state closed == true
+"#;
+    let s = script::scripted("due", source, None).unwrap().remove(0);
+    assert!(s.delivery.stopped.is_none(), "{:?}", s.delivery.stopped);
+    crate::expectations(&s).unwrap();
+}
