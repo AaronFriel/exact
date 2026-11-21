@@ -654,6 +654,7 @@ async function main(args, lockHeld = false) {
     return identity(prof.team, { profiles: [prof, pair?.extension, ...(!tv && packaged.has('watch') ? watchProfiles({ app, udid: ph?.udid, like: prof }) : [])].filter(Boolean) });
   })() : ios ? '-' : appstore ? (args.includes('--ad-hoc') ? '-' : process.env.EXACT_APPSTORE_ID ?? null) : (distribution ? process.env.EXACT_DEVELOPER_ID ?? null : macIdentity());
   if (!ios && sha1 === '-') widgets = false;
+  if (!ios && !appleEmbedOnly(args)) macSigning(app, null, { current: sha1, release: process.env.EXACT_UPDATE_TRUST === 'production' || distribution, distribution, store: appstore ? 'appstore' : null, preflight: true, log: () => {} });
   let macWidgets = null;
   const dylib = `lib${gpuCrate.replace(/-/g, '_')}.dylib`;
   // One load name lets the Swift presenter serve every app.

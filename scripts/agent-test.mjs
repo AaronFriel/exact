@@ -385,20 +385,22 @@ export function backendFetchPrefixes(tests, origins) {
  * go (`request N (name) failed and is no longer pending: <it ends unsent | it is not retried>: <why>`). A mutation has no
  * `state.failed`: its slot keeps what it had and its `then` never runs, so this is the only place the reason is said
  * (sb4 farm wave 6, E3: an answer's undeclared field voided a reply, 25 minutes with nothing naming the field). */
-export function refusedReplies(lines) {
+export function refusedReplies(lines, { resources = false } = {}) {
   const refused = new Map();
+  const outcome = resources ? 'it ends unsent|it is not retried|it keeps its last value' : 'it ends unsent|it is not retried';
+  const requestRe = new RegExp(`request \\d+ \\(([^)]+)\\) failed and is no longer pending: (?:${outcome}): (.*)$`);
   for (const l of Array.isArray(lines) ? lines : []) {
-    const m = (typeof l === 'string' ? l : JSON.stringify(l)).match(/request \d+ \(([^)]+)\) failed and is no longer pending: (?:it ends unsent|it is not retried): (.*)$/)
-      ?? (typeof l === 'string' ? l : JSON.stringify(l)).match(/send ([^ ]+) failed: (.*); it ends unsent$/);
+    const text = typeof l === 'string' ? l : JSON.stringify(l);
+    const m = text.match(requestRe) ?? text.match(/send ([^ ]+) failed: (.*); it ends unsent$/);
     if (m) refused.set(m[1], m[2]);
   }
   return refused;
 }
-/** Assert a mutation's observed refusal, preserving only its matching journal lines for verify. */
+/** Assert a mutation's or resource's observed refusal, preserving only its matching journal lines for verify. */
 export function refusalExpectation(logs, target) {
   const lines=Array.isArray(logs?.lines) ? logs.lines : [];
   for (let i=lines.length-1;i>=0;i--) {
-    const why=refusedReplies([lines[i]]).get(target);
+    const why=refusedReplies([lines[i]], { resources: true }).get(target);
     if (why==null) continue;
     const expected=[String(lines[i])];
     // A failed reply's transaction line precedes the request's terminal failure.
@@ -409,7 +411,7 @@ export function refusalExpectation(logs, target) {
     }
     return { expected };
   }
-  return { message: `expected mutation ${JSON.stringify(target)} to refuse, but no refused reply was observed; clock data or clock settle lands a send` };
+  return { message: `expected ${JSON.stringify(target)} to refuse, but no refused reply was observed; clock data or clock settle lands a request` };
 }
 
 /** What had failed when a test launched: nothing (LLP 1146 D4). */
@@ -424,7 +426,7 @@ export async function failureMark(s) {
   return {
     failures: Object.fromEntries(Object.entries(state.failures ?? {}).map(([name, f]) => [name, f.count])),
     failed: state.failed ?? {}, mutations: state.mutationFailures ?? {},
-    faults: Object.fromEntries((state.faults ?? []).map((f) => [f.prefix, f.failureHits ?? (f.response ? 0 : f.hits)])), journal,
+    faults: Object.fromEntries((state.faults ?? []).map((f) => [f.prefix, f.failureHits ?? (!f.response || f.response.status >= 400 ? f.hits : 0)])), journal,
   };
 }
 
@@ -436,11 +438,12 @@ export function unarranged(was, now, { refusals = [], churn = [] } = {}) {
   const faulted = Object.entries(now.faults).some(([prefix, hits]) => hits > (was.faults[prefix] ?? 0));
   if (!faulted) {
     for (const [name, count] of Object.entries(now.failures)) {
+      if (refusals.includes(name)) continue;
       const more = count - (was.failures[name] ?? 0);
       if (more > 0) out.push(`resource ${name} was refused ${more === 1 ? 'once' : `${more} times`}${now.failed[name] ? ` (${now.failed[name]})` : ''}`);
     }
     // A host that counts no refusals still names what failed.
-    for (const [name, why] of Object.entries(now.failed)) if (!(name in now.failures) && !(name in was.failed)) out.push(`resource ${name} failed (${why})`);
+    for (const [name, why] of Object.entries(now.failed)) if (!refusals.includes(name) && !(name in now.failures) && !(name in was.failed)) out.push(`resource ${name} failed (${why})`);
   }
   for (const [name, f] of Object.entries(now.mutations)) {
     if (refusals.includes(name) || JSON.stringify(f) === JSON.stringify(was.mutations[name])) continue;

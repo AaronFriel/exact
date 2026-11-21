@@ -361,6 +361,24 @@ test('failure evidence survives replacement and reload independently of response
   expect(parseFaults(faultSpecOf(faultsJson()))[0]).toMatchObject({hits: 1, failureHits: 2});
 });
 
+test('answer fetch 4xx and 5xx responses increment failureHits across reload while 2xx does not (LLP 1156.007)', async () => {
+  const set = normalized('net.fetch https://api.test');
+  faultOp({answer: 'https://api.test/ok', response: {status: 200, headers: {}, body: 'ok'}});
+  faultOp({answer: 'https://api.test/missing', response: {status: 404, headers: {}, body: 'nope'}});
+  faultOp({answer: 'https://api.test/broken', response: {status: 500, headers: {}, body: 'boom'}});
+  expect((await fetchWith(set, 'https://api.test/ok')).status).toBe(200);
+  expect((await fetchWith(set, 'https://api.test/missing')).status).toBe(404);
+  expect((await fetchWith(set, 'https://api.test/broken')).status).toBe(500);
+  const byPrefix = Object.fromEntries(faultsJson().map(f => [f.prefix, {hits: f.hits, failureHits: f.failureHits}]));
+  expect(byPrefix).toEqual({
+    'https://api.test/ok': {hits: 1, failureHits: 0},
+    'https://api.test/missing': {hits: 1, failureHits: 1},
+    'https://api.test/broken': {hits: 1, failureHits: 1},
+  });
+  const reloaded = Object.fromEntries(parseFaults(faultSpecOf(faultsJson())).map(f => [f.prefix, {hits: f.hits, failureHits: f.failureHits}]));
+  expect(reloaded).toEqual(byPrefix);
+});
+
 test('Chromium gives fixtures the real response properties and request-mode refusals', async () => {
   const { suiteBrowser } = await import('../../scripts/agent-launch.mjs');
   const { hostFixtureFile } = await import('./tests/glue-fixture.mjs');

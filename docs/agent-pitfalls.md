@@ -112,6 +112,14 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   the `dialog` itself to fill the sheet between its side insets. Verified on an
   iPhone 17 Pro simulator, iOS 27.0 (#845).
 
+- **An `alertdialog` button with `press=action` and `commandfor`/`command="close"` stays open when `action` disables it.**
+  Symptom: tapping Save clears the prompt input (`draft = ""`), `disabled=(draft == "")` turns
+  true, and the alert never closes. Cause: HTML runs the button's click handler before its
+  invoker command and skips `command="close"` when the button is now disabled, and Exact's
+  native hosts follow HTML (LLP 1115). Fix: call `close("id")` inside the action (without
+  `commandfor`/`command="close"`), or clear `draft` in the mutation's `then` or the dialog's
+  `close` handler. (Feedback `b39da82a`, web and native hosts, 2026-11-19.)
+
 - **A root with `min-height="100%"` and `overflow-y="auto"` does not scroll itself.**
   `min-height` lets the box grow with its in-flow content (CSS), so it has nothing to
   scroll and the document scrolls instead: on the web a screenshot shows only the first

@@ -830,7 +830,8 @@ test('expect refusal asserts an observed mutation failure and preserves unrelate
     'refused reply other; wall 1 ms: Not permitted',
     'showModal absent refused: no dialog has that id',
   ]);
-  expect(refusalExpectation({lines},'resource').message).toContain('no refused reply was observed');
+  expect(refusalExpectation({lines},'resource')).toEqual({expected:[lines[7]]});
+  expect(refusalExpectation({lines},'absent').message).toContain('no refused reply was observed');
   expect(refusalExpectation({lines:[]},'saved').message).toContain('clock data');
   // The same assertion cannot consume a refusal before the preceding assertion of the same slot's log cursor.
   expect(refusalExpectation({lines:lines.slice(2)},'saved').expected).toEqual([lines[3],lines[2]]);
@@ -845,7 +846,6 @@ test('expect refusal asserts an observed mutation failure and preserves unrelate
   expect(refusalsOf({lines:lines.slice(0,2),host:[mirror,mirror]},first.expected)).toEqual(['refused reply saved; wall 3 ms: Not permitted']);
   expect(refusalsOf({lines:repeated,host:[mirror,mirror,mirror]},[...first.expected,...first.expected])).toEqual(['refused reply saved; wall 3 ms: Not permitted']);
 });
-
 
 test('an authored expected refusal keeps a prior send value, skips then, and is accepted by verify', async () => {
   const {refusalsOf} = await import('./verify.mjs');

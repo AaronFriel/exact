@@ -857,6 +857,7 @@ extension Presenter {
                 if control.accessibilityLabel() != node.authoredLabel { control.setAccessibilityLabel(node.authoredLabel) }
                 #else
                 if control.accessibilityLabel != node.authoredLabel { control.accessibilityLabel = node.authoredLabel }
+                if node.props["type"] == "select" { assign(control, \.accessibilityValue, controls.selectValue(for: node)) }
                 #endif
             } else {
                 #if os(macOS)
@@ -865,6 +866,7 @@ extension Presenter {
                 if node.accessibilityLabel != node.accessibleName { node.accessibilityLabel = node.accessibleName }
                 node.updateImageAccessibility()
                 #endif
+                node.video?.update()
             }
         }
         for node in nodes {

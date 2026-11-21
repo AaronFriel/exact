@@ -203,6 +203,10 @@ pub struct Faults {
     lines: Arc<Mutex<std::collections::VecDeque<String>>>,
 }
 
+fn counts_as_failure(response: Option<&Response>) -> bool {
+    response.is_none_or(|r| r.status >= 400)
+}
+
 impl Faults {
     /// The table a launch names: `EXACT_AGENT_FAIL_FETCH`, in
     /// [`Faults::parse`]'s lines, read only in an agent launch.
@@ -258,7 +262,11 @@ impl Faults {
                 })
                 .transpose()?;
             let failure_hits =
-                count(fields.next())?.unwrap_or(if response.is_none() { hits } else { 0 });
+                count(fields.next())?.unwrap_or(if counts_as_failure(response.as_ref()) {
+                    hits
+                } else {
+                    0
+                });
             faults.retain(|f| f.prefix != prefix);
             faults.push(Fault {
                 prefix: prefix.to_string(),
@@ -364,7 +372,7 @@ impl Faults {
         match hit {
             Some(f) => {
                 f.hits += 1;
-                if f.response.is_none() {
+                if counts_as_failure(f.response.as_deref()) {
                     f.failure_hits += 1;
                 }
                 f.left = f.left.map(|n| n - 1);
@@ -520,6 +528,9 @@ impl<D: DataSource> Runner<D> {
                             .is_some_and(|r| Arc::ptr_eq(r, &fixture))
                 }) {
                     entry.hits += 1;
+                    if counts_as_failure(Some(&fixture)) {
+                        entry.failure_hits += 1;
+                    }
                 }
                 let mut lines = faults.lines.lock().unwrap_or_else(|e| e.into_inner());
                 lines.push_back(format!("fetch answered (driver fixture): {}", request.url));
@@ -855,5 +866,109 @@ mod tests {
         assert!(launch
             .json()
             .contains("\"prefix\":\"https://d.test/\",\"times\":2,\"left\":2"));
+    }
+
+    #[test]
+    fn error_status_response_fixtures_count_as_failures_in_both_paths() {
+        let mut builder = exact_plan::builder::PlanBuilder::new(exact_kernel::SCHEMA_DIGEST, 1);
+        builder.node(
+            exact_kernel::NodeType::View as u8,
+            None,
+            None,
+            0,
+            &[],
+            &[],
+            None,
+        );
+        struct Granted;
+        impl DataSource for Granted {
+            fn query(
+                &mut self,
+                source: &str,
+                _: &[exact_plan::Value],
+            ) -> Result<exact_plan::Value, crate::DataError> {
+                Err(crate::DataError::UnknownSource(source.into()))
+            }
+            fn grants(&self) -> &str {
+                "net.fetch https://api.test"
+            }
+        }
+        let mut runner = Runner::boot(
+            builder.finish().unwrap(),
+            Granted,
+            exact_kernel::Kernel::with_monospace(),
+            Default::default(),
+            "/",
+        )
+        .unwrap();
+        let faults = runner.faults().clone();
+        faults
+            .answer(
+                "https://api.test/ok",
+                &serde_json::json!({"status": 200, "headers": {}, "body": "ok"}),
+            )
+            .unwrap();
+        faults
+            .answer(
+                "https://api.test/missing",
+                &serde_json::json!({"status": 404, "headers": {}, "body": "nope"}),
+            )
+            .unwrap();
+        faults
+            .answer(
+                "https://api.test/broken",
+                &serde_json::json!({"status": 500, "headers": {}, "body": "boom"}),
+            )
+            .unwrap();
+        // Path 1: `take_response`.
+        assert_eq!(
+            faults
+                .take_response("https://api.test/ok", true)
+                .unwrap()
+                .unwrap()
+                .status,
+            200
+        );
+        assert_eq!(
+            faults
+                .take_response("https://api.test/missing", true)
+                .unwrap()
+                .unwrap()
+                .status,
+            404
+        );
+        // Path 2: `Runner::fault_dispatch` (the normal HTTP dispatch closure).
+        let out = RequestOut {
+            completion: None,
+            ticket: 7,
+            target: "items".into(),
+            request: crate::Request::get("https://api.test/broken"),
+            class: Default::default(),
+            forced: false,
+        };
+        let work = runner.fault_dispatch(&out).expect("matched 500 answer");
+        match work {
+            Dispatch::Run(Work::HttpResponse(run)) => match run() {
+                Outcome::Response(response) => assert_eq!(response.status, 500),
+                other => panic!("expected Response outcome, got {other:?}"),
+            },
+            _ => panic!("expected Dispatch::Run(Work::HttpResponse)"),
+        }
+        let table = faults.table();
+        let counts: Vec<_> = table
+            .iter()
+            .map(|f| (f.prefix.as_str(), f.hits, f.failure_hits))
+            .collect();
+        assert_eq!(
+            counts,
+            vec![
+                ("https://api.test/ok", 1, 0),
+                ("https://api.test/missing", 1, 1),
+                ("https://api.test/broken", 1, 1),
+            ]
+        );
+        drop(table);
+        let carried = Faults::parse(&faults.spec()).unwrap();
+        assert_eq!(carried.json(), faults.json());
     }
 }

@@ -46,8 +46,10 @@ export function answeredFetch(fixture, request) {
   return wrap(opaque ? Response.error() : new Response(request.method === 'HEAD' || [204, 205, 304].includes(fixture.status) ? null : new TextEncoder().encode(fixture.body), fixture));
 }
 
+const isFailureResponse = response => !response || response.status >= 400;
+
 /** Launch lines carry the current table through a reload. */
-export const faultSpecOf = faults => (faults ?? []).map(f => [f.prefix, f.times ?? '-', f.left ?? '-', f.hits, f.armed ? 1 : 0, f.response ? JSON.stringify(f.response) : '', f.failureHits ?? (f.response ? 0 : f.hits)].join('\t')).join('\n');
+export const faultSpecOf = faults => (faults ?? []).map(f => [f.prefix, f.times ?? '-', f.left ?? '-', f.hits, f.armed ? 1 : 0, f.response ? JSON.stringify(f.response) : '', f.failureHits ?? (isFailureResponse(f.response) ? f.hits : 0)].join('\t')).join('\n');
 
 function tableFits(entries) {
   // Keep room for hit counts to grow without making a later reload fail.
@@ -71,7 +73,8 @@ export function parseFaults(spec) {
     if (n === 0) throw new Error('fail fetch: `times` is a positive integer');
     const at = entries.findIndex(f => f.prefix === prefix);
     if (at >= 0) entries.splice(at, 1);
-    entries.push({ prefix, times: n, left: left === undefined ? n : count(left), hits: count(hits) ?? 0, failureHits: count(failures) ?? (response ? 0 : count(hits) ?? 0), armed: armed !== '0', ...(response ? { response: fixtureResponse(JSON.parse(response)) } : {}) });
+    const parsedResponse = response ? fixtureResponse(JSON.parse(response)) : null;
+    entries.push({ prefix, times: n, left: left === undefined ? n : count(left), hits: count(hits) ?? 0, failureHits: count(failures) ?? (isFailureResponse(parsedResponse) ? count(hits) ?? 0 : 0), armed: armed !== '0', ...(parsedResponse ? { response: parsedResponse } : {}) });
   }
   tableFits(entries);
   return entries;
@@ -100,7 +103,7 @@ export const matchFault = (url, answers = false) => AGENT_ADMITTED && longest(ur
 /** Count the selected entry only when it supplies the request's outcome. */
 export function countFault(url, entry) {
   entry.hits += 1;
-  if (!entry.response) entry.failureHits = (entry.failureHits ?? 0) + 1;
+  if (isFailureResponse(entry.response)) entry.failureHits = (entry.failureHits ?? 0) + 1;
   if (entry.left !== null) entry.left -= 1;
   say(entry.response ? `fetch answered (driver fixture): ${url}` : faultMessage(url));
   return entry.response ?? true;

@@ -1169,7 +1169,7 @@ impl Parser {
                     }
                 };
                 match what.as_str() {
-                    "refusal" => Step::ExpectRefusal { target: self.str_lit("a mutation name")?, span },
+                    "refusal" => Step::ExpectRefusal { target: self.str_lit("a mutation or resource name")?, span },
                     "tree" => {
                         let present = if self.at_ident("has") {
                             self.next();
