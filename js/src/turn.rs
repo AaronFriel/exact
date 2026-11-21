@@ -7,6 +7,7 @@
 //! never ends a turn, an interrupt does (LLP 1048.000 D10). A test times
 //! turns on a ticking clock instead ([`Module::set_turn_step`]).
 
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -39,7 +40,28 @@ pub(crate) struct Took {
     loading_ms: f64,
 }
 
+pub(crate) fn source_budgets(text: &str) -> Result<BTreeMap<String, f64>, String> {
+    if text.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    let budgets: BTreeMap<String, f64> = serde_json::from_str(text)
+        .map_err(|error| format!("exact-js: invalid turnBudgets: {error}"))?;
+    for (source, ms) in &budgets {
+        if !(crate::DEFAULT_BUDGET_MS..=1000.).contains(ms) {
+            return Err(format!(
+                "exact-js: turnBudgets for `{source}` must be 100 to 1000 ms"
+            ));
+        }
+    }
+    Ok(budgets)
+}
+
 impl crate::Module {
+    /// Per-source Hermes turn budgets frozen into this generation's bytecode.
+    pub fn source_budgets(&self) -> &BTreeMap<String, f64> {
+        &self.source_budgets
+    }
+
     /// Times every turn on a clock that moves `step` as each turn starts, and
     /// at no other time: each turn takes one step, of its own time and of
     /// wall, and the steps add up across turns, spending the time a snapshot
@@ -56,9 +78,12 @@ impl crate::Module {
     /// The budget of a turn that starts at `started`: the module's own, or the
     /// time left to a snapshot's deadline; on the ticking clock, what the
     /// snapshot had when it was prepared less the turns' steps.
-    pub(crate) fn turn_budget_ms(&self, started: Instant) -> f64 {
+    pub(crate) fn turn_budget_ms(&self, source: &str, started: Instant) -> f64 {
         let Some((deadline, given)) = self.snapshot_deadline else {
-            return self.budget_ms;
+            return self
+                .budget_ms
+                .or_else(|| self.source_budgets.get(source).copied())
+                .unwrap_or(crate::DEFAULT_BUDGET_MS);
         };
         match self.turn_time.elapsed_ms() {
             Some(ticked) => (given.as_secs_f64() * 1e3 - ticked).max(0.0),

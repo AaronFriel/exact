@@ -2724,7 +2724,7 @@ storage write already submitted may finish, so an OOM does not establish
 whether it committed. Its completion is discarded, and queued JavaScript
 writes never start.
 
-On Hermes each turn of an answer has 100 ms of its own time: its call, or its
+On Hermes each turn of an answer has 100 ms of its own time by default: its call, or its
 resumption after a `fetch`, storage step or yield it awaited, until it awaits
 the next. Its own time is the calling thread's CPU clock where the platform keeps
 one, so a turn that waits on a blocked host call spends little of it; a turn may
@@ -2733,6 +2733,11 @@ as an overrun (`Overrun`: `` `work` took 904.5 ms of its own (CPU) time (2283.7 
 of wall), over the 100 ms budget for one turn; … ``), and the message names the
 repair: `await scheduler.yield()` every few thousand items of a long loop
 ([the guide](contract-for-agents.md#data-requests-and-side-effects) shows one).
+For synchronous work that cannot yield, `app.ts` can export a constant map
+such as `export const turnBudgets = { signOrder: 400 }`. A budget is 100 to
+1000 ms inclusive and names a source owned by TypeScript in this app. It
+applies to the source's initial call, continuations and stream messages. Its
+wall-clock limit is ten times its budget. A snapshot keeps its own deadline.
 A resource so refused keeps its last value and reads as pending, and is asked
 again at 250 ms, then at 1 s; a third overrun in a row fails it as any refusal
 does. A mutation fails on its first overrun. `failure(x).code` is `error`

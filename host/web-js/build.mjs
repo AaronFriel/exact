@@ -446,7 +446,7 @@ async function typecheck(checking) {
   const real = realpathSync(stage);
   if (real !== tsStage) throw new Error(`the TypeScript stage moved: ${real}`);
   const { rolldown } = await import('rolldown');
-  await configure(real, false, parseSync, true, rolldown);
+  const metadata = await configure(real, false, parseSync, true, rolldown);
   const backendWarning=JSON.parse(readFileSync(resolve(real,'__exact_backend.json'),'utf8')).warning;
   if (backendWarning) console.warn(`warning: ${backendWarning}`);
   // The packages whose declarations the check reads (typescript.mjs
@@ -487,7 +487,7 @@ async function typecheck(checking) {
     const errors = [failed, ...why.map(line => new Error(line)), await typed].filter(Boolean);
     throw Object.assign(new Error(errors.map(e => e.message ?? String(e)).join('\n')), { warnings });
   }
-  const exported = await valueExports(real, libraries);
+  const { names: exported } = await valueExports(real, libraries, metadata);
   // The packages whose code it captured are inputs the dev loop watches, as
   // their declarations are: each package's tree, and each place it is
   // installed (a link retargeted, or a reinstall, is an edit there).
