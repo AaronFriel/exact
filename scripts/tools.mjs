@@ -127,6 +127,7 @@ export function fromSet(name, source, env = process.env) {
 const TOOLS_ORIGIN = null;
 const PRODUCER_KEYS = [];
 const fetchMisses = new Map();
+const lookupKey = (env, name) => JSON.stringify([cacheDir(env), env.EXACT_TOOLS_ORIGIN || TOOLS_ORIGIN, name]);
 
 /** A fetched product from the cache or the tools origin, when this machine accepts one. */
 export function fetchedTool(name, env = process.env) {
@@ -135,15 +136,17 @@ export function fetchedTool(name, env = process.env) {
   if (cached) return cached;
   const origin = env.EXACT_TOOLS_ORIGIN || TOOLS_ORIGIN;
   if (!origin) return null;
-  const attempt = JSON.stringify([cacheDir(env), origin, name]);
-  if (Date.now() - (fetchMisses.get(attempt) ?? 0) < 30_000) return null;
+  const attempt = lookupKey(env, name);
+  if (Date.now() - (fetchMisses.get(attempt)?.time ?? 0) < 30_000) return null;
   // Callers choose tools synchronously. Only a cold origin lookup needs a child.
-  const fetch = spawnSync(process.execPath, [fileURLToPath(import.meta.url), 'fetch', name], { env, cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
+  const fetch = spawnSync(process.execPath, [fileURLToPath(import.meta.url), 'fetch', name], { env, cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'] });
   if (fetch.status === 0) {
     const installed = fromSet(name, 'fetched', env);
     if (installed) return installed;
   }
-  fetchMisses.set(attempt, Date.now());
+  const reason = fetch.error?.message || fetch.stderr?.trim().replace(/^tools: /, '') || `the tools origin has no matching ${name} for ${hostTriple()}`;
+  fetchMisses.set(attempt, { time: Date.now(), reason });
+  if (!rustMissing(env)) console.warn(`tools: ${reason}`);
   return null;
 }
 
@@ -169,6 +172,8 @@ export class RustMissing extends Error {
       if (at && newest.manifest.commit && clean.status === 0 && clean.stdout === '' && git('rev-parse', 'HEAD').stdout.trim() !== newest.manifest.commit)
         commit = `; \`git -C ${ROOT} checkout ${newest.manifest.commit}\` brings this checkout to that set's sources`;
     }
+    const remote = fetchMisses.get(lookupKey(env, name));
+    if (remote) why += `. The tools lookup reported ${remote.reason}`;
     super(`error [rust-missing]: ${name} builds with Rust, which this machine does not have (cargo, with the pinned toolchain ${pin()}), and ${why}${commit}. Install Rust with rustup (https://rustup.rs), then run bun ${resolve(ROOT, 'scripts/exact.mjs')} setup`);
     this.rustMissing = true;
   }
@@ -495,6 +500,7 @@ function recentSets(bytes) {
 }
 
 function checkToolFiles(manifest) {
+  if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(manifest.commit)) throw new Error('invalid Git commit in signed tool manifest');
   const inputsValid = inputs => Array.isArray(inputs) && inputs.length > 0 && inputs.every(([file, hash]) =>
     typeof file === 'string' && !file.includes(':') && !file.split(/[\\/]/).some(part => !part || part === '.' || part === '..') && /^[0-9a-f]{64}$/.test(hash));
   for (const [name, product] of Object.entries(manifest.products)) {
@@ -539,6 +545,7 @@ export async function fetchToolSet(origin, name, keys, env = process.env) {
   if (!TOOL_FILES.includes(name)) throw new Error(`unknown tool ${name}`);
   if (!keys.length) throw new Error('this checkout has no tools producer public key');
   const tried = new Set();
+  let firstMismatch;
   async function take(id) {
     if (tried.has(id)) return false;
     tried.add(id);
@@ -547,16 +554,32 @@ export async function fetchToolSet(origin, name, keys, env = process.env) {
     const manifest = readToolManifest(bytes, id, triple, keys);
     checkToolFiles(manifest);
     const product = manifest.products[name];
-    if (!product || differs(product)) return false;
+    if (!product) return false;
+    const at = differs(product);
+    if (at) {
+      firstMismatch ??= { at, commit: manifest.commit };
+      return false;
+    }
     await installSet(origin, cacheDir(env, triple), id, bytes, manifest);
     return true;
   }
   const head = spawnSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8', env }).stdout?.trim();
+  let builtHead = false;
   if (/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(head ?? '')) {
     const mapped = await origin.get(`${base}/commits/${head}.json`);
-    if (mapped && await take(manifestId(JSON.parse(mapped.toString('utf8'))))) return true;
+    builtHead = mapped !== null;
+    if (builtHead && await take(manifestId(JSON.parse(mapped.toString('utf8'))))) return true;
   }
   for (const id of recentSets(await origin.get(`${base}/recent.json`)).slice(0, 8)) if (await take(id)) return true;
+  if (firstMismatch) {
+    const { at, commit } = firstMismatch;
+    let reason = `${at} differs from the tool set built at ${short(commit)}`;
+    if (head && !builtHead && head !== commit) {
+      const status = spawnSync('git', ['-C', ROOT, 'status', '--porcelain'], { encoding: 'utf8', env });
+      if (status.status === 0 && !status.stdout.trim()) reason += `. Run git -C "${ROOT}" checkout ${commit} to use its sources`;
+    }
+    throw new Error(reason);
+  }
   return false;
 }
 

@@ -125,6 +125,9 @@ test('fetch authenticates the whole set before the cache can run it and falls ba
     assert.equal(requests.includes(`${base}/recent.json`), false);
     writeFileSync(origin.path(blobPath(sha(wasm))), wasm);
     const stale = await publish(head, { ...products, contract: { ...product, inputs: [[ours[0][0], '0'.repeat(64)]] } });
+    await origin.put(`${base}/recent.json`, Buffer.from(JSON.stringify([stale])));
+    await assert.rejects(fetchSet(), new RegExp(`rust-toolchain.toml differs from the tool set built at ${head.slice(0, 12)}`));
+    await origin.put(`${base}/recent.json`, Buffer.from(JSON.stringify([stale, good])));
     requests.length = 0;
     assert.deepEqual(await Promise.all([fetchSet(), fetchSet()]), [true, true]);
     assert.deepEqual(readdirSync(cache), [good]);
@@ -227,6 +230,15 @@ test('a fetched set runs only without Rust or when an origin is named, and never
     } finally { m.done(); }
   }
 }, 60000);
+
+test('the rust-missing diagnostic includes the configured origin failure', () => {
+  const m = machine([], { rust: false });
+  try {
+    const env = { ...m.env, EXACT_TOOLS_ORIGIN: 'invalid:' };
+    assert.equal(fromSets('contract', env), null);
+    assert.match(new RustMissing('contract', env).message, /rust-missing.*tools origin needs an HTTP or HTTPS URL/);
+  } finally { m.done(); }
+});
 
 function onWindows(arch, run) {
   const platform = Object.getOwnPropertyDescriptor(process, 'platform');
