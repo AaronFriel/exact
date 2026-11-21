@@ -1508,7 +1508,9 @@ server answered, and the host will not take more than the app said it would;
 asking again gets the same answer, which `offline` would not imply. A
 new code is a breaking change; branch with a default case.
 
-`failure(x).reason` retains the domain string as well, empty when none was supplied.
+`failure(x).reason` retains the domain string as well. A module turn that
+fails its resource or mutation by exceeding the time budget has code `error`
+and reason `overrun`. Other failures without a reason carry the empty string.
 For a mutation, failure belongs to its latest send: a new send, a successful answer,
 or an explicit assignment clears it. A `parallel` mutation's belongs to its latest
 send to conclude: a send's failure shows unless a later send has already answered

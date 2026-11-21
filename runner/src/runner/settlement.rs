@@ -1140,11 +1140,8 @@ impl<D: DataSource> Runner<D> {
                                     self.count_failure(i);
                                     self.alert(super::lines::failed_now(&resource, &why));
                                     self.resources[i].failed_args = Some(args.clone());
-                                    self.resources[i].failed_why = Some(crate::failure::Failure {
-                                        code,
-                                        message: why,
-                                        reason,
-                                    });
+                                    self.resources[i].failed_why =
+                                        Some(crate::failure::Failure::source(code, why, reason));
                                     kept
                                 }
                                 // A turn over its budget (`overrun.rs`): the

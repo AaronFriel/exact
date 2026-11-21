@@ -1421,7 +1421,7 @@ export const classifications = [
   group("runner helpers", ["one-shot"], "synchronous invocation, evaluator state or caller-owned value; no independent completion", "UI-owned",
     "The named runner source evaluates, encodes, compares or constructs caller-owned values. These public helpers have no independently delivered outcome or persisted operation identity. vm.rs eval_accounted returns its result and counters synchronously to semantics/difftest/src/accounting.rs and vm/unsettled_tests.rs; vm/constant.rs eval_constant returns them synchronously to contract/lower/src/keyframes.rs.", [
     ["runner:runner/src/compare.rs", "changed_fields equal equivalent equivalent_all equivalent_opt same shared"],
-    ["runner:runner/src/failure.rs", "Failure::error Failure::exposed_code Failure::of FailureCode::from_name FailureCode::name FailureCode::of_kind FailureCode::seam_error"],
+    ["runner:runner/src/failure.rs", "Failure::error Failure::exposed_code Failure::of Failure::reason FailureCode::from_name FailureCode::name FailureCode::of_kind FailureCode::seam_error"],
     ["runner:runner/src/file_pickers.rs", "start_in_refusal"],
     ["runner:runner/src/fetch_template.rs", "argument encode expand graphql_error pointer"],
     ["runner:runner/src/format/mod.rs", "formatting"],

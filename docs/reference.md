@@ -2735,7 +2735,10 @@ repair: `await scheduler.yield()` every few thousand items of a long loop
 ([the guide](contract-for-agents.md#data-requests-and-side-effects) shows one).
 A resource so refused keeps its last value and reads as pending, and is asked
 again at 250 ms, then at 1 s; a third overrun in a row fails it as any refusal
-does. A mutation's or a stream message's overrun is not asked again.
+does. A mutation fails on its first overrun. `failure(x).code` is `error`
+and `failure(x).reason` is `overrun` for either failure. The app can show a
+retry button for a failed mutation. The runner never retries a stream message
+that overruns.
 The host asks a yielded answer again at once, in its place among the source's
 requests, with no work and no clock, so an agent's `clock settle` runs it to its
 end without moving the clock. The browser keeps no such budget and
