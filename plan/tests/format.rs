@@ -1064,11 +1064,13 @@ fn a_plan_without_compiled_values_keeps_every_other_data_range() {
 /// `owner` and `then_args` to mutations (D6): every host rebuilds for them.
 /// Child tasks add `owner` and captured `args` to timers (D6); every
 /// plan-reading host needs a new binary for those rows.
+/// Component member names share their qualifier in the string pool (LLP
+/// 1029.000.002 D1). Every plan-reading host must rebuild for that record.
 /// The digest covers all of `tables/format.json`, including comments.
 #[test]
 fn the_format_digest_is_pinned() {
     assert_eq!(
-        FORMAT_DIGEST, 0xf1cf_e1fc_7009_617a,
+        FORMAT_DIGEST, 0x4e07_8029_6b09_555d,
         "the plan format digest moved: if intended, name the break and the hosts that move"
     );
 }
