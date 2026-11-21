@@ -19,7 +19,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash, createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { parseArgs } from 'node:util';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -123,9 +123,33 @@ export function fromSet(name, source, env = process.env) {
   return null;
 }
 
+// The checkout pins its producer. A mirror supplies bytes and cannot choose a key.
+const TOOLS_ORIGIN = null;
+const PRODUCER_KEYS = [];
+const fetchMisses = new Map();
+
+/** A fetched product from the cache or the tools origin, when this machine accepts one. */
+export function fetchedTool(name, env = process.env) {
+  if (!fetchedAllowed(env)) return null;
+  const cached = fromSet(name, 'fetched', env);
+  if (cached) return cached;
+  const origin = env.EXACT_TOOLS_ORIGIN || TOOLS_ORIGIN;
+  if (!origin) return null;
+  const attempt = JSON.stringify([cacheDir(env), origin, name]);
+  if (Date.now() - (fetchMisses.get(attempt) ?? 0) < 30_000) return null;
+  // Callers choose tools synchronously. Only a cold origin lookup needs a child.
+  const fetch = spawnSync(process.execPath, [fileURLToPath(import.meta.url), 'fetch', name], { env, cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
+  if (fetch.status === 0) {
+    const installed = fromSet(name, 'fetched', env);
+    if (installed) return installed;
+  }
+  fetchMisses.set(attempt, Date.now());
+  return null;
+}
+
 /** The set D5's order takes product `name` from, after this checkout's own fresh build: one built here, else (where a
  * kept product does not answer first) a fetched one where that is allowed. */
-export const fromSets = (name, env = process.env) => fromSet(name, 'built', env) ?? (fetchedAllowed(env) ? fromSet(name, 'fetched', env) : null);
+export const fromSets = (name, env = process.env) => fromSet(name, 'built', env) ?? fetchedTool(name, env);
 
 /** Thrown where product `name` would need Cargo and Rust is missing: says why no set matched, the newest set's commit
  * (and how to check it out, when the tree is clean), then how to install Rust (D5). Its message is one
@@ -362,16 +386,20 @@ export function readToolManifest(bytes, id, triple, publicKey) {
   if (manifest.kind !== 'exact-tool-set' || manifest.version !== 1 || manifest.triple !== triple || manifest.source !== 'fetched')
     throw new Error(`tool manifest is not a version 1 set for ${triple}`);
   const signature = Buffer.from(manifest.signature ?? '', 'base64');
-  if (publicKey.asymmetricKeyType !== 'ed25519' || signature.length !== 64 || !verify(null, canonicalBytes(manifest), publicKey, signature))
+  const keys = Array.isArray(publicKey) ? publicKey : [publicKey];
+  const message = canonicalBytes(manifest);
+  if (signature.length !== 64 || !keys.some(key => key.asymmetricKeyType === 'ed25519' && verify(null, message, key, signature)))
     throw new Error('tool manifest signature does not match the producer key');
   return manifest;
 }
 
 const EXECUTABLES = ['contract', 'exact-web-js', 'exact-filesystem'];
+const LEAVES = ['markdown.wasm', 'motion.wasm', 'markup-editor.wasm', 'textflow.wasm'];
+const TOOL_FILES = [...EXECUTABLES, ...LEAVES];
 
 function runProducts({ dir, manifest }, root) {
   const linux = manifest.triple === LINUX_TOOLS && hostTriple() !== LINUX_TOOLS;
-  for (const name of ['markdown.wasm', 'motion.wasm', 'markup-editor.wasm', 'textflow.wasm']) {
+  for (const name of LEAVES) {
     const product = manifest.products[name];
     if (!product || product.file !== name) throw new Error(`missing ${name} in the built tool set`);
     new WebAssembly.Module(readFileSync(resolve(dir, name)));
@@ -464,6 +492,80 @@ function recentSets(bytes) {
   const list = JSON.parse(bytes.toString('utf8'));
   if (!Array.isArray(list)) throw new Error('recent tool lookup must be an array');
   return list.map(manifestId);
+}
+
+function checkToolFiles(manifest) {
+  const inputsValid = inputs => Array.isArray(inputs) && inputs.length > 0 && inputs.every(([file, hash]) =>
+    typeof file === 'string' && !file.includes(':') && !file.split(/[\\/]/).some(part => !part || part === '.' || part === '..') && /^[0-9a-f]{64}$/.test(hash));
+  for (const [name, product] of Object.entries(manifest.products)) {
+    if (!TOOL_FILES.includes(name) || product.file !== name || !Number.isSafeInteger(product.size) || product.size < 1 ||
+        !/^[0-9a-f]{64}$/.test(product.sha256) || !inputsValid(product.inputs)) throw new Error(`invalid product in signed tool manifest: ${name}`);
+  }
+  if (manifest.metadata && !inputsValid(manifest.metadata.inputs)) throw new Error('invalid inputs in signed tool metadata');
+}
+
+/** Another process sees the set only once all its blobs match the signed manifest. */
+async function installSet(origin, cache, id, bytes, manifest) {
+  const { blobPath } = await import('./origin.mjs');
+  mkdirSync(cache, { recursive: true });
+  const entry = resolve(cache, id), temp = mkdtempSync(entry + '.');
+  try {
+    for (const [name, product] of Object.entries(manifest.products)) {
+      const body = await origin.get(blobPath(product.sha256));
+      if (body?.length !== product.size || sha(body) !== product.sha256) throw new Error(`${name} differs from its signed tool manifest`);
+      const path = resolve(temp, product.file);
+      writeFileSync(path, body);
+      if (EXECUTABLES.includes(name)) chmodSync(path, 0o755);
+    }
+    writeFileSync(resolve(temp, 'manifest.json'), bytes);
+    try { renameSync(temp, entry); }
+    catch (error) {
+      // A simultaneous fetch may have published the same complete set.
+      if (!['ENOTEMPTY', 'EEXIST', 'EPERM'].includes(error.code) ||
+          !readFileSync(resolve(entry, 'manifest.json')).equals(bytes)) throw error;
+      // Restore any cached product that disappeared between runs.
+      for (const { file } of Object.values(manifest.products)) {
+        try { linkSync(resolve(temp, file), resolve(entry, file)); }
+        catch (linkError) { if (linkError.code !== 'EEXIST') throw linkError; }
+      }
+    }
+  } finally { rmSync(temp, { recursive: true, force: true }); }
+}
+
+/** Look up HEAD first. Recent sets can match a fork or edits outside the requested product. */
+export async function fetchToolSet(origin, name, keys, env = process.env) {
+  const { streamPath } = await import('./origin.mjs');
+  const triple = hostTriple(), base = streamPath({ channel: 'tools', compatibilityId: triple });
+  if (!TOOL_FILES.includes(name)) throw new Error(`unknown tool ${name}`);
+  if (!keys.length) throw new Error('this checkout has no tools producer public key');
+  const tried = new Set();
+  async function take(id) {
+    if (tried.has(id)) return false;
+    tried.add(id);
+    const bytes = await origin.get(`${base}/manifests/${id}.json`);
+    if (!bytes) return false;
+    const manifest = readToolManifest(bytes, id, triple, keys);
+    checkToolFiles(manifest);
+    const product = manifest.products[name];
+    if (!product || differs(product)) return false;
+    await installSet(origin, cacheDir(env, triple), id, bytes, manifest);
+    return true;
+  }
+  const head = spawnSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8', env }).stdout?.trim();
+  if (/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(head ?? '')) {
+    const mapped = await origin.get(`${base}/commits/${head}.json`);
+    if (mapped && await take(manifestId(JSON.parse(mapped.toString('utf8'))))) return true;
+  }
+  for (const id of recentSets(await origin.get(`${base}/recent.json`)).slice(0, 8)) if (await take(id)) return true;
+  return false;
+}
+
+async function fetchProduct(name) {
+  const spec = process.env.EXACT_TOOLS_ORIGIN || TOOLS_ORIGIN;
+  if (!spec || !fetchedAllowed()) return false;
+  if (!/^https?:\/\//.test(spec)) throw new Error('a tools origin needs an HTTP or HTTPS URL');
+  const { HttpsOrigin } = await import('./origin.mjs');
+  return fetchToolSet(new HttpsOrigin(spec), name, PRODUCER_KEYS.map(pem => createPublicKey(pem)));
 }
 
 async function recordCommit(origin, stream, base, commit, id, newer) {
@@ -641,9 +743,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const [verb, ...args] = process.argv.slice(2);
   // Not awaited at the top level: this module is in an import cycle with filesystem.mjs, and with a top-level await
   // a dynamic import of a module in that cycle waits for this module's evaluation, so `keep` never finishes.
-  if (verb === 'keep' || verb === 'publish') {
+  if (verb === 'keep' || verb === 'publish' || verb === 'fetch') {
     const run = async () => {
       if (verb === 'publish') return publish(args);
+      if (verb === 'fetch') { if (!await fetchProduct(args[0])) process.exitCode = 1; return; }
       const { values } = parseArgs({ args, options: { target: { type: 'string' } } });
       return keep(values.target);
     };

@@ -3,13 +3,13 @@ import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash, generateKeyPairSync } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { digest, lockClosure, workspaceManifest } from './kept.mjs';
 import { cargoOnPath } from './cargo-check.mjs';
-import { ROOT, RustMissing, fromSet, fromSets, hostTriple, publishToolSet, publishWatchedTip, readToolManifest, rustMissing } from './tools.mjs';
-import { DirectoryOrigin, blobPath } from './origin.mjs';
+import { ROOT, RustMissing, fetchToolSet, fromSet, fromSets, hostTriple, publishToolSet, publishWatchedTip, readToolManifest, rustMissing } from './tools.mjs';
+import { DirectoryOrigin, HttpsOrigin, blobPath } from './origin.mjs';
 import { offlineMiss } from './filesystem.mjs';
 
 const pin = Bun.TOML.parse(readFileSync(resolve(ROOT, 'rust-toolchain.toml'), 'utf8')).toolchain.channel;
@@ -90,6 +90,53 @@ test('publish exposes a verified manifest and complete blobs before updating eit
     assert.deepEqual(JSON.parse(await origin.get(`${base}/recent.json`)), ids.slice(-8).reverse());
     assert.equal(JSON.parse(await origin.get(`${base}/commits/${commits[1]}.json`)), ids[1]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 60000);
+
+test('fetch authenticates the whole set before the cache can run it and falls back from HEAD to matching recent inputs', async () => {
+  const m = machine([], { rust: false }), { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  const triple = hostTriple(), base = `.exact/tools/${triple}`, dir = resolve(m.env.HOME, 'origin');
+  const cache = resolve(m.env.HOME, '.cache/exact/tools', triple);
+  mkdirSync(dir);
+  const origin = new DirectoryOrigin(dir), requests = [];
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
+    const path = new URL(request.url).pathname.slice(1);
+    requests.push(path);
+    const bytes = await origin.get(path);
+    return bytes === null ? new Response(null, { status: 404 }) : new Response(bytes);
+  } });
+  try {
+    const head = execFileSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const env = { ...m.env, PATH: process.env.PATH, EXACT_TOOLS_ORIGIN: server.url.href };
+    const mirror = new HttpsOrigin(server.url.href);
+    const tool = Buffer.from('contract executable'), wasm = Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]);
+    const product = { file: 'contract', inputs: ours, crate: 'contract', closure: lockClosure(ROOT, 'contract'),
+      workspace: sha(JSON.stringify(workspaceManifest(ROOT))), size: tool.length, sha256: sha(tool) };
+    const products = { contract: product, 'motion.wasm': { ...product, file: 'motion.wasm', size: wasm.length, sha256: sha(wasm) } };
+    writeFileSync(resolve(dir, 'contract'), tool);
+    writeFileSync(resolve(dir, 'motion.wasm'), wasm);
+    const publish = (commit, rows) => publishToolSet(origin, { dir, manifest: { version: 1, triple, source: 'built', commit, products: rows } }, privateKey);
+    const good = await publish(head, products);
+    const fetchSet = (keys = [publicKey]) => fetchToolSet(mirror, 'contract', keys, env);
+    await assert.rejects(fetchSet([generateKeyPairSync('ed25519').publicKey]), /signature/);
+    assert.equal(requests.some(path => path.includes('/blobs/')), false);
+    writeFileSync(origin.path(blobPath(sha(wasm))), Buffer.alloc(wasm.length));
+    await assert.rejects(fetchSet(), /motion.wasm differs/);
+    assert.deepEqual(readdirSync(cache), []);
+    assert.equal(requests.includes(`${base}/recent.json`), false);
+    writeFileSync(origin.path(blobPath(sha(wasm))), wasm);
+    const stale = await publish(head, { ...products, contract: { ...product, inputs: [[ours[0][0], '0'.repeat(64)]] } });
+    requests.length = 0;
+    assert.deepEqual(await Promise.all([fetchSet(), fetchSet()]), [true, true]);
+    assert.deepEqual(readdirSync(cache), [good]);
+    const distinct = [...new Set(requests)];
+    assert.deepEqual(distinct.slice(0, 4), [`${base}/commits/${head}.json`, `${base}/manifests/${stale}.json`, `${base}/recent.json`, `${base}/manifests/${good}.json`]);
+    assert.deepEqual(readFileSync(fromSets('contract', env).path), tool);
+    assert.deepEqual(readFileSync(fromSets('motion.wasm', env).path), wasm);
+    rmSync(resolve(cache, good, 'contract'));
+    assert.equal(await fetchSet(), true);
+    server.stop(true);
+    assert.deepEqual(readFileSync(fromSets('contract', env).path), tool);
+  } finally { server.stop(true); m.done(); }
 }, 60000);
 
 test('the publisher prefers each new tip and resumes skipped commits after failure, restart or branch replacement', async () => {
