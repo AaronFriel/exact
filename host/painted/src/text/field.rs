@@ -192,7 +192,7 @@ fn line_spans(run: LayoutRun<'_>, data: &ShapeData, offsets: &Offsets) -> Rc<[Sp
         }
         let (ascent, descent) = data
             .run_metrics
-            .get(g.run())
+            .get(g.run(run.run_base))
             .map_or(data.strut_font, |m| (m.0, m.1));
         let cluster = &run.text[g.range()];
         let mut boundaries: Vec<_> = cluster.grapheme_indices(true).map(|(i, _)| i).collect();
@@ -233,13 +233,11 @@ impl Geometry {
         let data = &paragraph.source.data;
         let mut retained = HashMap::new();
         let key = |run: &LayoutRun<'_>| (run.text.as_ptr(), run.glyphs[0].start);
-        let mut same_metrics = false;
         if let Some((old, geometry)) =
             previous.filter(|(p, _)| !masked && p.source.data.strut_font == data.strut_font)
         {
-            // A reused hard line owns the same text. Its first visual cluster
-            // locates the slice even when short rows moved to a new allocation.
-            same_metrics = old.source.data.run_metrics == data.run_metrics;
+            // Only a shared shape owns the same hard-line text and font metrics.
+            // Its first visual cluster identifies the row when wrapping changes.
             for (run, line) in old.layout_runs().zip(&geometry.lines) {
                 if !run.glyphs.is_empty() {
                     retained.insert(key(&run), (run.glyphs, &line.spans));
@@ -270,9 +268,10 @@ impl Geometry {
             let (byte, base) = hard_starts[run.line_i];
             let spans = if value.is_empty() || run.glyphs.is_empty() {
                 empty_spans.clone()
-            } else if let Some((_, spans)) = retained.get(&key(&run)).filter(|(glyphs, _)| {
-                std::ptr::eq(*glyphs, run.glyphs) || same_metrics && *glyphs == run.glyphs
-            }) {
+            } else if let Some((_, spans)) = retained
+                .get(&key(&run))
+                .filter(|(glyphs, _)| std::ptr::eq(*glyphs, run.glyphs) || *glyphs == run.glyphs)
+            {
                 Rc::clone(spans)
             } else {
                 // Wrapped rows index the same hard line. A flowed row indexes the whole paragraph.
