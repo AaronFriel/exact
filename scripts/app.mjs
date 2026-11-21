@@ -250,7 +250,9 @@ export function rustRemapFlags(app, toolchain = null, env = process.env) {
   const { commit, sysroot } = rustcFacts.get(key);
   const pairs = [[resolve(env.CARGO_HOME ?? resolve(homedir(), '.cargo')), 'cargo']];
   if (sysroot && commit) pairs.push([resolve(sysroot, 'lib/rustlib/src/rust'), `/rustc/${commit}`]);
-  if (env.EXACT_SOURCE_ROOT) pairs.push([resolve(env.EXACT_SOURCE_ROOT), 'source']);
+  // The source root as Cargo names its sources, through any link in the given spelling (macOS's /var is /private/var)
+  const real = path => { try { return realpathSync.native(path); } catch { return path; } };
+  if (env.EXACT_SOURCE_ROOT) pairs.push([real(resolve(env.EXACT_SOURCE_ROOT)), 'source']);
   pairs.push([ROOT, '']);
   if (app && resolve(app.workspace) !== ROOT) pairs.push([resolve(app.workspace), '']);
   if (app) pairs.push([resolve(app.target), 'target']);
