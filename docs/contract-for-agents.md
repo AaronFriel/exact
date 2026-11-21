@@ -2528,6 +2528,7 @@ control's insets/corners alone.
 On the Mac, an image-only `plain` or `borderless` button uses AppKit's push
 button height at its control size as its default minimum width and height.
 Authored dimensions and padding take precedence; its focus ring follows the image.
+In a window toolbar or route header, either style gives the toolbar item a borderless button.
 
 `pointer-events` takes `none` or `auto`. A disabled native button retains
 its authored colours; bind `opacity` for authored dimming. It can open a
