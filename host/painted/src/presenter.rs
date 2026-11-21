@@ -61,7 +61,7 @@ mod field_scroll;
 mod field_tests;
 mod file_drop;
 #[cfg(test)]
-mod frame_target_tests;
+pub(crate) mod frame_target_tests;
 mod group;
 mod hatch;
 mod history;

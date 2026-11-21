@@ -6,12 +6,13 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use tiny_skia::Transform;
 
-struct PresentPaint {
-    name: &'static str,
-    lost: bool,
-    inner: Raster,
-    targets: Rc<RefCell<Vec<FrameTarget>>>,
-    omit_capture: Rc<Cell<bool>>,
+/// Presents a window frame itself and returns pixels only for a capture.
+pub(crate) struct PresentPaint {
+    pub(crate) name: &'static str,
+    pub(crate) lost: bool,
+    pub(crate) inner: Raster,
+    pub(crate) targets: Rc<RefCell<Vec<FrameTarget>>>,
+    pub(crate) omit_capture: Rc<Cell<bool>>,
 }
 impl Backend for PresentPaint {
     crate::paints_nothing!();

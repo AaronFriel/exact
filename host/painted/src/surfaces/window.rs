@@ -495,7 +495,8 @@ impl DirectWindow {
         p: &mut Presenter<D>,
     ) -> Result<Option<Arc<Pixmap>>, String> {
         let frame = self.paint_and_present(p);
-        self.presented = frame.is_ok() && p.last_frame_succeeded;
+        // Pixels returned here have not reached the window.
+        self.presented = matches!(frame, Ok(None)) && p.last_frame_succeeded;
         frame
     }
 
@@ -676,7 +677,6 @@ impl<D: DataSource> Presenter<D> {
 /// A message-only window: a live handle that shows nothing and needs no
 /// desktop session.
 #[cfg(test)]
-#[allow(unsafe_code)]
 pub(crate) fn unopened_test_window() -> exact_ink::device::d3d11::Window {
     use wgpu::rwh as raw_window_handle;
     use windows::{
@@ -728,6 +728,7 @@ pub(crate) fn unopened_test_window() -> exact_ink::device::d3d11::Window {
 mod tests {
     use super::*;
     use crate::paint::{Backend, GradientPaint, Rect4, Shape};
+    use crate::presenter::frame_target_tests::PresentPaint;
     use tiny_skia::Transform;
 
     #[test]
@@ -952,7 +953,18 @@ mod tests {
         let mut p = cpu_presenter();
         let mut direct = DirectWindow::new(unopened_test_window());
         direct.open = |_| Err(exact_ink::device::Error::Device("test refusal".into()));
-        direct.frame(&mut p).unwrap();
+        // Pixels returned for the host to present have not reached the window.
+        assert!(direct.frame(&mut p).unwrap().is_some());
+        assert!(!direct.presented);
+        p.brush.replace_backend(Box::new(PresentPaint {
+            name: "ink",
+            lost: false,
+            inner: crate::raster::Raster::new(),
+            targets: Default::default(),
+            omit_capture: Default::default(),
+        }));
+        p.repaint();
+        assert!(direct.frame(&mut p).unwrap().is_none());
         assert!(direct.presented);
         // The device is lost before the next frame, and WARP refuses.
         p.brush.replace_backend(Box::new(Lost(true, false)));
