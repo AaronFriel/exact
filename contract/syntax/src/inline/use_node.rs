@@ -544,7 +544,13 @@ fn prepare_use(node: &Node, subst: &mut Subst<'_, Expr>, ctx: &mut Ctx<'_>) -> O
         })
     });
     // Rename only the view: declarations were lifted above.
-    let mut renamed = rename_nodes(&c.view, &BTreeMap::new(), n, ctx.discarded_slots);
+    let mut renamed = rename_nodes(
+        &c.view,
+        &BTreeMap::new(),
+        n,
+        ctx.discarded_slots,
+        &mut ctx.source_keys,
+    );
     share_instance_props(c, &mut renamed, &child_subst, &derives, &value_names, ctx);
     let provides = c
         .provides

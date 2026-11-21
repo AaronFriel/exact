@@ -55,6 +55,8 @@ public struct Batch {
     public var canvasOwed = false
     /// A control's viewless contents changed (LLP 1069.011 §9).
     public var layoutProvisional = false
+    /// This batch applies over the previous generation’s presented tree.
+    public var replacesTree = false
     public var controls = false
     /// Image handles a 2D canvas asked for, to decode (LLP 1056 D9).
     public var canvasImages: [String] = []

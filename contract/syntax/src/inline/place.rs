@@ -10,7 +10,7 @@ pub(super) fn root(component: &str) -> String {
     path
 }
 
-fn step(path: &mut String, kind: char, name: &str, ordinal: usize) {
+fn step(path: &mut String, kind: char, name: &str, ordinal: u32) {
     // The length keeps author-supplied ids distinct even when they contain
     // the same delimiters as the surrounding steps.
     write!(path, "{kind}{}:{name}:{ordinal}/", name.len()).unwrap();
@@ -28,9 +28,63 @@ fn literal_id(attrs: &[Attr], subst: &mut Subst<'_, Expr>) -> Option<String> {
     }
 }
 
+/// One source step between a rendered parent (or row) and this site.
+/// Only component and slot boundaries can precede it on the same edge.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SourceStep {
+    /// The preceding boundary on this edge.
+    pub outer: Option<u32>,
+    /// What the author wrote.
+    pub kind: SourceKind,
+    /// The position among source siblings of this kind and name.
+    pub ordinal: u32,
+    /// Another source sibling declares the same literal id, even in a hidden arm.
+    pub shared_id: bool,
+}
+
+/// What contributes a step to a rendered place (LLP 1029.000.002 D1).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SourceKind {
+    /// An authored tag, before lowering selects its kernel node type.
+    Element(String),
+    /// A component use, including the entry component.
+    Component(String),
+    /// The loop that owns a row's runtime key.
+    Each(String),
+    /// Where a slot component renders its fill.
+    Children,
+}
+
+impl SourceKind {
+    fn parts(&self) -> (char, &str) {
+        match self {
+            Self::Element(tag) => ('e', tag),
+            Self::Component(name) => ('c', name),
+            Self::Each(key) => ('f', key),
+            Self::Children => ('s', ""),
+        }
+    }
+}
+
+#[derive(Default)]
+pub(super) struct Steps(BTreeMap<SourceStep, u32>);
+
+impl Steps {
+    pub(super) fn intern(&mut self, step: SourceStep) -> u32 {
+        let next = self.0.len() as u32;
+        *self.0.entry(step).or_insert(next)
+    }
+
+    pub(super) fn into_rows(self) -> Vec<SourceStep> {
+        let mut rows: Vec<_> = self.0.into_iter().collect();
+        rows.sort_unstable_by_key(|(_, index)| *index);
+        rows.into_iter().map(|(step, _)| step).collect()
+    }
+}
+
 #[derive(Default)]
 pub(super) struct Siblings {
-    ordinals: BTreeMap<(char, String), usize>,
+    ordinals: BTreeMap<SourceKind, u32>,
     ids: BTreeMap<String, usize>,
 }
 
@@ -56,23 +110,40 @@ impl Siblings {
         path: &mut String,
         node: &Node,
         subst: &mut Subst<'_, Expr>,
-    ) {
-        let (kind, name) = match node {
-            Node::Element { tag, .. } => ('e', tag.as_str()),
-            Node::Use { name, .. } => ('c', name.as_str()),
-            Node::Each { .. } => ('f', ""),
-            Node::Children { .. } => ('s', ""),
-            Node::When { .. } | Node::Match { .. } => return,
+        outer: Option<u32>,
+        source_keys: &BTreeMap<crate::Span, String>,
+    ) -> Option<SourceStep> {
+        let kind = match node {
+            Node::Element { tag, .. } => SourceKind::Element(tag.clone()),
+            Node::Use { name, .. } => SourceKind::Component(name.clone()),
+            Node::Each { span, .. } => SourceKind::Each(source_keys[span].clone()),
+            Node::Children { .. } => SourceKind::Children,
+            Node::When { .. } | Node::Match { .. } => return None,
         };
-        let next = self.ordinals.entry((kind, name.to_owned())).or_default();
+        // Every sibling loop counts even when it computes a different key.
+        let counted = match &kind {
+            SourceKind::Each(_) => SourceKind::Each(String::new()),
+            other => other.clone(),
+        };
+        let next = self.ordinals.entry(counted).or_default();
         let ordinal = *next;
         *next += 1;
-        if let Node::Element { attrs, .. } = node {
-            if let Some(id) = literal_id(attrs, subst).filter(|id| self.ids.get(id) == Some(&1)) {
-                step(path, 'i', &id, 0);
-                return;
-            }
+        let id = match node {
+            Node::Element { attrs, .. } => literal_id(attrs, subst),
+            _ => None,
+        };
+        let shared_id = id.as_ref().is_some_and(|id| self.ids.get(id) != Some(&1));
+        if let Some(id) = id.filter(|_| !shared_id) {
+            step(path, 'i', &id, 0);
+        } else {
+            let (letter, name) = kind.parts();
+            step(path, letter, name, ordinal);
         }
-        step(path, kind, name, ordinal);
+        Some(SourceStep {
+            outer,
+            kind,
+            ordinal,
+            shared_id,
+        })
     }
 }

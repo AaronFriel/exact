@@ -41,6 +41,8 @@ fn same_carried(a: &exact_runner::Carried, b: &exact_runner::Carried) -> bool {
     };
     let Carried {
         generation,
+        last_view_id,
+        views,
         epoch,
         fresh_state,
         router,
@@ -65,6 +67,8 @@ fn same_carried(a: &exact_runner::Carried, b: &exact_runner::Carried) -> bool {
         uploads,
     } = a;
     generation == &b.generation
+        && last_view_id == &b.last_view_id
+        && views == &b.views
         && epoch == &b.epoch
         && fresh_state == &b.fresh_state
         && router == &b.router

@@ -225,7 +225,7 @@ package final class ReplacementQueue {
 
     private func hold(for candidate: Candidate) -> String? {
         guard candidate.now else { return interactionHold }
-        return app.sessions.contains { $0.state != .destroyed && $0.isApplyingPresentation } ? "presentation" : nil
+        return app.sessions.contains { $0.state != .destroyed && $0.presentingPriorTree } ? "presentation" : nil
     }
 
     /// What the person holds now (D7, D9; LLP 1030.003 D5), asked of the
@@ -236,7 +236,7 @@ package final class ReplacementQueue {
     /// runs inside one.
     var interactionHold: String? {
         let sessions = app.sessions.filter { $0.state != .destroyed }
-        if sessions.contains(where: \.isApplyingPresentation) { return "presentation" }
+        if sessions.contains(where: \.presentingPriorTree) { return "presentation" }
         #if os(macOS)
         if composing(sessions) { return "composition" }
         #endif
@@ -456,3 +456,7 @@ private final class ReplacementContact: UIGestureRecognizer {
     }
 }
 #endif
+
+private extension ExactSession {
+    var presentingPriorTree: Bool { isApplyingPresentation || insideApply || landing || fillLanding }
+}

@@ -916,7 +916,7 @@ impl<D: DataSource> Runner<D> {
             roles: exact_kernel::style::roles::Installed::new(roles.clone()),
             reorder_session: None,
             dropping_from: None,
-            ids: Ids::default(),
+            ids: Ids::from_last(sequence.map_or(0, |c| c.last_view_id)),
             orientation: Default::default(),
             now_ms,
             timers: Vec::new(),
@@ -1124,17 +1124,17 @@ impl<D: DataSource> Runner<D> {
         runner.keep_sent(false);
         let audio = runner.seams.audio;
         audio.transport_stood(&mut runner);
-        // First frame.
         let mut ids = std::mem::take(&mut runner.ids);
         ids.tabs.carried = carried.map(|c| c.panels.clone()).unwrap_or_default();
+        runner.prepare_view_ids(&mut ids, carried)?;
         let (tree, ops, surfaces, notes, shown) = {
             let mut u = runner.instance_update(&mut ids);
             u.discard = runner.kernel.is_detached();
             let tree = Tree::create(&mut u)?;
             (tree, u.ops, u.surfaces, u.notes, u.shown)
         };
-        runner.notes = notes;
-        runner.shown = shown;
+        ids.finish_first_frame();
+        (runner.notes, runner.shown) = (notes, shown);
         runner.ids = ids;
         runner.tree = Some(tree);
         let mut receipt = runner.apply(ops)?;

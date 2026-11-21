@@ -13,7 +13,7 @@ import UIKit.UIGestureRecognizerSubclass
 /// says and not as Exact's own gestures do. The app keeps the newest candidate as
 /// bytes and prepares it when the hold clears, so it carries the state of
 /// that moment; its lifecycle hears once how each held candidate ended. The
-/// fixture's two plans differ in one label, "before" and "after".
+/// second plan changes a label and inserts a sibling above the editor.
 final class ReplacementHoldTests: XCTestCase {
     private final class Life: ExactAppLifecycle {
         var started: [UInt64] = []
@@ -95,6 +95,101 @@ final class ReplacementHoldTests: XCTestCase {
     }
 
     #if os(macOS)
+    func testTypingAndUndoWithoutReplacingThePlan() throws { try exerciseEditor(replace: false) }
+
+    func testTypingAndUndoAcrossPlanReplacement() throws { try exerciseEditor(replace: true) }
+
+    private func exerciseEditor(replace: Bool) throws {
+        let window = try XCTUnwrap(self.window)
+        func editor() throws -> NSTextView {
+            try XCTUnwrap(session.presenter.views.values.first { $0.props["testId"] == "note" }?.textArea)
+        }
+        func type(_ text: String, into view: NSTextView) throws {
+            let undo = try XCTUnwrap(view.undoManager)
+            RunLoop.main.perform {
+                view.insertText(text, replacementRange: view.selectedRange())
+                view.breakUndoCoalescing()
+            }
+            waitFor("typed text and its undo group") { undo.canUndo && undo.groupingLevel == 0 && view.string.contains(text) }
+        }
+        let initial = try editor()
+        XCTAssertTrue(window.makeFirstResponder(initial))
+        try type("Piranesi", into: initial)
+        XCTAssertEqual(initial.string, "Piranesi")
+        XCTAssertEqual(initial.undoManager?.canUndo, true)
+        let selection = NSRange(location: 2, length: 3)
+        initial.setSelectedRange(selection)
+        if replace {
+            XCTAssertEqual(app.apply(try after()), .applied)
+            XCTAssertEqual(label(), "after")
+            let sibling = try XCTUnwrap(session.presenter.views.values.first { $0.props["testId"] == "unrelated" })
+            XCTAssertEqual(sibling.props["text"], "Unrelated")
+        }
+        let current = try editor()
+        XCTAssertEqual(current.string, "Piranesi", "component draft")
+        XCTAssertTrue(initial === current, "native editor identity")
+        XCTAssertTrue(window.firstResponder === current, "first responder")
+        XCTAssertEqual(current.selectedRange(), selection, "selected text")
+        XCTAssertEqual(current.undoManager?.canUndo, true, "typing history")
+        try type("x", into: current)
+        XCTAssertEqual(current.string, "Pixesi", "next key replaces the selection")
+        current.undoManager?.undo()
+        XCTAssertEqual(current.string, "Piranesi", "undo the replacement text")
+        current.undoManager?.undo()
+        XCTAssertEqual(current.string, "", "undo typing from before the reload")
+    }
+
+    /// Exercise the native commit while text is marked. The public apply holds
+    /// composition until this path is qualified on the host (LLP 1029.000.002 D7).
+    func testACommittedReplacementKeepsAppKitsMarkedRangeAndItsClient() throws {
+        let window = try XCTUnwrap(window)
+        let editor = try XCTUnwrap(session.presenter.views.values.first { $0.props["testId"] == "note" }?.textArea)
+        XCTAssertTrue(window.makeFirstResponder(editor))
+        let automatic = NSRange(location: NSNotFound, length: 0)
+        editor.setMarkedText("にほん", selectedRange: NSRange(location: 2, length: 0), replacementRange: automatic)
+        XCTAssertTrue(editor.hasMarkedText())
+        let marked = editor.markedRange(), selected = editor.selectedRange()
+        let candidate = try XCTUnwrap(session.prepare(try after(), resolver: app.resolver))
+        let batch = try XCTUnwrap(session.commit(candidate))
+        XCTAssertTrue(batch.replacesTree)
+        session.presentCommitted(batch, label: "marked text")
+        XCTAssertTrue(window.firstResponder === editor)
+        XCTAssertTrue(editor.hasMarkedText())
+        XCTAssertEqual(editor.markedRange(), marked)
+        XCTAssertEqual(editor.selectedRange(), selected)
+        XCTAssertEqual(editor.string, "にほん")
+        editor.insertText("日本", replacementRange: automatic)
+        XCTAssertFalse(editor.hasMarkedText())
+        XCTAssertEqual(editor.string, "日本")
+    }
+
+    func testKeysAcrossReloadsStayInOrderWithinTheDevRestartBudget() throws {
+        let window = try XCTUnwrap(window)
+        let editor = try XCTUnwrap(session.presenter.views.values.first { $0.props["testId"] == "note" }?.textArea)
+        XCTAssertTrue(window.makeFirstResponder(editor))
+        let plans = try [after(), fixturePlan("REPLACEMENT_HOLD")]
+        let labels = ["after", "before"]
+        var text = "", elapsed: [Double] = []
+        for (index, byte) in "abcdefghijk".enumerated() {
+            let key = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+                characters: String(byte), charactersIgnoringModifiers: String(byte), isARepeat: false, keyCode: 0))
+            window.sendEvent(key)
+            text.append(byte)
+            let target = index % plans.count
+            let start = CACurrentMediaTime()
+            XCTAssertEqual(app.apply(plans[target]), .applied)
+            window.displayIfNeeded()
+            elapsed.append((CACurrentMediaTime() - start) * 1000)
+            XCTAssertEqual(label(), labels[target])
+            XCTAssertTrue(window.firstResponder === editor)
+            XCTAssertEqual(editor.string, text)
+        }
+        let median = elapsed.sorted()[elapsed.count / 2]
+        print("AppKit replacement request to display, p50 over \(elapsed.count) edits: \(median) ms")
+        XCTAssertLessThan(median, 100)
+    }
+
     /// An input method composing `text`, until the test ends: asked to let
     /// go (`NSTextInputContext.discardMarkedText`), a live one inserts what
     /// it composes into its client, whatever the client has made of its

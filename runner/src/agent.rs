@@ -26,6 +26,7 @@ mod looks;
 mod owned;
 pub(crate) use owned::declared_name;
 mod pending;
+mod place;
 mod row;
 /// A row's value as `node` prints it: the JS target's inspect table (LLP 1122 T2b) writes the same words.
 pub use row::row_json;
@@ -636,6 +637,10 @@ pub fn node<D: DataSource>(runner: &Runner<D>, id: u32) -> String {
             }
         }
         s.push(']');
+    }
+    if let Some(path) = runner.view_place(id) {
+        s.push_str(",\"place\":");
+        place::write(&path, &mut s);
     }
     // The app modes it is in (LLP 1121 D5): the window's, overridden by the
     // pins above it (LLP 1122 D5's selected node's tuple).

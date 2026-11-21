@@ -700,8 +700,38 @@
       ]
     },
     {
+      "name": "place_steps",
+      "_comment": "LLP 1029.000.002 D1. A local step from the rendered parent or enclosing row. An outer step records a component or slot boundary erased by inlining.",
+      "fields": [
+        {
+          "name": "outer",
+          "codec": "opt:place_steps"
+        },
+        {
+          "name": "kind",
+          "codec": "enum:PlaceKind"
+        },
+        {
+          "name": "name",
+          "codec": "str"
+        },
+        {
+          "name": "ordinal",
+          "codec": "u32"
+        },
+        {
+          "name": "shared_id",
+          "codec": "bool"
+        }
+      ]
+    },
+    {
       "name": "regions",
       "fields": [
+        {
+          "name": "place",
+          "codec": "opt:place_steps"
+        },
         {
           "name": "kind",
           "codec": "enum:RegionKind"
@@ -774,6 +804,10 @@
     {
       "name": "nodes",
       "fields": [
+        {
+          "name": "place",
+          "codec": "opt:place_steps"
+        },
         {
           "name": "node_type",
           "codec": "u8"
@@ -1156,6 +1190,7 @@
       "list",
       "record"
     ],
+    "PlaceKind": ["element", "component", "each", "children"],
     "RegionKind": [
       "when",
       "match",

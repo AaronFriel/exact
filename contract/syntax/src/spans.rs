@@ -211,7 +211,7 @@ record_variants! {
 }
 record_variants! {
     Node {
-        Element { tag, positional, attrs, children, span, instance }, Use { name, args, children, span },
+        Element { tag, positional, attrs, children, span, instance, place }, Use { name, args, children, span },
         Children { span },
         When { tag, cond, then, otherwise, span }, Each { tag, var, index, list, key, body, span },
         Match { tag, subject, some, none, span },

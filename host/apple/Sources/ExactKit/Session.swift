@@ -954,15 +954,14 @@ public final class ExactSession {
 
     private(set) var modulePending = false, requestsPending = false
     private(set) var preparationError: String? // why the last preparation refused the plan
-    /// While a carried restart applies its tree, autofocus waits; the restart
-    /// then puts focus back at its place (`Presenter.restoreFocus`).
+    /// A replacement holds autofocus while it applies the new tree.
     var autofocusHeld = false
     private var keptFocus: FocusPlace?
 
     func prepare(_ bytes: Data, resolver: AssetResolver, token: UInt64 = 0, module: ExactModule? = nil, size: CGSize? = nil, letGo: Bool = false) -> Prepared? {
         modulePending = false; requestsPending = false; preparationError = nil
         guard state != .destroyed else { return nil }
-        // The running tree's focus, read before the candidate replaces it.
+        if booted { drainFill() } // The candidate compares against the last fully presented tree.
         keptFocus = booted ? presenter.focusPlace(tree: runtime.ask(exact_tree, "{}")) : nil
         let module = module ?? app.lastModule
         runtime.setProfileResolver(resolver)
@@ -1034,7 +1033,8 @@ public final class ExactSession {
         let restart = booted, kept = keptFocus
         keptFocus = nil
         awaitingTree = true // the tint a reset gives back is reported with the new tree
-        resetHeld(); viewsEpoch += 1 // the teardown reaches no runtime; what it set off waits for `treeIsIn` (ResetGate)
+        if batch.replacesTree { cancelStage(); runtime.held = false } else { resetHeld() }
+        viewsEpoch += 1
         forgetAppearances()
         booted = true; app.buildSessionBooted(self)
         app.lifecycle?.generationStarted(app, token: updateToken)
@@ -1048,7 +1048,7 @@ public final class ExactSession {
         ExactLaunch.shared.treeApplied(self, path: label)
         view?.rebooted()
         autofocusHeld = false
-        if restart { presenter.restoreFocus(kept, tree: runtime.ask(exact_tree, "{}")) }
+        if restart && !batch.replacesTree { presenter.restoreFocus(kept, tree: runtime.ask(exact_tree, "{}")) }
         state = .ready
         if restart { fputs("reloaded \(label)\n", stderr) } // a launch generation's first boot is no reload
     }

@@ -10,6 +10,37 @@ impl<D: DataSource> Runner<D> {
         update
     }
 
+    pub(super) fn prepare_view_ids(
+        &self,
+        ids: &mut Ids,
+        carried: Option<&Carried>,
+    ) -> Result<(), RunnerError> {
+        let Some(views) = carried
+            .map(|carry| &carry.views)
+            .filter(|views| !views.is_empty())
+        else {
+            return Ok(());
+        };
+        if self.kernel.is_detached() {
+            return Ok(());
+        }
+        // Only evaluate the settled first frame. Asking the data source and
+        // publishing surfaces belong to the runner that commits the frame.
+        let mut preview = Ids::default();
+        preview.tabs.carried = ids.tabs.carried.clone();
+        let mut update = self.instance_update(&mut preview);
+        update.fonts = Some(std::rc::Rc::new(std::cell::RefCell::new(
+            self.fonts.borrow().clone(),
+        )));
+        let tree = Tree::create(&mut update)?;
+        let mut kernel = Kernel::on_demand(Box::new(exact_kernel::MonospaceMeasurer::default()));
+        let _roles = self.bind_roles();
+        kernel.apply(0, 1, &update.ops)?;
+        let candidate = tree.retainable_views(&self.plan, &kernel, &preview);
+        views.assign(&candidate, preview.last_issued(), ids);
+        Ok(())
+    }
+
     /// Re-evaluate every site and apply one batch. A failure here means the
     /// instance tree and the kernel may disagree; the runner is poisoned and
     /// the host restarts it — never a half-applied frame.

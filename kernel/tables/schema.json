@@ -6270,6 +6270,10 @@
           "member": "controls",
           "codec": "bool"
         },
+        "replacesTree": {
+          "member": "replacesTree",
+          "codec": "bool"
+        },
         "layoutProvisional": {
           "member": "layoutProvisional",
           "codec": "bool"

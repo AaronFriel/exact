@@ -24,6 +24,8 @@ pub struct Batch {
     /// Deferred store read and data activation still need a retry (LLP 1126.001 WP12).
     pub store_status: Option<(bool, bool)>,
     ops: Vec<String>,
+    /// The first frame updates the native views left by the previous runner.
+    pub(crate) replaces_tree: bool,
     /// The views this batch creates: each starts at its presentation's
     /// identity (`Host::present`).
     created: std::collections::HashSet<u32>,
@@ -863,6 +865,12 @@ impl Batch {
         self.ops.push(s);
     }
 
+    pub(crate) fn prepend(&mut self, other: Self) {
+        let mut ops = other.ops;
+        ops.append(&mut self.ops);
+        self.ops = ops;
+    }
+
     /// This batch's ops, for another batch to carry (`Host::ending`).
     pub(crate) fn into_ops(self) -> Vec<String> {
         self.ops
@@ -1170,6 +1178,9 @@ impl Batch {
         }
         if self.canvas_owed {
             s.push_str(",\"canvasOwed\":true");
+        }
+        if self.replaces_tree {
+            s.push_str(",\"replacesTree\":true");
         }
         if self.layout_provisional {
             s.push_str(",\"layoutProvisional\":true");

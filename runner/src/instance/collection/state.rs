@@ -24,6 +24,11 @@ impl ListState for Collection {
     fn site(&self, view: ViewId, path: &mut Vec<InstanceStep>) -> Option<(NodesId, u32)> {
         Collection::site(self, view, path)
     }
+    fn visit_rows(&self, visit: &mut dyn FnMut(RegionsId, &Row)) {
+        for (_, row) in self.mounted_rows() {
+            visit(self.region, row);
+        }
+    }
     fn document_children<'a>(&'a self, plan: &Plan) -> Result<Vec<ListChild<'a>>, InstanceError> {
         Collection::document_children(self, plan)
     }

@@ -74,7 +74,8 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   contract([resolve(root, 'host/apple/tests/fixtures/range-adjust.contract'), '-o', env[`${prefix}_RANGE_ADJUST_PLAN`] = resolve(dir, 'range-adjust.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/replacement-hold.contract'), '-o', env[`${prefix}_REPLACEMENT_HOLD_PLAN`] = resolve(dir, 'replacement-hold.plan')]);
   const replaced = resolve(dir, 'replacement-hold-after.contract');
-  writeFileSync(replaced, readFileSync(resolve(root, 'host/apple/tests/fixtures/replacement-hold.contract'), 'utf8').replace('"before"', '"after"'));
+  writeFileSync(replaced, readFileSync(resolve(root, 'host/apple/tests/fixtures/replacement-hold.contract'), 'utf8')
+    .replace('"before"', '"after"').replace('      DraftNote()', '      OtherNote()\n      DraftNote()'));
   contract([replaced, '-o', env[`${prefix}_REPLACEMENT_HOLD_AFTER_PLAN`] = resolve(dir, 'replacement-hold-after.plan')]);
   // A test that writes its own manifest names the app the tests link (`SheetFixture`'s `data`).
   env[`${prefix}_TEST_APP_ID`] = appId;
