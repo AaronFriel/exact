@@ -156,12 +156,36 @@ function layoutPosition(node) {
   }
   return { left, top };
 }
-// An outer SVG has no offsetParent. If it shares the scroller’s coordinate
-// system, its screen matrix gives the projection of both border boxes. Under
-// an affine transform the centre of each projects to the centre of its bounds.
+// The measured border-box centres include translation and transform origins.
+function planarAxes(from, to) {
+  const projection = new DOMMatrix();
+  for (let n = from; n && n !== to; n = n.parentElement) {
+    const css = getComputedStyle(n);
+    if (css.display === 'contents') continue;
+    const z = css.translate.match(/calc\([^)]*\)|\S+/g)?.[2];
+    if (css.offsetPath !== 'none' || css.perspective !== 'none' || (z && parseFloat(z) !== 0)) return null;
+    const local = new DOMMatrix();
+    if (css.rotate !== 'none') {
+      const parts = css.rotate.split(' '), angle = parseFloat(parts.pop());
+      const axis = parts.length === 3 ? parts.map(Number) : { x: [1, 0, 0], y: [0, 1, 0] }[parts[0]] ?? [0, 0, 1];
+      local.rotateAxisAngleSelf(...axis, angle);
+    }
+    if (css.scale !== 'none') {
+      const [x, y = x, z = 1] = css.scale.split(' ').map(Number);
+      local.scaleSelf(x, y, z);
+    }
+    if (css.transform !== 'none') local.multiplySelf(new DOMMatrix(css.transform));
+    if (!local.is2D) return null;
+    local.e = local.f = 0;
+    projection.preMultiplySelf(local);
+  }
+  return projection.scaleSelf((from.currentCSSZoom ?? 1) / (to?.currentCSSZoom ?? 1));
+}
+const projectedSize = (m, w, h) => [Math.abs(m.a) * w + Math.abs(m.c) * h, Math.abs(m.b) * w + Math.abs(m.d) * h];
+// An outer SVG has no offsetParent. Its screen matrix includes the viewBox
+// scaling as well as the CSS transforms inside and outside the scrollport.
 function svgBox(el, node) {
   if (el === document.scrollingElement) return null;
-  for (let n = node; n !== el; n = n.parentElement) if (!n || transformed(n)) return null;
   const m = node.getScreenCTM();
   if (!m) return null;
   const [w, h] = dimensions(node), [pw, ph] = dimensions(el);
@@ -175,17 +199,23 @@ function svgBox(el, node) {
       sx = sy = aspect.meetOrSlice === aspect.SVG_MEETORSLICE_SLICE ? Math.max(sx, sy) : Math.min(sx, sy);
     a /= sx; b /= sx; c /= sy; d /= sy;
   }
-  const det = a * d - b * c;
-  if (!det) return null;
+  // A collapsed SVG can have a diagonal client rect with positive width and height.
+  const ad = a * d, bc = b * c;
+  if (Math.abs(ad - bc) <= Number.EPSILON * (Math.abs(ad) + Math.abs(bc))) return null;
+  const screen = new DOMMatrix([a, b, c, d, 0, 0]), inner = planarAxes(node, el);
+  // screen = outer × inner. Either planar map identifies the other, including
+  // when the browser alone knows the rotation along a motion path.
+  const outer = inner ? screen.multiply(inner.inverse()) : planarAxes(el, null);
+  if (!outer) return null;
   const r = node.getBoundingClientRect(), p = el.getBoundingClientRect();
   // Perspective can give boxes at different positions different projections.
-  const agrees = (bounds, width, height) => Math.abs(bounds.width - Math.abs(a) * width - Math.abs(c) * height) < 0.1
-    && Math.abs(bounds.height - Math.abs(b) * width - Math.abs(d) * height) < 0.1;
-  if (!agrees(p, pw, ph) || !agrees(r, w, h)) return null;
-  const dx = r.left + r.width / 2 - p.left - p.width / 2, dy = r.top + r.height / 2 - p.top - p.height / 2;
-  const left = (d * dx - c * dy) / det + (pw - w) / 2 - el.clientLeft;
-  const top = (a * dy - b * dx) / det + (ph - h) / 2 - el.clientTop;
-  return { left, top, right: left + w, bottom: top + h };
+  const agrees = (bounds, [width, height]) => Math.abs(bounds.width - width) < 0.1 && Math.abs(bounds.height - height) < 0.1;
+  if (!agrees(p, projectedSize(outer, pw, ph)) || !agrees(r, projectedSize(screen, w, h))) return null;
+  const inverse = outer.inverse();
+  const centre = inverse.transformPoint({ x: r.left + r.width / 2 - p.left - p.width / 2, y: r.top + r.height / 2 - p.top - p.height / 2 });
+  const [width, height] = projectedSize(inverse.multiply(screen), w, h);
+  const left = centre.x + (pw - width) / 2 - el.clientLeft, top = centre.y + (ph - height) / 2 - el.clientTop;
+  return { left, top, right: left + width, bottom: top + height };
 }
 // Scroll Anchoring §2.2 measures within the scrolling box, before transforms
 // on that box or its ancestors. Client rects retain subpixels and descendant
