@@ -783,23 +783,18 @@ mod tests {
             assert_ne!(alert.serial, menu.serial);
             assert!(snapshot.refresh(&p, &alert, 1.25));
             let tree = snapshot.tree();
-            let node = |name| {
+            let node = |role, name| {
                 tree.nodes
                     .iter()
-                    .find(|(_, n)| n.label() == Some(name))
+                    .find(|(_, n)| n.role() == role && n.label() == Some(name))
                     .unwrap()
             };
-            let (headline, heading) = node("Keep it?");
-            let (supporting, message) = node("You can change this later.");
-            let (cancel, button) = node("Cancel");
-            assert_eq!(heading.role(), Role::Heading);
-            assert_eq!(message.role(), Role::Label);
-            assert_eq!(button.role(), Role::Button);
+            let (_, dialog) = node(Role::AlertDialog, "Keep it?");
+            let (headline, _) = node(Role::Heading, "Keep it?");
+            let (supporting, _) = node(Role::Label, "You can change this later.");
+            let (cancel, button) = node(Role::Button, "Cancel");
             assert!(button.supports_action(Action::Click));
-            assert!(tree
-                .nodes
-                .iter()
-                .any(|(_, node)| { node.children() == [*headline, *supporting, *cancel] }));
+            assert_eq!(dialog.children(), [*headline, *supporting, *cancel]);
             menu_action(
                 &mut p,
                 accesskit::ActionRequest {
