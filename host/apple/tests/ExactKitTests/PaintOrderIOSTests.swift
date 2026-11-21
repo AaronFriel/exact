@@ -155,6 +155,35 @@ final class PaintOrderIOSTests: XCTestCase {
         XCTAssertEqual(container.layer.zPosition, 0)
     }
 
+    func testAPanelAfterARaisedBarPaintsAndTakesTouchesOverIt() throws {
+        let p = fixture()
+        let mount = try XCTUnwrap(p.views[1]).container
+        let before = try XCTUnwrap(p.views[2]), bar = try XCTUnwrap(p.views[3])
+        let panel = try XCTUnwrap(p.views[4]), above = try XCTUnwrap(p.views[5])
+        let navigation = UIView()
+        mount.insertSubview(navigation, belowSubview: bar)
+        navigation.setPaintForeground(aboveAuthored: false)
+        before.setRank(1)
+        bar.setRank(1)
+        panel.setRank(1)
+        above.setRank(2)
+        bar.clearsNavigation = true
+        PaintOrder.changed(mount)
+
+        func order() -> [UIView] {
+            NodeView.hitOrder(mount.subviews).filter { $0 is NodeView || $0 === navigation }
+        }
+        XCTAssertEqual(order(), [above, panel, bar, navigation, before])
+        XCTAssertEqual(panel.paintZPosition, bar.paintZPosition, "equal CSS ranks paint in tree order")
+        bar.setRank(0)
+        XCTAssertGreaterThan(panel.paintZPosition, bar.paintZPosition)
+        XCTAssertGreaterThan(bar.paintZPosition, navigation.layer.zPosition)
+        XCTAssertEqual(order(), [above, panel, bar, navigation, before])
+        bar.clearsNavigation = false
+        PaintOrder.changed(mount)
+        XCTAssertEqual(order(), [above, panel, navigation, before, bar])
+    }
+
     /// A long-pressed row's context menu: UIKit hides the row and adds its
     /// highlight to the route's mount (`LiftTarget.container`) after the route,
     /// at depth 0, under the positioned route's ½. It goes to the route's depth,
