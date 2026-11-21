@@ -1739,9 +1739,9 @@ profile claims neither.
 
 ### Web CI preparation
 
-For a website's `web-build` and `test web` on Linux, install Bun at the version in
-Exact's `package.json` and rustup, then check out the desired Exact commit at the path
-the app's `exact.mjs` uses. From the app directory, run:
+For a website's `web-build` and `test web` on Linux, check out Exact at the path the
+app's `exact.mjs` uses and install Bun at the version in Exact's `package.json`.
+Install rustup if the app or SDK tools will build from source. Run these commands from the app directory.
 
 ```sh
 bun <exact2>/scripts/exact.mjs setup --platform web
@@ -1749,7 +1749,13 @@ bun install --frozen-lockfile
 bun exact.mjs test web
 ```
 
-The scoped setup installs the pinned stable and nightly Rust, the nightly's `rust-src`,
+A Contract and TypeScript site can use matching prebuilt tools for its web build and browser tests.
+Web setup checks the tools and their recorded Cargo metadata against this checkout, then installs
+the JavaScript dependencies and browser. `--check` uses the local cache. Setup can also fetch
+from a tools origin when the checkout pins its producer key. Native builds, games, Rust data or
+GPU crates, custom web build scripts and Rust page renderers require Rust.
+
+For a source build, the scoped setup installs the pinned stable and nightly Rust, the nightly's `rust-src`,
 `llvm-tools`, clippy and `wasm32-unknown-unknown` target, its standard-library dependencies,
 wasm-bindgen, Binaryen, Exact's `node_modules`, Playwright's Chromium and headless shell,
 and Exact's locked crates. The wasm tools serve Markdown, motion, the markup editor,

@@ -1,7 +1,7 @@
 // A tool set is taken by its inputs' bytes, and a fetched one only where it may run (LLP 1174 D3, D5).
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -220,6 +220,48 @@ test('when a cached compiler disappears, the next matching set supplies it', () 
     assert.match(new RustMissing('contract', m.env).message, /tool set built at bbbbbbbbbbbb is missing contract/);
   } finally { m.done(); }
 });
+
+test('web setup accepts a complete matching tool set for a Contract app and keeps the source requirements for a Rust app', () => {
+  const m = machine([{ source: 'built', inputs: ours, commit: 'a'.repeat(40) }], { rust: false });
+  try {
+    const dir = resolve(m.env.HOME, '.cache/exact/tools', hostTriple(), 'set0'), receipt = resolve(dir, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(receipt, 'utf8'));
+    for (const file of ['exact-web-js', 'exact-filesystem', 'markdown.wasm', 'motion.wasm', 'markup-editor.wasm', 'textflow.wasm']) {
+      writeFileSync(resolve(dir, file), '');
+      manifest.products[file] = { ...manifest.products.contract, file };
+    }
+    manifest.metadata = { record: { packages: [], resolve: { nodes: [] } }, inputs: ours };
+    writeFileSync(receipt, JSON.stringify(manifest));
+    const app = resolve(m.env.HOME, 'starter'), script = resolve(app, 'web/build.rs');
+    mkdirSync(resolve(app, 'web'), { recursive: true });
+    writeFileSync(resolve(app, 'app.contract'), '');
+    const check = (chrome = process.execPath) => spawnSync(process.execPath, [resolve(ROOT, 'scripts/exact.mjs'), 'setup', '--check', '--platform', 'web'],
+      { cwd: app, encoding: 'utf8', env: { ...m.env, CHROME: chrome, EXACT_TOOLS_ORIGIN: 'none' } });
+    const needsRust = () => {
+      const result = check();
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stdout, /MISSING rustup/);
+      assert.doesNotMatch(result.stdout, /Prebuilt web tools/);
+    };
+    writeFileSync(script, 'fn main() { exact_js_bake::build(); }');
+    const ready = check();
+    assert.equal(ready.status, 0, ready.stderr);
+    assert.match(ready.stdout, /Prebuilt web tools/);
+    assert.doesNotMatch(ready.stdout, /rustup|Cargo crates/);
+    const noBrowser = check(resolve(app, 'absent-chrome'));
+    assert.equal(noBrowser.status, 1);
+    assert.match(noBrowser.stdout, /MISSING Chrome/);
+    writeFileSync(script, 'fn main() { println!("cargo:rerun-if-changed=data.json"); }');
+    needsRust();
+    rmSync(script);
+    rmSync(resolve(dir, 'motion.wasm'));
+    needsRust();
+    writeFileSync(resolve(dir, 'motion.wasm'), '');
+    manifest.metadata.inputs = [[ours[0][0], '0'.repeat(64)]];
+    writeFileSync(receipt, JSON.stringify(manifest));
+    needsRust();
+  } finally { m.done(); }
+}, 60000);
 
 test('a fetched set runs only without Rust or when an origin is named, and never under EXACT_TOOLS_ORIGIN=none', () => {
   for (const [rust, origin, taken] of [[true, undefined, false], [true, 'https://tools.example', true], [false, undefined, true], [false, 'none', false]]) {

@@ -130,10 +130,10 @@ const fetchMisses = new Map();
 const lookupKey = (env, name) => JSON.stringify([cacheDir(env), env.EXACT_TOOLS_ORIGIN || TOOLS_ORIGIN, name]);
 
 /** A fetched product from the cache or the tools origin, when this machine accepts one. */
-export function fetchedTool(name, env = process.env) {
+export function fetchedTool(name, env = process.env, download = true) {
   if (!fetchedAllowed(env)) return null;
   const cached = fromSet(name, 'fetched', env);
-  if (cached) return cached;
+  if (cached || !download) return cached;
   const origin = env.EXACT_TOOLS_ORIGIN || TOOLS_ORIGIN;
   if (!origin) return null;
   const attempt = lookupKey(env, name);
@@ -152,16 +152,17 @@ export function fetchedTool(name, env = process.env) {
 
 /** The set D5's order takes product `name` from, after this checkout's own fresh build: one built here, else (where a
  * kept product does not answer first) a fetched one where that is allowed. */
-export const fromSets = (name, env = process.env) => fromSet(name, 'built', env) ?? fetchedTool(name, env);
+export const fromSets = (name, env = process.env, download = true) => fromSet(name, 'built', env) ?? fetchedTool(name, env, download);
 
 /** Thrown where product `name` would need Cargo and Rust is missing: says why no set matched, the newest set's commit
  * (and how to check it out, when the tree is clean), then how to install Rust (D5). Its message is one
  * `error [rust-missing]: …` line, the form `contract build --json` keeps the id of. */
 export class RustMissing extends Error {
-  constructor(name, env = process.env) {
+  constructor(name, env = process.env, reason) {
     const newest = sets(env).find(set => set.manifest.products?.[name]);
     let why = `no tool set on this machine has it (${cacheDir(env).replace(home(env), '~')})`, commit = '';
-    if (newest) {
+    if (reason) why = reason;
+    else if (newest) {
       const product = newest.manifest.products[name], built = short(newest.manifest.commit);
       const path = productFile(newest, product), at = path && differs(product);
       if (!path) why = `the tool set built at ${built} is missing ${product.file}`;
@@ -401,6 +402,15 @@ export function readToolManifest(bytes, id, triple, publicKey) {
 const EXECUTABLES = ['contract', 'exact-web-js', 'exact-filesystem'];
 const LEAVES = ['markdown.wasm', 'motion.wasm', 'markup-editor.wasm', 'textflow.wasm'];
 const TOOL_FILES = [...EXECUTABLES, ...LEAVES];
+
+/** A complete web toolchain for a machine without Rust. A setup check reads only its cache. */
+export function prebuiltWebTools({ download = false, env = process.env } = {}) {
+  if (!rustMissing(env)) return false;
+  return TOOL_FILES.every(name => {
+    const match = fromSets(name, env, download);
+    return !!match && (name !== 'exact-web-js' || !!setMetadata(match.set));
+  });
+}
 
 function runProducts({ dir, manifest }, root) {
   const linux = manifest.triple === LINUX_TOOLS && hostTriple() !== LINUX_TOOLS;
