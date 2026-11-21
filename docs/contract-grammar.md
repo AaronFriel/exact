@@ -999,6 +999,14 @@ Numbers use binary64 arithmetic and IEEE comparisons; other values compare by
 their whole printed text. These checks cover observed steps, not every commit
 inside a step, and are not proofs.
 
+`after` and `never refuses` accept a root action name or a qualified name such
+as `"Palette.typed"`. A qualified name covers every instance of that component.
+Both `contract test` and `contract verify` check the name before running scripts.
+If only a child declares a bare name, the diagnostic gives its qualified form.
+If a component has no action with the given name, the diagnostic lists its
+actions. An unknown bare name stays unexercised. Verification receipts use the
+spelling in the test file. Suggested properties use the same component names.
+
 `contract test <file>` emits an object with `tests` and `properties` arrays. Each
 property carries `kind`, `name`, its declaration `line` and parsed `lines`; each
 line has its source `line` and an `op` (`expect-state`, `only-writes`, `command`).
