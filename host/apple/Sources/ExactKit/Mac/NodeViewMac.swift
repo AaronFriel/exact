@@ -377,14 +377,8 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     package override func resetCursorRects() {
         super.resetCursorRects()
         guard !held else { return }
-        if let cursor = CSSCursor.value(style["cursor"]?.string ?? "auto") { addCursorRect(bounds, cursor: cursor); return }
-        // `cursor: auto` over a link is AppKit's pointing hand, as
-        // `NSTextView` shows over its links (LLP 1115 §3): a `link` node, and
-        // each `href` run of a paragraph.
-        if props["accessibilityRole"] == "link" || !(props["href"] ?? "").isEmpty {
-            addCursorRect(bounds, cursor: .pointingHand)
-            return
-        }
+        if let cursor = boxCursor { addCursorRect(bounds, cursor: cursor); return }
+        // An inline link has a pointing hand over its own fragments (LLP 1115 §3).
         for run in inlineText where run.isLink && !run.hidden {
             for rect in inlineRects(run) { addCursorRect(rect, cursor: .pointingHand) }
         }
