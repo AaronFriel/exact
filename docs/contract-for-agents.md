@@ -7283,10 +7283,10 @@ selection clears the selection, as in a text view. On Android a long press on
 `user-select="text"` selects a word. The handles adjust the selection within
 one paragraph, and the floating toolbar offers Copy, Share and Select all.
 An inline or enclosing `all` selects its text as a unit. Dragging the paragraph
-away from a handle scrolls its container. On Linux, drag across opted-in text,
+away from a handle scrolls its container. On Linux and Windows, drag across opted-in text,
 double-click a word, or triple-click a paragraph. One click selects a run marked `all`.
 Ctrl+C copies the visible text when the host supplies a clipboard.
-Windows and tvOS have no text selection, so `text` and `all` change nothing there. `contain` is refused by
+On tvOS, `text` and `all` leave their content unselected. `contain` is refused by
 name: no native host has it. These rows take literals
 or choices of literals, so unsupported runtime values cannot bypass the check.
 
