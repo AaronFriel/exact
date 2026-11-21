@@ -326,12 +326,14 @@ fn raster_rect(instance: &Instance) -> Option<[f32; 4]> {
         return ((x.abs() + w <= MAX) && (y.abs() + h <= MAX) && w >= 0. && h >= 0.)
             .then_some(instance.rect);
     }
-    if b != 0.
-        || c != 0.
-        || !(a.abs() <= MAX && d.abs() <= MAX)
-        || !((x.abs() + w.abs()) * a.abs() + tx.abs() <= MAX)
-        || !((y.abs() + h.abs()) * d.abs() + ty.abs() <= MAX)
-    {
+    let extents = [
+        a.abs(),
+        d.abs(),
+        (x.abs() + w.abs()) * a.abs() + tx.abs(),
+        (y.abs() + h.abs()) * d.abs() + ty.abs(),
+    ];
+    // A NaN extent is not within the bound either.
+    if b != 0. || c != 0. || !extents.into_iter().all(|v| v <= MAX) {
         return None;
     }
     let rect = Encoder::device_rect(instance);
