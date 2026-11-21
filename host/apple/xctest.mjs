@@ -62,7 +62,7 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   contract([resolve(root, 'host/apple/tests/fixtures/quiet-scroll.contract'), '-o', env[`${prefix}_QUIET_SCROLL_PLAN`] = resolve(dir, 'quiet-scroll.plan')]);
   const filteredFeed = resolve(dir, 'filtered-feed.contract');
   writeFileSync(filteredFeed, readFileSync(resolve(root, 'host/apple/tests/fixtures/quiet-scroll.contract'), 'utf8')
-    .replace('for n in items ', 'for n in items.filter(n => n % 2 == 1) '));
+    .replace('for n in items ', 'for n in items.filter(n => n % 2 != 0) '));
   contract([filteredFeed, '-o', env[`${prefix}_FILTERED_FEED_PLAN`] = resolve(dir, 'filtered-feed.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/quiet-edge.contract'), '-o', env[`${prefix}_QUIET_EDGE_PLAN`] = resolve(dir, 'quiet-edge.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/scroll-facts.contract'), '-o', env[`${prefix}_SCROLL_FACTS_PLAN`] = resolve(dir, 'scroll-facts.plan')]);

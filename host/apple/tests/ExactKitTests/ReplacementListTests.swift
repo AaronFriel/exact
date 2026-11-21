@@ -60,6 +60,13 @@ final class ReplacementListTests: XCTestCase {
             return node("coin-18") == nil && node("coin-19") != nil
                 && offset().map { abs($0 - 907) <= 1 } == true && !session.fillInFlight
         }
+        let prepend = try XCTUnwrap(node("prepend")).id
+        presenter.press(prepend) // -100 is filtered out.
+        presenter.press(prepend) // -101 goes above row 19.
+        waitFor("row 19 stays put as new output arrives", facts: { "offset=\(String(describing: offset()))" }) {
+            presenter.settlePump()
+            return node("coin-19") != nil && offset().map { abs($0 - 1007) <= 1 } == true && !session.fillInFlight
+        }
     }
 }
 #endif
