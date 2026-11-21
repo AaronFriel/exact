@@ -108,6 +108,40 @@ mod tests {
         (p, id)
     }
 
+    #[test]
+    fn accessibility_scrolls_a_wrapped_range_to_either_edge_without_moving_the_caret() {
+        let value = "🦀 one two three four ".repeat(32);
+        let (mut p, view) = fixture("textarea", &value);
+        p.set_focus(None, 0.);
+        p.frame();
+        p.reader_access(1., true);
+        let id = p.access_told().iter().find(|n| n.view == view).unwrap().id;
+        let starts: Vec<_> = p.access_text_lines(view, &value).unwrap().collect();
+        assert!(starts.len() > 12);
+        let offset = starts[starts.len() / 2];
+        let frame = |p: &Presenter<()>| {
+            p.brush.field_text[&view]
+                .range_frame(offset, offset + 1)
+                .unwrap()
+        };
+        let rect = p.rect_of(view).unwrap();
+        assert!(frame(&p).1 > rect.1 + rect.3);
+        let selection = p.access_selection(id);
+        for top in [true, false] {
+            assert!(p.access_scroll_text_line(id, offset, top));
+            p.frame();
+            let (_, y, _, height) = frame(&p);
+            assert!(y >= rect.1 && y + height <= rect.1 + rect.3);
+            if top {
+                assert!(y < rect.1 + 24., "{y}, {rect:?}");
+            } else {
+                assert!(y + height > rect.1 + rect.3 - 24., "{y}, {rect:?}");
+            }
+            assert_eq!(p.access_selection(id), selection);
+            assert_eq!(p.access_focus(), None);
+        }
+    }
+
     fn assert_caret_in_field(p: &mut Presenter<()>, id: ViewId) {
         let pixels = p.frame();
         let r = p.rect_of(id).unwrap();

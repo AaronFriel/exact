@@ -86,3 +86,7 @@ rerun those tests; the upstream suite alone does not cover the patch.
    macros in `node/patterns.rs`. `tests::simple::scroll_an_overflowing_pane_through_uia`
    exercises the public UI Automation client against a window and checks the
    actions delivered to the application.
+
+10. **`text.rs`, UI Automation text ranges.** At a line boundary,
+    `ScrollIntoView(false)` aligns the last included text run with the bottom
+    of the field. A collapsed range keeps its insertion position.

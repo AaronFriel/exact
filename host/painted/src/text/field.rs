@@ -328,6 +328,10 @@ impl Geometry {
         Rc::ptr_eq(&self.lines[row].spans, &old.lines[old_row].spans)
     }
 
+    pub(crate) fn line_starts(&self) -> impl ExactSizeIterator<Item = u32> + Clone + '_ {
+        self.lines.iter().map(|line| line.start)
+    }
+
     pub(crate) fn wrap_boundary(&self, offset: u32) -> bool {
         self.lines
             .windows(2)

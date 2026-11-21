@@ -71,6 +71,28 @@ impl<D: DataSource> Presenter<D> {
         Some(self.field_text(self.access_view(id)?))
     }
 
+    /// UTF-16 starts of the visual lines in the last paint of this value.
+    pub fn access_text_lines(
+        &self,
+        view: ViewId,
+        value: &str,
+    ) -> Option<impl ExactSizeIterator<Item = u32> + Clone + '_> {
+        let field = self.brush.field_text.get(&view)?;
+        (field.value == value).then(|| field.geometry.line_starts())
+    }
+
+    /// Align a text range's endpoint with the top or bottom of its field.
+    pub fn access_scroll_text_line(&mut self, id: i32, offset: u32, top: bool) -> bool {
+        let Some(view) = self.access_view(id) else {
+            return false;
+        };
+        let Some(field) = self.brush.field_text.get(&view) else {
+            return false;
+        };
+        let y = field.aligned_line_y(offset, top);
+        self.scroll_to(view, (self.scroll_of(view).0, y)).is_some()
+    }
+
     /// Select text requested by an accessibility service, clamped to the current value.
     pub fn access_select(&mut self, id: i32, selection: FieldSelection, now_ms: f64) -> bool {
         if self.access_selection(id).is_none() {

@@ -1,6 +1,6 @@
 //! UI Automation over the presenter's accessibility model.
 use accesskit::{
-    Action, ActionData, Affine, Node, NodeId, Rect, Role, TreeId, TreeInfo, TreeUpdate,
+    Action, ActionData, Affine, Node, NodeId, Rect, Role, ScrollHint, TreeId, TreeInfo, TreeUpdate,
 };
 use accesskit_winit::{Adapter, WindowEvent as AccessEvent};
 use exact_kernel::PropId;
@@ -114,6 +114,25 @@ impl Access {
                     return;
                 }
                 self.sync(p, window, title);
+                if let (Action::ScrollIntoView, Some(ActionData::ScrollHint(hint))) =
+                    (request.action, &request.data)
+                {
+                    let run = request.target_node;
+                    let owner = NodeId(run.0 >> 32);
+                    let Some(line) = self.runs.get(&owner).and_then(|runs| runs.line(owner, run))
+                    else {
+                        return;
+                    };
+                    if matches!(hint, ScrollHint::TopEdge | ScrollHint::BottomEdge) {
+                        p.access_scroll_text_line(
+                            owner.0 as i32,
+                            line.start,
+                            *hint == ScrollHint::TopEdge,
+                        );
+                        self.sync(p, window, title);
+                    }
+                    return;
+                }
                 let Some(node) = self.nodes.get(&request.target_node) else {
                     return;
                 };
@@ -257,7 +276,8 @@ impl Access {
                     .get(&id)
                     .and_then(Node::value)
                     .zip(self.runs.remove(&id));
-                let field = FieldRuns::update(id, &source.value, previous, &mut changed);
+                let starts = p.access_text_lines(source.view, &source.value);
+                let field = FieldRuns::update(id, &source.value, starts, previous, &mut changed);
                 if let Some(selection) = p.access_selection(source.id) {
                     let (anchor, focus) = if selection.direction == SelectionDirection::Backward {
                         (selection.end, selection.start)
@@ -350,12 +370,13 @@ impl Access {
     }
 }
 
-/// AccessKit indexes a grapheme within a hard line. The editor indexes UTF-16 units in the whole value.
+/// AccessKit indexes a grapheme within a visual line. The editor indexes UTF-16 units in the whole value.
 struct FieldRuns {
     lines: Vec<FieldLine>,
 }
 
 struct FieldLine {
+    bytes: usize,
     start: u32,
     offsets: Vec<u32>,
 }
@@ -368,6 +389,7 @@ impl FieldRuns {
     fn update(
         field: NodeId,
         text: &str,
+        starts: Option<impl Iterator<Item = u32> + Clone>,
         previous: Option<(&str, Self)>,
         changed: &mut Vec<(NodeId, Node)>,
     ) -> Self {
@@ -376,14 +398,45 @@ impl FieldRuns {
                 .chain((text.is_empty() || text.ends_with('\n')).then_some(""))
         }
         let mut previous = match previous {
-            Some((before, runs)) if before == text => return runs,
-            previous => previous
-                .into_iter()
-                .flat_map(|(before, runs)| hard_lines(before).zip(runs.lines)),
+            Some((before, runs))
+                if before == text
+                    && starts.as_ref().is_none_or(|starts| {
+                        starts.clone().eq(runs.lines.iter().map(|line| line.start))
+                    }) =>
+            {
+                return runs
+            }
+            previous => previous,
+        }
+        .into_iter()
+        .flat_map(|(mut before, runs)| {
+            runs.lines.into_iter().map(move |line| {
+                let (old, rest) = before.split_at(line.bytes);
+                before = rest;
+                (old, line)
+            })
+        });
+        let slices = if let Some(starts) = starts {
+            let mut chars = text.chars();
+            let (mut units, mut byte) = (0, 0);
+            let mut slices = Vec::new();
+            for next in starts.skip(1) {
+                while units < next {
+                    let Some(ch) = chars.next() else { break };
+                    units += ch.len_utf16() as u32;
+                }
+                let end = text.len() - chars.as_str().len();
+                slices.push(&text[byte..end]);
+                byte = end;
+            }
+            slices.push(&text[byte..]);
+            slices
+        } else {
+            hard_lines(text).collect()
         };
         let mut lines = Vec::new();
         let mut start = 0;
-        for line in hard_lines(text) {
+        for line in slices {
             let offsets = match previous.next() {
                 Some((old, run)) if old == line => run.offsets,
                 _ => {
@@ -396,7 +449,11 @@ impl FieldRuns {
                 }
             };
             let end = start + offsets.last().unwrap();
-            lines.push(FieldLine { start, offsets });
+            lines.push(FieldLine {
+                bytes: line.len(),
+                start,
+                offsets,
+            });
             start = end;
         }
         Self { lines }
@@ -407,7 +464,7 @@ impl FieldRuns {
             .lines
             .partition_point(|line| line.start <= offset)
             .saturating_sub(1);
-        let FieldLine { start, offsets } = &self.lines[line];
+        let FieldLine { start, offsets, .. } = &self.lines[line];
         accesskit::TextPosition {
             node: Self::id(field, line),
             character_index: offsets
@@ -416,12 +473,15 @@ impl FieldRuns {
         }
     }
 
-    fn offset(&self, field: i32, at: accesskit::TextPosition) -> Option<u32> {
-        if at.node.0 >> 32 != field as u64 {
+    fn line(&self, field: NodeId, run: NodeId) -> Option<&FieldLine> {
+        if run.0 >> 32 != field.0 {
             return None;
         }
-        let line = (at.node.0 as u32).checked_sub(1)?;
-        let line = self.lines.get(line as usize)?;
+        self.lines.get((run.0 as u32).checked_sub(1)? as usize)
+    }
+
+    fn offset(&self, field: i32, at: accesskit::TextPosition) -> Option<u32> {
+        let line = self.line(NodeId(field as u64), at.node)?;
         Some(line.start + line.offsets.get(at.character_index)?)
     }
 }
@@ -521,13 +581,14 @@ mod tests {
         let old = "a\r\n🦀e\u{301}\n";
         let new = "start\r\n🦀e\u{301}\n";
         let mut changed = Vec::new();
-        let runs = FieldRuns::update(id, old, None, &mut changed);
+        const HARD_LINES: Option<std::iter::Empty<u32>> = None;
+        let runs = FieldRuns::update(id, old, HARD_LINES, None, &mut changed);
         assert_eq!(changed.len(), 3);
         let kept = runs.lines[1].offsets.as_ptr();
         changed.clear();
-        let runs = FieldRuns::update(id, old, Some((old, runs)), &mut changed);
+        let runs = FieldRuns::update(id, old, HARD_LINES, Some((old, runs)), &mut changed);
         assert!(changed.is_empty());
-        let runs = FieldRuns::update(id, new, Some((old, runs)), &mut changed);
+        let runs = FieldRuns::update(id, new, HARD_LINES, Some((old, runs)), &mut changed);
         assert_eq!(changed.len(), 1);
         assert_eq!(changed[0].0, FieldRuns::id(id, 0));
         assert_eq!(runs.lines[1].offsets.as_ptr(), kept);
@@ -537,6 +598,36 @@ mod tests {
             assert_eq!(runs.offset(43, position), None);
         }
         assert_eq!(runs.position(id, 12).node, FieldRuns::id(id, 2));
+    }
+
+    #[test]
+    fn text_runs_follow_wrapping_without_splitting_graphemes_or_adding_line_breaks() {
+        let id = NodeId(42);
+        let text = "a🦀e\u{301} word\n";
+        let update = |starts: &[u32], previous| {
+            let mut changed = Vec::new();
+            let runs = FieldRuns::update(
+                id,
+                text,
+                Some(starts.iter().copied()),
+                previous,
+                &mut changed,
+            );
+            (runs, changed)
+        };
+        let (narrow, changed) = update(&[0, 3, 6, 11], None);
+        assert_eq!(
+            changed
+                .iter()
+                .map(|(_, n)| n.value().unwrap())
+                .collect::<Vec<_>>(),
+            ["a🦀", "e\u{301} ", "word\n", ""]
+        );
+        assert_eq!(narrow.position(id, 6).node, FieldRuns::id(id, 2));
+        let (wide, changed) = update(&[0, 11], Some((text, narrow)));
+        assert_eq!(changed[0].1.value(), Some(text));
+        assert_eq!(wide.offset(42, wide.position(id, 6)), Some(6));
+        assert!(wide.line(id, FieldRuns::id(id, 2)).is_none());
     }
 
     #[test]

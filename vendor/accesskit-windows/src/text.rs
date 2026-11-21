@@ -617,8 +617,10 @@ impl ITextRangeProvider_Impl for PlatformRange_Impl {
         self.do_action(|range, tree| {
             let position = if align_to_top.into() {
                 range.start()
-            } else {
+            } else if range.is_degenerate() {
                 range.end()
+            } else {
+                range.end().biased_to_end()
             };
             let (target_node, target_tree) = tree
                 .state()
