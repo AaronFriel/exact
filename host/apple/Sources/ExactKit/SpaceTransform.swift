@@ -273,7 +273,13 @@ extension NodeView {
                 return AxisClip(x: x, y: next)
             }
         }
-        var reach = drawnRect(CGRect(origin: .zero, size: content), in: document)
+        // The origin is already on the pixel grid. Snap the other edge from
+        // its layout origin too, so a right-aligned root ends at the viewport.
+        let extent = grid.map { place in
+            CGSize(width: PixelGrid.length(content.width, from: place.origin, vertical: false, scale: place.origin.scale),
+                   height: PixelGrid.length(content.height, from: place.origin, vertical: true, scale: place.origin.scale))
+        } ?? content
+        var reach = drawnRect(CGRect(origin: .zero, size: extent), in: document)
         // Each box goes with whether it or a box above it carries drawn
         // points. Below none, the platform's conversion is `drawnRect`, and
         // this pass, which runs at every batch, walks each box's ancestors

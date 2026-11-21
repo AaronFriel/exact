@@ -75,7 +75,8 @@ impl<D: DataSource> Bridge<D> {
     /// `exact_kernel::encode_registration` writes it, refused as an update is.
     /// Kind 23 says how a split shows a block's route against its stack's
     /// top (LLP 1127 D8): its first f32 1 beside it, 2 under a pane over
-    /// it, 0 in its stack.
+    /// it, 0 in its stack. Kind 24 sizes a table header’s column in points.
+    /// NaN restores automatic sizing.
     pub fn covers(&mut self, len: usize) -> u32 {
         let bytes = self.input.get(..len).unwrap_or(&[]);
         let out = if let Ok(records) = records(bytes) {
@@ -121,6 +122,13 @@ impl<D: DataSource> Bridge<D> {
                             _ => exact_kernel::BlockShown::InStack,
                         },
                     )),
+                    24 => {
+                        let width = edge(8);
+                        restyles.push((
+                            view,
+                            Restyle::TableColumn((!width.is_nan()).then_some(width)),
+                        ));
+                    }
                     10 => lists.push((view, Some([edge(8), edge(12)]))),
                     11 => lists.push((view, None)),
                     1 => {

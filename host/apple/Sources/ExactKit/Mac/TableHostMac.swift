@@ -61,7 +61,7 @@ package final class TableHost {
     /// Painted rows, not AppKit's table: the driver's own chrome
     /// (`--chrome agent`), as it paints the header and the tablist. A test
     /// of the painted list says so.
-    var painted = ExactEnv.authoredChrome { didSet { if painted != oldValue { decide(); syncPainted() } } }
+    var painted = ExactEnv.authoredChrome { didSet { if painted != oldValue { decide(); syncPainted(); presenter?.dataTables.sync() } } }
     /// Why each list that is no table is none, as last said in the log.
     private var said: [UInt32: String] = [:]
     init(_ presenter: Presenter) { self.presenter = presenter }
