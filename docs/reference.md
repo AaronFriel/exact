@@ -79,9 +79,13 @@ A direct `EXACT_SMOKE=1` development launch uses the app's painter choice.
 `bun exact.mjs windows --release` packages a production binary and omits the
 headless driver. To measure an optimized build under the driver, set
 `EXACT_UPDATE_TRUST=development` when running the same command.
-A hand-written TypeScript app shell can pass the bake's `ADMIT_AGENT` constant
-to `exact_windows::run_baked::<AppData, ADMIT_AGENT>` with its window, plan,
-receipt and composed packages.
+A hand-written Windows shell selects the driver at compile time by calling
+`exact_windows::run_baked::<AppData, ADMIT_AGENT>`. The TypeScript bake supplies
+`ADMIT_AGENT`. A Rust app that bakes its own `compat.json` writes
+`compat.admits_agent()` to a Rust constant in `OUT_DIR` in the same build step.
+`run_composed` always links the driver. The heavy-list app shows the
+[build step](../bench/heavy-list/exact-heavylist/windows/build.rs) and the
+[entry point](../bench/heavy-list/exact-heavylist/windows/src/main.rs).
 A Windows login item started with `--login hidden` paints its offscreen launch
 frame on the CPU and opens the selected painter when its window first draws.
 Linux and Android still opt into ink per platform; Android refuses it until
