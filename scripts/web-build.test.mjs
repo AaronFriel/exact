@@ -37,6 +37,9 @@ test("a failed build's summary keeps the compiler's first error", () => {
   const two = [error(6, 'syntax-method-call', '`.replace(…)` is a method call'), error(8, 'type-handler-action', '`follow` is an action of `Pill`')].join('\n');
   // The web build: every compiler error with its excerpt, in the order said.
   expect(webBuildFailure(`   Compiling app v0.1.0\n${two}\n`)).toEqual([two]);
+  const tail = ['  Compiling app', '  Finished preparing', '  Running compiler'];
+  expect(webBuildFailure(['earlier output', ...tail, ''].join('\r\n'))).toEqual(tail);
+  expect(webBuildFailure('')).toEqual([]);
   // A native build: from the first when the tail would leave it out.
   const many = Array.from({ length: 12 }, (_, i) => error(i + 1, 'type-unknown-name', `unknown name \`n${i}\``)).join('\n');
   expect(failureSummary(`app: the bake failed:\n${many}\n`, { host: 'macos', code: 1, log: 'x.log' })).toStartWith(error(1, 'type-unknown-name', 'unknown name `n0`'));

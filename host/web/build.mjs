@@ -364,7 +364,7 @@ if (target !== '--wasm' && !game && !bakeOnly) {
   process.stdout.write(said(js.stdout));
   // The compiler's warnings, as `contract build` says them, its file from here: the count names them (LLP 1116.004 D7).
   const compiler = compilerWarnings(js.stderr);
-  if (js.status === 0) {
+  if (js.status === 0 && !js.error) {
     if (inputs) completeWebInputs(app, true, render[1] ?? 'rust', inputRoots, inputs, inputsAt, builtSettings(stage));
     // What the JS target warned of, in its own words: the count it prints names nothing (workout F3, kanban F30).
     // The bundler's notes on the generated glue are not the app's to act on. The types app.ts imports, when
@@ -403,7 +403,10 @@ if (target !== '--wasm' && !game && !bakeOnly) {
   }
   // Its warnings as a success says them: the colours in one line unless a drive reads each (`EXACT_WARNINGS_WHOLE`).
   const failure = webBuildFailure(js.stderr);
-  console.error(`${(process.env.EXACT_WARNINGS_WHOLE ? failure : oneScheme(failure)).join('\n')}\n${app.name}: the web build (the JS target) failed; the wasm target is internal (--wasm)`);
+  for (const line of process.env.EXACT_WARNINGS_WHOLE ? failure : oneScheme(failure)) console.error(line);
+  if (js.error) console.error(js.error.message);
+  const exit = js.signal ? `signal ${js.signal}` : js.status != null ? `exit ${js.status}` : 'no exit status';
+  console.error(`${app.name}: the web build (the JS target) failed (${exit}); the wasm target is internal (--wasm)`);
   process.exit(1);
 }
 const crate = app.crate('web');
