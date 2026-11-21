@@ -19,6 +19,10 @@ pub(in crate::image) fn decode<R: Read + Seek>(
     cancelled: impl Fn() -> bool,
 ) -> Result<Pixmap, Refusal> {
     let bytes = read_all(input, plan, &cancelled)?;
+    let (encoded, index) = match plan.header.icon {
+        Some(entry) => entry.decoder_input(&bytes)?,
+        None => (bytes.as_slice(), 0),
+    };
     // SAFETY: every interface is released before the apartment guard; the
     // stream's borrowed bytes outlive the entire decoder/transform chain.
     unsafe {
@@ -31,12 +35,12 @@ pub(in crate::image) fn decode<R: Read + Seek>(
                 .map_err(|_| Refusal::DecodeFailed)?;
         let stream = factory.CreateStream().map_err(|_| Refusal::DecodeFailed)?;
         stream
-            .InitializeFromMemory(&bytes)
+            .InitializeFromMemory(encoded)
             .map_err(|_| Refusal::DecodeFailed)?;
         let decoder = factory
             .CreateDecoderFromStream(&stream, std::ptr::null(), WICDecodeMetadataCacheOnDemand)
             .map_err(|_| Refusal::DecodeFailed)?;
-        let frame = decoder.GetFrame(0).map_err(|_| Refusal::DecodeFailed)?;
+        let frame = decoder.GetFrame(index).map_err(|_| Refusal::DecodeFailed)?;
         let (mut width, mut height) = (0, 0);
         frame
             .GetSize(&mut width, &mut height)

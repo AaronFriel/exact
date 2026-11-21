@@ -16,11 +16,12 @@ pub(super) struct Header {
     interlaced: bool,
     #[cfg(windows)]
     pub(super) orientation: u8,
+    #[cfg(windows)]
+    pub(super) icon: Option<super::windows_bitmap::IconEntry>,
 }
 
-/// `color` for a JPEG, GIF or WebP (not a PNG colour type); its pixels come
-/// from `jpeg_decode`, the platform's decoder.
-const JPEG: u8 = 0xFF;
+/// A format whose pixels come from the platform's decoder.
+const PLATFORM: u8 = 0xFF;
 /// `color` for an SVG document (LLP 1011.001): its pixels are painted from
 /// the resolved scene (`super::svg_picture`).
 const SVG: u8 = 0xFE;
@@ -36,21 +37,22 @@ impl Header {
         // Read once: a plan is made at every poll, for every picture.
         static EXACT: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         cfg!(target_os = "android")
-            && self.color == JPEG
+            && self.color == PLATFORM
             && !*EXACT.get_or_init(|| std::env::var_os("EXACT_EXACT_DECODE").is_some())
     }
 
-    /// A JPEG's, GIF's or WebP's header: decoded as 8-bit RGBA by the platform
-    /// (a GIF's or WebP's first frame).
-    pub(super) fn jpeg(metadata: Metadata) -> Header {
+    /// The platform decodes this source to 8-bit RGBA.
+    pub(super) fn platform(metadata: Metadata) -> Header {
         Header {
             metadata,
             depth: 8,
             channels: 4,
-            color: JPEG,
+            color: PLATFORM,
             interlaced: false,
             #[cfg(windows)]
             orientation: 1,
+            #[cfg(windows)]
+            icon: None,
         }
     }
 
@@ -58,13 +60,8 @@ impl Header {
     /// its pixels painted at any size up to the island's.
     pub(super) fn svg(metadata: Metadata) -> Header {
         Header {
-            metadata,
-            depth: 8,
-            channels: 4,
             color: SVG,
-            interlaced: false,
-            #[cfg(windows)]
-            orientation: 1,
+            ..Self::platform(metadata)
         }
     }
 
@@ -113,6 +110,10 @@ pub(super) fn inspect(
         }
     }
     let head = &head[..got];
+    #[cfg(windows)]
+    if let Some(header) = super::windows_bitmap::inspect(head, input, encoded_bytes)? {
+        return Ok(header);
+    }
     if super::jpeg_decode::is_jpeg(head) {
         return super::jpeg_decode::inspect(input, encoded_bytes);
     }
@@ -186,6 +187,8 @@ pub(super) fn inspect(
                 interlaced: head[28] == 1,
                 #[cfg(windows)]
                 orientation: 1,
+                #[cfg(windows)]
+                icon: None,
             });
         }
         if end > MAX_HEADER_BYTES {
@@ -226,7 +229,7 @@ impl DecodePlan {
     /// Whether the platform's decoder decodes this (JPEG, GIF, WebP).
     #[cfg(target_os = "android")]
     pub(super) fn platform(&self) -> bool {
-        self.header.color == JPEG
+        self.header.color == PLATFORM
     }
     pub fn new(header: Header, pixels: (u32, u32)) -> Result<Self, Refusal> {
         let natural = header.metadata.natural;
@@ -252,7 +255,7 @@ impl DecodePlan {
             .ok_or(Refusal::Overflow)?;
         // A JPEG's platform decode holds the whole file and its own row
         // buffers (two source rows of 4 bytes a pixel) beside the output.
-        let scratch = if header.color == JPEG {
+        let scratch = if header.color == PLATFORM {
             header
                 .metadata
                 .encoded_bytes
@@ -276,7 +279,7 @@ impl DecodePlan {
         // WIC codecs may cache a complete source frame (notably GIF/WebP).
         // Charge that backing even when the requested thumbnail is small.
         #[cfg(windows)]
-        let scratch = if header.color == JPEG {
+        let scratch = if header.color == PLATFORM {
             scratch
                 .checked_add(u64::from(natural.width) * u64::from(natural.height) * 4)
                 .ok_or(Refusal::Overflow)?
@@ -286,7 +289,7 @@ impl DecodePlan {
         // ImageIO may retain a full source decode, a sampled thumbnail and
         // CFData's copy of the encoded bytes alongside the crop's output.
         #[cfg(target_os = "macos")]
-        let scratch = if header.color == JPEG {
+        let scratch = if header.color == PLATFORM {
             scratch
                 .checked_add(u64::from(natural.width) * u64::from(natural.height) * 4)
                 .and_then(|n| n.checked_add(u64::from(pixels.0) * u64::from(pixels.1) * 4))
@@ -444,7 +447,7 @@ impl DecodePlan {
 
 fn area_scratch(header: Header, pixels: (u32, u32)) -> u64 {
     let natural = header.metadata.natural;
-    if header.color == JPEG || pixels == (natural.width, natural.height) {
+    if header.color == PLATFORM || pixels == (natural.width, natural.height) {
         return 0;
     }
     let rows = if header.interlaced { pixels.1 } else { 2 };
@@ -472,7 +475,7 @@ pub(super) fn decode_rows<R: Read + Seek>(
     plan: &DecodePlan,
     cancelled: impl Fn() -> bool,
 ) -> Result<Pixmap, Refusal> {
-    if plan.header.color == JPEG {
+    if plan.header.color == PLATFORM {
         return super::jpeg_decode::decode(input, plan, cancelled);
     }
     if cancelled() {
