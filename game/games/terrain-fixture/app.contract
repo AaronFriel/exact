@@ -56,7 +56,7 @@ component TerrainFixture
             column position="absolute" inset=0 align-items="center" justify-content="center" background-color="-exact-background"
               text "Preparing terrain…" testId="terrain-pending"
       else
-        column width="100%" height="100%" align-items="center" justify-content="center" gap=8
+        column width="100%" height="100%" align-items="center" justify-content="flex-start" gap=8
           button press=play testId="play"
             text "Show terrain"
           row gap=8 align-items="center"
