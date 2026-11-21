@@ -533,10 +533,14 @@ fn jobs_refill_finishes_after_the_installed_sections_and_blend_are_current() {
         let mut time = hook_time(64, false);
         time.interval_ms = 16.;
         let report = |drive: &Drive| {
-            drive
-                .passes
-                .workload
-                .report(settings, 27, false, 0, false, Default::default())
+            drive.passes.workload.report(
+                settings,
+                27,
+                Default::default(),
+                false,
+                Default::default(),
+                Default::default(),
+            )
         };
         for _ in 0..80 {
             drive.step_at(settings, 0, &time);
@@ -599,7 +603,14 @@ fn jobs_kept_stale_mesh_finishes_its_refill_before_the_repair() {
     let workload = &drive.passes.workload;
     assert_eq!(workload.counts().1, 1);
     assert_eq!(workload.pending(settings), 1);
-    let report = workload.report(settings, 27, false, 0, false, Default::default());
+    let report = workload.report(
+        settings,
+        27,
+        Default::default(),
+        false,
+        Default::default(),
+        Default::default(),
+    );
     assert!(
         report.contains(r#""refills":{"started":1,"finishedCount":1,"unfinishedCount":0"#),
         "{report}"
@@ -633,10 +644,14 @@ fn jobs_cpu_peak_counts_a_taken_result_before_installing_it() {
             + installed
             + mesh.vertices.capacity()
             + mesh.indices.capacity() * size_of::<u32>();
-        let report = drive
-            .passes
-            .workload
-            .report(settings, 0, false, 0, false, Default::default());
+        let report = drive.passes.workload.report(
+            settings,
+            0,
+            Default::default(),
+            false,
+            Default::default(),
+            Default::default(),
+        );
         assert!(
             report.contains(&format!(r#""peakCpuBytes":{taken},"#)),
             "{report}"

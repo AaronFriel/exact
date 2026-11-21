@@ -85,8 +85,8 @@ component TerrainFixture
             text "Budget (count:N, deadline)"
             input value=budget input=setBudget testId="budget" aria-label="Budget (count:N, deadline)" width=120
           row gap=8 align-items="center"
-            text "Draw (on, off)"
-            input value=draw input=setDraw testId="draw" aria-label="Draw (on, off)" width=120
+            text "Draw (on, off, arena, indirect)"
+            input value=draw input=setDraw testId="draw" aria-label="Draw (on, off, arena, indirect)" width=120
           row gap=8 align-items="center"
             text "Pool (off, on)"
             input value=pool input=setPool testId="pool" aria-label="Pool (off, on)" width=120
