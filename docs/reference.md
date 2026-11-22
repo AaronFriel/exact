@@ -6318,6 +6318,9 @@ second argument to `exact_gpu::module!`. See [the GPU module recipe](recipes/gpu
 for a declaration and [package GPU surfaces](contract-for-agents.md#a-packages-gpu-surfaces)
 for packaging. Packages declare `exactGpu: "0.4"` and depend on `exact-gpu = "0.4"`.
 
+A surface opts into raw input with `Surface::wants_input`. On macOS the canvas
+also dispatches Contract pointer, wheel and context menu events. [GPU module recipe](recipes/gpu-module.md)
+
 ### GPU storage
 
 On Apple (macOS, iOS and tvOS), Android, Linux and Windows, a surface may implement:
