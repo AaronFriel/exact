@@ -1173,7 +1173,7 @@ extension Agent {
 
     /// EXACT_AGENT_ACTIVATE=1 (only scripts/measure-controls.mjs sets it): an
     /// activated run, whose pictures say whether they were (ExactMac main.swift).
-    nonisolated static let activated = ExactEnv.agentMode && ExactEnv.environment["EXACT_AGENT_ACTIVATE"] == "1"
+    nonisolated static let activated = ExactEnv.agentActivates
     package static func ownWindowImage(_ number: Int) -> CGImage? { WindowServerPicture.ownWindow(number) }
 
     /// The window server's own composite of `window` and `attached`, all
