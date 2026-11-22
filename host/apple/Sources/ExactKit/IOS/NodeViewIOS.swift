@@ -26,6 +26,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     private(set) var textRasterWhole = false
     var textRasterReady = false { didSet { if oldValue != textRasterReady { presenter?.noteOwedText(self) } } }
     var textRasterFailed = false { didSet { if oldValue != textRasterFailed { presenter?.noteOwedText(self) } } }
+    var proseMarker: CATextLayer?
     var textLayoutValid = false
     /// Whether a frame has shown it where it is (`Presenter.showed`).
     var shown = Shown.uncopied
@@ -1107,6 +1108,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         for k in clear { next.removeValue(forKey: k) }
         for (k, v) in set { next[k] = v }
         props = next
+        if set["listMarker"] != nil || clear.contains("listMarker") { layoutProseMarker() }
         if isParagraph, set.keys.contains(where: Self.paragraphProps.contains) || clear.contains(where: Self.paragraphProps.contains) { invalidateText() }
         #if os(iOS)
         let nativeList = kind == "list" && next["listStyle"] != nil

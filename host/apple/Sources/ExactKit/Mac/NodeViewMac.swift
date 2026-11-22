@@ -73,6 +73,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var contextClicked = false
     var cachedTextSpec: Spec? { didSet { cachedTextHeadroom = nil } }
     var cachedTextHeadroom: Float?
+    var proseMarker: CATextLayer?
     var textLayoutValid = false
     /// The node whose `accent-color` this view last read as its tint, nil for the system's (NodeColorMac.swift).
     var tintSource: ObjectIdentifier?
@@ -1009,6 +1010,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         for k in clear { next.removeValue(forKey: k) }
         for (k, v) in set { next[k] = v }
         props = next
+        if set["listMarker"] != nil || clear.contains("listMarker") { layoutProseMarker() }
         if set["groupedSeparator"] != nil || clear.contains("groupedSeparator") { applyGroupedSeparator() }
         if set["symbolEffectValue"] != nil || set["symbolColorWritten"] != nil || clear.contains("symbolColorWritten")
             || set["symbolFillRule"] != nil || clear.contains("symbolFillRule") { updateSymbol() }

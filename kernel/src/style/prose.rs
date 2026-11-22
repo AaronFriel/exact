@@ -71,3 +71,62 @@ pub(crate) fn apply(arena: &NodeArena, slot: u32, s: &mut taffy::style::Style) {
         s.margin.bottom = length(em);
     }
 }
+
+impl<'a> crate::NodeRef<'a> {
+    /// Outside markers in document order. A hidden item with a layout box
+    /// still advances the counter. Removing its box removes its counter too.
+    pub fn list_markers(&self) -> Option<impl Iterator<Item = (Self, Option<String>)> + 'a> {
+        use crate::ListMarkerType;
+        let tag = self.props.str(PropId::SemanticTag)?;
+        if !list(tag) {
+            return None;
+        }
+        let marker = if self.style.mask.has(StyleId::ListStyleType) {
+            self.style.list_style_type
+        } else if tag == "ol" {
+            ListMarkerType::Decimal
+        } else {
+            let mut marker = ListMarkerType::Disc;
+            let mut parent = self.arena.parent(self.slot);
+            while let Some(slot) = parent {
+                if self
+                    .arena
+                    .props(slot)
+                    .str(PropId::SemanticTag)
+                    .is_some_and(list)
+                {
+                    if marker == ListMarkerType::Circle {
+                        marker = ListMarkerType::Square;
+                        break;
+                    }
+                    marker = ListMarkerType::Circle;
+                }
+                parent = self.arena.parent(slot);
+            }
+            marker
+        };
+        let mut ordinal = 0;
+        Some(self.child_nodes().filter_map(move |item| {
+            if item.props.str(PropId::SemanticTag) != Some("li") {
+                return None;
+            }
+            if item.style.mask.has(StyleId::Display) {
+                return Some((item, None));
+            }
+            ordinal += 1;
+            let kind = if item.style.mask.has(StyleId::ListStyleType) {
+                item.style.list_style_type
+            } else {
+                marker
+            };
+            let label = match kind {
+                ListMarkerType::Decimal => format!("{ordinal}."),
+                ListMarkerType::Disc => "•".into(),
+                ListMarkerType::Circle => "◦".into(),
+                ListMarkerType::Square => "▪".into(),
+                ListMarkerType::None => return Some((item, None)),
+            };
+            Some((item, Some(label)))
+        }))
+    }
+}

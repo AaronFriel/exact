@@ -84,6 +84,7 @@ impl<D: DataSource> Host<D> {
             documents(self);
         }
         let (mut batch, error) = self.resize_rounds(batch, error);
+        self.emit_prose_markers(&mut batch);
         self.route_overflow.settled =
             error.is_none() && !batch.layout_provisional && !self.layout_owed;
         if let Some(canvas) = self.turn.canvas {

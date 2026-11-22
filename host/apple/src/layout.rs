@@ -12,9 +12,10 @@ mod inert_commit_tests;
 pub(super) mod separator;
 
 /// The props `emit_layout` derives from a node's layout, not its author's.
-pub(super) const DERIVED_PROPS: [&str; 5] = [
+pub(super) const DERIVED_PROPS: [&str; 6] = [
     "fitScale",
     "flexGrows",
+    "listMarker",
     "textOffset",
     "textLeft",
     "textWidth",
@@ -502,18 +503,7 @@ impl<D: DataSource> Host<D> {
                 && node.style.flex_grow >= 1.0
                 && !node.style.mask.has(exact_kernel::StyleId::MaxHeight))
             .then(|| "true".to_string());
-            if m.props.get("flexGrows") != grows.as_ref() {
-                match grows {
-                    Some(value) => {
-                        batch.props(id, &[("flexGrows", value.clone())], &[]);
-                        m.props.insert("flexGrows", value);
-                    }
-                    None => {
-                        batch.props(id, &[], &["flexGrows"]);
-                        m.props.remove("flexGrows");
-                    }
-                }
-            }
+            m.derived_prop(id, "flexGrows", grows, batch);
             // The anonymous text item's placement within its content box.
             let offset = kernel.text_line_offset(&node);
             let item = kernel.text_item_box(&node);

@@ -277,6 +277,7 @@ pub struct Host<D: DataSource> {
     /// Each table's and table part's record as the presenter last heard it
     /// (`tables.rs`).
     tables: IdMap<ViewId, String>,
+    changed_prose_lists: IdSet<ViewId>,
     ranks: IdMap<ViewId, i64>,
     roots: Vec<ViewId>,
     /// Last published common collection snapshot; refreshed only after layout.
@@ -677,6 +678,7 @@ impl<D: DataSource> Host<D> {
             timeline_scrolls: Default::default(),
             fragments: IdMap::default(),
             tables: IdMap::default(),
+            changed_prose_lists: IdSet::default(),
             ranks: IdMap::default(),
             roots: Vec::new(),
             collections_json: "[]".into(),

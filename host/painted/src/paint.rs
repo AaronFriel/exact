@@ -71,6 +71,7 @@ mod placed;
 mod presented;
 mod shared;
 pub use shared::{SharedElement, SharedState};
+mod prose;
 mod region;
 pub mod rows;
 mod shadow;
@@ -384,7 +385,8 @@ pub struct Painter {
     pub(crate) media: native::Media,
     boxless_audio: Option<Vec<ViewId>>,
     pub(crate) alert: Option<alert::Picture>,
-    /// The text engine, shared with the kernel's measurer.
+    markers: HashMap<ViewId, HashMap<ViewId, String>>,
+    /// Shared with the kernel measurer.
     pub text: Shared,
     /// Device pixels per point.
     pub scale: f32,
@@ -534,6 +536,7 @@ impl Painter {
             direct_canvases: Default::default(),
             media: Default::default(),
             boxless_audio: None,
+            markers: HashMap::new(),
             text,
             scale,
             dark: false,
@@ -594,7 +597,7 @@ impl Painter {
         }
     }
 
-    /// The backend's name.
+    /// The active backend's name.
     pub fn backend(&self) -> &'static str {
         self.backend.name()
     }
@@ -798,6 +801,7 @@ impl Painter {
         if self.paint_epoch != Some(scene.kernel.epoch()) {
             self.svg_warned
                 .retain(|key| scene.kernel.node_by_key(*key).is_some());
+            self.markers.clear();
             self.refresh_ranks(scene.kernel);
             self.order_shared(scene);
             self.paint_epoch = Some(scene.kernel.epoch());
@@ -1117,6 +1121,7 @@ impl Painter {
             surface.bleed = self.bleed(walk.scene.kernel, node.id, &surface.outer, ts);
             paint.paint(self.backend.as_mut(), &surface, ts);
             self.column_rules(walk.scene.kernel, node, rect, ts);
+            self.prose_marker(walk, node, rect, ts);
             let (dark, feedback) = (
                 self.dark,
                 (self.feedback.0, self.presses(node.id).then_some(node.id)),
@@ -1367,10 +1372,8 @@ pub fn object_fit(
     )
 }
 
-/// A text node's paragraph spec from its rows (the kernel's defaults are
-/// CSS's, so every row reads directly).
-/// Its white space is collapsed per CSS unless the row preserves it; the
-/// caller that replaces the runs collapses again ([`Spec::collapse_white_space`]).
+/// Paragraph style and CSS white-space handling for a text node. A caller that
+/// replaces its runs must repeat [`Spec::collapse_white_space`].
 pub fn text_spec(s: &StyleProps, text: &str) -> Spec {
     Spec {
         strut: Run::from_style("", exact_kernel::TextStyle::from_style(s)),
