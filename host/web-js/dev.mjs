@@ -43,6 +43,7 @@ import { galleryLoop } from './dev-gallery.mjs';
 import { inlineWhy as inlineWhyOf } from './dev-inline.mjs';
 import { DEV_STATUS_TYPE, FAILED, PHASE, gist } from '../web/dev-phase.mjs';
 import { startupBuilds, stopBuildTree } from '../web/dev-startup.mjs';
+import { watchDirectoryInputs } from '../web/dev-watch.mjs';
 import { fileURLToPath } from 'node:url';
 import { declaredSources, installedFileDependencies } from '../../scripts/file-dependencies.mjs';
 
@@ -96,7 +97,11 @@ let lastSources = [];
 function devPackages(stage) {
   try {
     const sources = JSON.parse(readFileSync(resolve(stage, '.gen', 'dev-sources.json'), 'utf8'));
-    return { trees: sources.packages ?? [], shallow: sources.shallow ?? [], sources: sources.sources ?? [] };
+    const files = sources.sources ?? [], packages = sources.packages ?? [];
+    const packageFiles = files.filter(path => packages.some(dir => within(dir, path)));
+    return { trees: sources.trees ?? [], sources: files, shallow: [
+      ...(sources.shallow ?? []), ...packageFiles.map(path => [dirname(path), basename(path)]),
+    ] };
   } catch { return { trees: [], shallow: [], sources: [] }; }
 }
 
@@ -815,7 +820,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     watchers.push(watch(path, {}, changed(dirname(path))));
   }
   // Compiler source trees and recorded files, wherever installed or linked.
-  const packages = new Set();
+  const packages = new Set(), packageEntries = new Map();
   const compilerSources = new Set();
   let skipCargoTarget = () => false;
   // A source, or a directory holding one (its event names the directory).
@@ -828,17 +833,31 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     for (const dir of trees) {
       if (packages.has(dir) || !existsSync(dir)) continue;
       packages.add(dir);
-      // A package's dot directories are its sources too; only its own
-      // node_modules is not.
+      // TypeScript and Rust discover sources within these trees.
       watchers.push(watch(dir, { recursive: true }, changed(dir, /(^|\/)node_modules(\/|$)/, false)));
     }
-    // One entry of a directory: a node_modules not made yet, or an install
-    // that is a link. Its making, or its retargeting, is an edit.
-    for (const [dir, entry] of shallow) {
-      const key = `shallow:${dir}:${entry}`;
-      if (packages.has(key) || !existsSync(dir)) continue;
-      packages.add(key);
-      watchers.push(watch(dir, {}, (event, name) => { if (name === entry) changed(dir, /^$/, false)(event, name); }));
+    // Group the Contract compiler's reads and install links by their parent.
+    // Watching the named entries also catches replacements and missing imports.
+    const directories = new Map();
+    for (const [dir, name] of shallow) {
+      if (!directories.has(dir)) directories.set(dir, new Set());
+      directories.get(dir).add(name);
+    }
+    for (const [dir, old] of packageEntries) {
+      const names = directories.get(dir);
+      if (!roots && !names) continue;
+      if (!roots) for (const name of old.names) names.add(name);
+      if (names?.size === old.names.size && [...names].every(name => old.names.has(name))) {
+        directories.delete(dir);
+        continue;
+      }
+      old.watch.close();
+      packageEntries.delete(dir);
+    }
+    for (const [dir, names] of directories) {
+      const notify = changed(dir, /^$/, false);
+      const handle = watchDirectoryInputs(dir, name => notify(null, name), { readNames: () => names });
+      packageEntries.set(dir, { names, watch: handle });
     }
     // Cargo reads can produce macOS notifications too. Its sources need a
     // changed entry or link target, rather than every notification. An
@@ -1309,6 +1328,7 @@ for(;;){
     stopping = true;
     clearTimeout(timer); timer = null;
     const buildExit = stopCompilers();
+    for (const entry of packageEntries.values()) entry.watch.close();
     for (const w of watchers) w.close(); residentChild?.kill('SIGTERM'); server.close(); server.closeAllConnections?.();
     // The design server lets go of its lock before this exits.
     await Promise.all([buildExit, forma?.close(), doors?.close(), gallery.stop()]);

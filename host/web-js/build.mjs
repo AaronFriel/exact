@@ -458,7 +458,7 @@ async function typecheck(checking) {
     const read = JSON.parse(readFileSync(resolve(real, '__exact_declarations.json'), 'utf8')).packages;
     const listed = resolve(gen, 'dev-sources.json');
     const sources = existsSync(listed) ? JSON.parse(readFileSync(listed, 'utf8')) : {};
-    sources.packages = [...new Set([...(sources.packages ?? []), ...read.map(([, , dir]) => dir)])];
+    sources.trees = [...new Set([...(sources.trees ?? []), ...read.map(([, , dir]) => dir)])];
     sources.shallow = [...(sources.shallow ?? []), ...read.map(([, installed]) => [dirname(installed), basename(installed)])];
     writeFileSync(listed, JSON.stringify(sources));
   }
@@ -495,7 +495,7 @@ async function typecheck(checking) {
     const listed = resolve(gen, 'dev-sources.json');
     const sources = existsSync(listed) ? JSON.parse(readFileSync(listed, 'utf8')) : {};
     const packages = JSON.parse(readFileSync(resolve(real, '__exact_packages.json'), 'utf8')).packages;
-    sources.packages = [...new Set([...(sources.packages ?? []), ...packages.map(([, dir]) => dir)])];
+    sources.trees = [...new Set([...(sources.trees ?? []), ...packages.map(([, dir]) => dir)])];
     sources.shallow = [...(sources.shallow ?? []), ...packages.flatMap(([, , installed]) => installed.map(path => [dirname(path), basename(path)]))];
     writeFileSync(listed, JSON.stringify(sources));
   }
@@ -553,7 +553,7 @@ if (rustLinked) {
   if (devReload && outside.length) {
     const listed = resolve(gen, 'dev-sources.json');
     const sources = existsSync(listed) ? JSON.parse(readFileSync(listed, 'utf8')) : {};
-    sources.packages = [...new Set([...(sources.packages ?? []), ...outside])];
+    sources.trees = [...new Set([...(sources.trees ?? []), ...outside])];
     writeFileSync(listed, JSON.stringify(sources));
   }
   rustGrants = await moduleGrants(resolve(out, 'rust/wasm/app.module.wasm'));
