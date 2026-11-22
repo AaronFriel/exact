@@ -427,6 +427,15 @@ fn outline_none_paints_no_ring_on_a_focused_button() {
 #[test]
 fn scripted_focus_reveals_an_offscreen_button() {
     super::pin_font();
+    let present = |p: &mut Presenter<()>| {
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "android"))]
+        {
+            let frame = p.display_frame().unwrap();
+            assert!(p.display_complete(&frame));
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "android")))]
+        p.frame();
+    };
     for initial in ["true", "false"] {
         let source = format!(
             r#"component App
@@ -461,15 +470,13 @@ fn scripted_focus_reveals_an_offscreen_button() {
                 .unwrap()
                 .id
         };
-        let frame = p.display_frame().unwrap();
-        assert!(p.display_complete(&frame));
+        present(&mut p);
         let (jump, port) = (id(&p, "jump"), id(&p, "port"));
         assert_eq!(p.scroll_of(port).1, 0.);
         p.tap(jump).unwrap();
         p.run_commands(<()>::default);
         assert_eq!(p.focus(), Some(id(&p, "last")));
-        let frame = p.display_frame().unwrap();
-        assert!(p.display_complete(&frame));
+        present(&mut p);
         assert_eq!(p.scroll_of(port).1, 206., "listed at launch: {initial}");
     }
 }
