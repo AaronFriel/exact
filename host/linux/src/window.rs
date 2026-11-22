@@ -1,24 +1,22 @@
 //! A Wayland window presents Exact's painted frames through a compositor
-//! surface. Winit dispatches window events while Exact waits on both the
-//! compositor and the presenter's worker descriptors.
+//! surface. Winit waits for compositor input, keyboard repeats and presenter work.
 
 mod input;
 
-use crate::event_loop::{poll, work_timeout, LocalPlan};
+use crate::event_loop::LocalPlan;
 use exact_painted::app::{boot_presenter, Config};
 use exact_painted::presenter::{wall_since, Presenter};
 use exact_painted::window_title::WindowTitle;
 use exact_runner::DataSource;
 use std::cell::Cell;
 use std::num::NonZeroU32;
-use std::os::fd::AsRawFd;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::platform::pump_events::{EventLoopExtPumpEvents, PumpStatus};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::platform::wayland::WindowAttributesExtWayland;
 use winit::window::{Theme, Window, WindowId};
 
@@ -46,6 +44,11 @@ pub(super) fn run<D: DataSource + Default>(config: &mut Config, started: Instant
     }
 }
 
+enum Event {
+    Wake,
+    Appearance(Option<bool>),
+}
+
 struct App<'a, D: DataSource> {
     config: &'a mut Config,
     local_plan: Option<LocalPlan>,
@@ -69,52 +72,22 @@ struct Live<D: DataSource> {
 
 impl<D: DataSource + Default> App<'_, D> {
     fn run(&mut self) -> Result<(), String> {
-        let mut events = EventLoop::<Option<bool>>::with_user_event()
+        let events = EventLoop::<Event>::with_user_event()
             .build()
             .map_err(|error| error.to_string())?;
         let proxy = events.create_proxy();
         let appearance = exact_painted::desktop::watch_appearance(move |dark| {
-            let _ = proxy.send_event(dark);
+            let _ = proxy.send_event(Event::Appearance(dark));
         });
         self.desktop_dark = appearance.as_ref().and_then(|a| a.initial);
-        let display = events.as_raw_fd();
-        loop {
-            // Drawing and lifecycle callbacks stay inside winit. Only the wait
-            // is shared with the presenter's data, image and update workers.
-            let status = events.pump_app_events(Some(Duration::ZERO), self);
-            if let Some(error) = self.error.take() {
-                return Err(error);
-            }
-            if self.closed.get() || matches!(status, PumpStatus::Exit(_)) {
-                return Ok(());
-            }
-            let live = self.live.as_mut().ok_or("no window was created")?;
-            let now = self.started.elapsed().as_secs_f64() * 1000.0;
-            live.turn(now);
-            if self.closed.get() {
-                return Ok(());
-            }
-            if let Some(plan) = &mut self.local_plan {
-                plan.poll(&mut live.presenter, D::default);
-            }
-            live.input.update_ime(&mut live.presenter, &live.window);
-            if live.presenter.dirty()
-                || live.presenter.wants_frames()
-                || live.presenter.needs_animation_frame()
-            {
-                live.window.request_redraw();
-            }
-            let due = live.presenter.turn_due_ms(now).map(|wait| now + wait);
-            let mut timeout = work_timeout(true, false, due, now);
-            if self.local_plan.is_some() {
-                timeout = if timeout < 0 { 100 } else { timeout.min(100) };
-            }
-            let p = &live.presenter;
-            let mut fds = vec![display, p.executor_fd(), p.image_fd()];
-            fds.extend(p.content_region_fd());
-            fds.extend(p.update_fd());
-            poll(&fds, display, timeout)?;
-        }
+        let wake = events.create_proxy();
+        exact_painted::set_event_waker(Some(Arc::new(move || {
+            let _ = wake.send_event(Event::Wake);
+        })));
+        let result = events.run_app(self);
+        exact_painted::set_event_waker(None);
+        result.map_err(|error| error.to_string())?;
+        self.error.take().map_or(Ok(()), Err)
     }
 
     fn open(&mut self, events: &ActiveEventLoop) -> Result<Live<D>, String> {
@@ -191,8 +164,41 @@ fn theme(dark: bool) -> Theme {
     }
 }
 
-impl<D: DataSource + Default> ApplicationHandler<Option<bool>> for App<'_, D> {
-    fn user_event(&mut self, _: &ActiveEventLoop, dark: Option<bool>) {
+impl<D: DataSource + Default> ApplicationHandler<Event> for App<'_, D> {
+    fn about_to_wait(&mut self, events: &ActiveEventLoop) {
+        let Some(live) = self.live.as_mut() else {
+            return;
+        };
+        let at = Instant::now();
+        let now = at.duration_since(self.started).as_secs_f64() * 1000.0;
+        live.turn(now);
+        if self.closed.get() {
+            events.exit();
+            return;
+        }
+        if let Some(plan) = &mut self.local_plan {
+            plan.poll(&mut live.presenter, D::default);
+        }
+        live.input.update_ime(&mut live.presenter, &live.window);
+        if live.presenter.dirty()
+            || live.presenter.wants_frames()
+            || live.presenter.needs_animation_frame()
+        {
+            live.window.request_redraw();
+        }
+        let mut wait = live.presenter.turn_due_ms(now);
+        if self.local_plan.is_some() {
+            wait = Some(wait.unwrap_or(100.0).min(100.0));
+        }
+        let deadline =
+            wait.and_then(|ms| at.checked_add(Duration::try_from_secs_f64(ms / 1000.0).ok()?));
+        events.set_control_flow(deadline.map_or(ControlFlow::Wait, ControlFlow::WaitUntil));
+    }
+
+    fn user_event(&mut self, _: &ActiveEventLoop, event: Event) {
+        let Event::Appearance(dark) = event else {
+            return;
+        };
         if self.desktop_dark == dark {
             return;
         }

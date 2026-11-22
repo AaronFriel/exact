@@ -360,7 +360,7 @@ impl<D: DataSource> Presenter<D> {
     /// already running.
     pub fn check_update(&mut self) -> bool {
         match &self.updates {
-            Some(u) => u.check(),
+            Some(u) => u.check(crate::wake::notify),
             None => false,
         }
     }
@@ -774,7 +774,7 @@ component App
         fn fd(&self) -> std::os::unix::io::RawFd {
             -1
         }
-        fn check(&self) -> bool {
+        fn check(&self, _: fn()) -> bool {
             false
         }
         fn take_line(&mut self) -> Option<String> {
