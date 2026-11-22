@@ -161,6 +161,10 @@ window. The compositor owns the display and sends the window its input.
 `EXACT_SIZE` supplies the initial logical window size. Setting `EXACT_DRM` or
 requesting VNC selects the DRM/KMS console path. Agent runs are headless.
 
+Wayland windows read the desktop’s light or dark preference from the XDG
+Settings portal. A change updates the window decorations and the app’s
+`prefers-color-scheme`.
+
 ### Linux KMS rotation and VNC
 
 On Linux KMS, `EXACT_ROTATE=0|90|180|270` turns the completed image clockwise.

@@ -20,7 +20,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::platform::pump_events::{EventLoopExtPumpEvents, PumpStatus};
 use winit::platform::wayland::WindowAttributesExtWayland;
-use winit::window::{Window, WindowId};
+use winit::window::{Theme, Window, WindowId};
 
 pub(super) fn run<D: DataSource + Default>(config: &mut Config, started: Instant) -> i32 {
     let mut app = App::<D> {
@@ -28,6 +28,7 @@ pub(super) fn run<D: DataSource + Default>(config: &mut Config, started: Instant
         config,
         started,
         live: None,
+        desktop_dark: None,
         error: None,
         closed: Rc::new(Cell::new(false)),
     };
@@ -50,6 +51,7 @@ struct App<'a, D: DataSource> {
     local_plan: Option<LocalPlan>,
     started: Instant,
     live: Option<Live<D>>,
+    desktop_dark: Option<bool>,
     error: Option<String>,
     closed: Rc<Cell<bool>>,
 }
@@ -67,7 +69,14 @@ struct Live<D: DataSource> {
 
 impl<D: DataSource + Default> App<'_, D> {
     fn run(&mut self) -> Result<(), String> {
-        let mut events = EventLoop::new().map_err(|error| error.to_string())?;
+        let mut events = EventLoop::<Option<bool>>::with_user_event()
+            .build()
+            .map_err(|error| error.to_string())?;
+        let proxy = events.create_proxy();
+        let appearance = exact_painted::desktop::watch_appearance(move |dark| {
+            let _ = proxy.send_event(dark);
+        });
+        self.desktop_dark = appearance.as_ref().and_then(|a| a.initial);
         let display = events.as_raw_fd();
         loop {
             // Drawing and lifecycle callbacks stay inside winit. Only the wait
@@ -120,12 +129,14 @@ impl<D: DataSource + Default> App<'_, D> {
             .as_str()
             .unwrap_or(&id)
             .to_owned();
+        let dark = self.desktop_dark;
         let window = Rc::new(
             events
                 .create_window(
                     Window::default_attributes()
                         .with_name(id, "")
                         .with_title(&app_name)
+                        .with_theme(dark.map(theme))
                         .with_inner_size(LogicalSize::new(self.config.size.0, self.config.size.1)),
                 )
                 .map_err(|error| error.to_string())?,
@@ -138,14 +149,24 @@ impl<D: DataSource + Default> App<'_, D> {
         let scale = window.scale_factor() as f32;
         self.config.scale = scale;
         self.config.clock_started = Some(self.started);
+        let defaults = self.config.preferences;
+        if let Some(dark) = dark {
+            self.config
+                .preferences
+                .get_or_insert_with(Default::default)
+                .dark = dark;
+        }
         exact_runner::page::set_awaits_present(true);
-        let (mut presenter, warning) = boot_presenter::<D>(
+        let boot = boot_presenter::<D>(
             self.config,
             (size.width as f32 / scale, size.height as f32 / scale),
-        )?;
+        );
+        self.config.preferences = defaults;
+        let (mut presenter, warning) = boot?;
         warn(warning);
         presenter.presents_pictures(true);
         presenter.set_live_clock(Some(wall_since(self.started)));
+        presenter.set_system_scheme(dark.unwrap_or_else(|| defaults.unwrap_or_default().dark));
         let closed = self.closed.clone();
         presenter.set_window_closer(move || closed.set(true));
         window.request_redraw();
@@ -162,7 +183,31 @@ impl<D: DataSource + Default> App<'_, D> {
     }
 }
 
-impl<D: DataSource + Default> ApplicationHandler for App<'_, D> {
+fn theme(dark: bool) -> Theme {
+    if dark {
+        Theme::Dark
+    } else {
+        Theme::Light
+    }
+}
+
+impl<D: DataSource + Default> ApplicationHandler<Option<bool>> for App<'_, D> {
+    fn user_event(&mut self, _: &ActiveEventLoop, dark: Option<bool>) {
+        if self.desktop_dark == dark {
+            return;
+        }
+        self.desktop_dark = dark;
+        if let Some(live) = &mut self.live {
+            live.window.set_theme(dark.map(theme));
+            let mut preferences = live.presenter.host().runner().viewport().preferences;
+            preferences.dark =
+                dark.unwrap_or_else(|| self.config.preferences.unwrap_or_default().dark);
+            live.presenter.set_system_scheme(preferences.dark);
+            warn(live.presenter.set_preferences(preferences));
+            live.window.request_redraw();
+        }
+    }
+
     fn resumed(&mut self, events: &ActiveEventLoop) {
         if self.live.is_none() {
             match self.open(events) {
