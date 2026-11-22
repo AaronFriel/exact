@@ -82,13 +82,16 @@ headless driver. To measure an optimized build under the driver, set
 `EXACT_UPDATE_TRUST=development` when running the same command.
 A generated Windows shell links the data module's network transports when its grant
 ceiling includes `net.fetch` or `net.websocket`. Development builds keep both so
-a plan can add source origins on reload. The host's image loader handles remote
-images and video posters independently of data grants.
-A hand-written shell can use the same selection with
-`exact_windows::run_with_executor::<AppData, ADMIT_AGENT>(name, window, PLAN, COMPAT, composed, START_EXECUTOR)`.
-The TypeScript bake supplies both constants. A Rust build writes them from
-`compat.admits_agent()` and `compat.windows_data_executor()` when it bakes
-`compat.json`. The heavy-list app shows the
+a plan can add source origins on reload. Image downloads are independent of data grants. A production
+Windows shell with `deploy.store.windows` set to `"0"` omits the downloader when
+all image, media, poster and frame sources in its plan are local literals or
+the plan has none. Computed sources, development shells and signed updates
+keep the downloader.
+A hand-written shell uses the same selection with
+`exact_windows::run_with_services::<AppData, ADMIT_AGENT>(name, window, PLAN, COMPAT, composed, SERVICES)`.
+The TypeScript bake supplies both constants. For Rust, the build reads
+`compat.admits_agent()` and composes `compat.windows_image_services(&baked)`
+with `compat.windows_data_executor()`. The heavy-list app shows the
 [build step](../bench/heavy-list/exact-heavylist/windows/build.rs) and the
 [entry point](../bench/heavy-list/exact-heavylist/windows/src/main.rs).
 A Windows login item started with `--login hidden` paints its offscreen launch

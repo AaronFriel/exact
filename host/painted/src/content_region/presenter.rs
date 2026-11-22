@@ -32,7 +32,7 @@ impl<D: DataSource> Presenter<D> {
             None,
             "/",
             Some(region),
-            crate::executor::Executor::start,
+            crate::app::Services::default(),
         )?;
         presenter.measure(); // LLP 1079 D1
         Ok((presenter, error))

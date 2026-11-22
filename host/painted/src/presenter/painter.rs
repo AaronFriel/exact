@@ -698,7 +698,7 @@ impl<D: DataSource> Presenter<D> {
             None,
             "/",
             None,
-            crate::executor::Executor::start,
+            crate::app::Services::default(),
         )?;
         presenter.measure();
         Ok((presenter, error))
@@ -941,7 +941,7 @@ mod tests {
             output_rotation: Default::default(),
             #[cfg(target_os = "macos")]
             painted_boot: None,
-            start_executor: crate::executor::Executor::start,
+            services: Default::default(),
             content_region: None,
             launch: "/".into(),
             plan: plan.into(),
@@ -986,7 +986,7 @@ mod tests {
             "/",
             None,
             PainterBoot::new(PainterChoice::Gpu, open),
-            crate::executor::Executor::start,
+            crate::app::Services::default(),
         )
     }
 
@@ -999,7 +999,7 @@ mod tests {
         }
         let plan = plan();
         let mut config = fixture_config(plan.clone());
-        config.start_executor = start;
+        config.services = crate::app::Services::with_image_downloads(start);
         let (mut presenter, error) = crate::app::boot_presenter_with_painter::<()>(
             &mut config,
             (8., 8.),

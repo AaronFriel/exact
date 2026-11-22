@@ -498,7 +498,7 @@ impl<D: DataSource> Presenter<D> {
         launch: &str,
         region: Option<crate::content_region::ContentRegionRegistration>,
         painter: PainterBoot,
-        start_executor: crate::executor::Start,
+        services: crate::app::Services,
     ) -> Result<(Presenter<D>, Option<String>), HostError> {
         let assets = match selected {
             Some(set) => Assets::selected(root, set),
@@ -515,7 +515,7 @@ impl<D: DataSource> Presenter<D> {
             Some(delivery),
             launch,
             region,
-            start_executor,
+            services,
         )?;
         presenter.compat = compat.to_string();
         presenter.host.web_mount = crate::app::web_mount(compat);
@@ -535,7 +535,7 @@ impl<D: DataSource> Presenter<D> {
         delivery: Option<exact_runner::Delivery>,
         launch: &str,
         region: Option<crate::content_region::ContentRegionRegistration>,
-        start_executor: crate::executor::Start,
+        services: crate::app::Services,
     ) -> Result<(Presenter<D>, Option<String>), HostError> {
         let choice = painter.choice;
         if region.is_some() && choice != PainterChoice::Cpu {
@@ -573,7 +573,7 @@ impl<D: DataSource> Presenter<D> {
             .map_err(HostError::Painter)?;
         #[cfg(not(windows))]
         let (backend, painter) = painter.open().map_err(HostError::Painter)?;
-        let mut images = Images::with_assets(assets.clone());
+        let mut images = (services.open_images)(assets.clone());
         images.fit(viewport, scale);
         let (mut host, error) = Host::boot_decoded(
             decoded,
@@ -616,6 +616,7 @@ impl<D: DataSource> Presenter<D> {
         // Initial selected layout and asset metadata/integrity accepted.
         // Decoded pixels and their natural dimensions arrive together later.
         // Only now may the app's queued requests reach its executor.
+        let start_executor = services.start_executor;
         let executor = host.executor_with(start_executor);
         if let Some(note) = executor.note() {
             host.log(note.to_string());

@@ -174,7 +174,7 @@ pub(super) fn run<D: DataSource + Default + 'static, const DEVELOPMENT: bool>(
     plan: &[u8],
     compat: &str,
     composed: exact_painted::Composed,
-    start_executor: exact_painted::executor::Start,
+    services: crate::Services,
 ) -> i32 {
     if let Some(result) = exact_ink::device::d3d11::startup_watchdog::helper() {
         return result;
@@ -244,7 +244,7 @@ pub(super) fn run<D: DataSource + Default + 'static, const DEVELOPMENT: bool>(
     {
         std::thread::sleep(Duration::from_millis(200));
     }
-    let mut config = Config::from_bake_with_executor::<DEVELOPMENT>(plan, compat, start_executor);
+    let mut config = Config::from_bake_with_services::<DEVELOPMENT>(plan, compat, services);
     config.preferences = Some(exact_runner::Preferences {
         screen_reader: if config.agent {
             exact_runner::ScreenReader::Unknown

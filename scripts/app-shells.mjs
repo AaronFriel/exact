@@ -472,7 +472,7 @@ include!(concat!(env!("OUT_DIR"), "/packages.rs"));
 include!(concat!(env!("OUT_DIR"), "/hatches.rs"));
 fn main() {
     let composed = exact_painted::Composed { hatches: exact_hatches(), packages: exact_packages() };
-    std::process::exit(exact_windows::run_with_executor::<AppData, ADMIT_AGENT>(${JSON.stringify(title)}, window(), PLAN, COMPAT, composed, START_EXECUTOR));
+    std::process::exit(exact_windows::run_with_services::<AppData, ADMIT_AGENT>(${JSON.stringify(title)}, window(), PLAN, COMPAT, composed, SERVICES));
 }
 `,
   };

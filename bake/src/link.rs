@@ -13,6 +13,30 @@ impl Compat {
     pub fn windows_data_executor(&self) -> &'static str {
         windows_data_executor(self.admits_agent(), self.inputs["grantCeiling"].as_str())
     }
+
+    /// Development and signed updates can replace the plan with one that downloads pictures.
+    pub fn windows_image_services(&self, plan: &exact_plan::Plan) -> &'static str {
+        windows_image_services(
+            plan,
+            self.embedded["trust"].as_str(),
+            self.inputs["store"]["L"].as_str(),
+        )
+    }
+}
+
+fn windows_image_services(
+    plan: &exact_plan::Plan,
+    trust: Option<&str>,
+    store: Option<&str>,
+) -> &'static str {
+    if trust == Some("production")
+        && store == Some("0")
+        && !exact_runner::uses::sources_can_be_remote(plan)
+    {
+        "exact_windows::Services::with_local_images"
+    } else {
+        "exact_windows::Services::with_image_downloads"
+    }
 }
 
 fn windows_data_executor(development: bool, ceiling: Option<&str>) -> &'static str {
@@ -537,6 +561,40 @@ mod tests {
             executor(false, Some("net.websocket wss://socket.test")),
             full
         );
+    }
+
+    #[test]
+    fn windows_omits_image_downloads_only_for_a_fixed_plan_with_local_sources() {
+        let compile = |view: &str| {
+            contract::compile(&format!(
+                "component A\n  state src = \"assets/a.png\"\n  view\n    {view}\n"
+            ))
+            .unwrap()
+        };
+        let local = compile(r#"image "app:/tmp/freeze/screen.png""#);
+        let images = super::windows_image_services;
+        let download = "exact_windows::Services::with_image_downloads";
+        assert_eq!(
+            images(&local, Some("production"), Some("0")),
+            "exact_windows::Services::with_local_images"
+        );
+        for (trust, store) in [
+            (Some("development"), Some("0")),
+            (Some("production"), Some("A")),
+            (None, None),
+        ] {
+            assert_eq!(images(&local, trust, store), download);
+        }
+        for view in [
+            r#"image "https://example.test/image""#,
+            "image src",
+            r#"video poster="https://example.test/poster""#,
+        ] {
+            assert_eq!(
+                images(&compile(view), Some("production"), Some("0")),
+                download
+            );
+        }
     }
 
     #[test]

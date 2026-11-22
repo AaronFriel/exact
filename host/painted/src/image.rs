@@ -283,6 +283,9 @@ impl Images {
     pub(crate) fn with_assets(assets: Assets) -> Self {
         Self::make(assets, Backend::new())
     }
+    pub(crate) fn local(assets: Assets) -> Self {
+        Self::make(assets, Backend::local())
+    }
     fn make(assets: Assets, backend: Arc<Backend>) -> Self {
         Self {
             generation: backend.generation(),
@@ -1179,8 +1182,8 @@ impl Images {
             "peakBytes":s.peak_bytes,"running":s.running,"processRunning":g.running,
             "ready":s.ready,"deliveryCells":s.delivery_cells,"pendingJobs":s.pending_jobs,
             "subscribers":s.subscribers,"coldEntries":s.cold_entries,"sourceEntries":self.backend.sources(),
-            "remoteFetches":self.backend.downloads.fetches.load(std::sync::atomic::Ordering::Relaxed),
-            "remoteCacheBytes":self.backend.downloads.cached_bytes(),
+            "remoteFetches":self.backend.downloads.as_ref().map_or(0, |d| d.fetches.load(std::sync::atomic::Ordering::Relaxed)),
+            "remoteCacheBytes":self.backend.downloads.as_ref().map_or(0, |d| d.cached_bytes()),
             "liveDiagnostics":self.loaded.len(),"deferred":self.deferred,
             "budgetWaits":waiting,"refusalReasons":reasons,
             "refused":self.views.values().filter(|v| v.refusal.is_some()).count()})

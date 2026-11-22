@@ -107,7 +107,7 @@ fn painted_boot_requests_no_images_below_the_first_screen() {
         "/",
         None,
         PainterBoot::selected(PainterChoice::Cpu),
-        crate::executor::Executor::start,
+        crate::app::Services::default(),
     )
     .unwrap();
     assert!(error.is_none(), "{error:?}");
@@ -169,6 +169,17 @@ fn a_refused_boot_picture_is_settled_content() {
         !images.pending(),
         "a terminal refusal must not keep boot alive"
     );
+}
+
+#[test]
+fn a_local_image_service_decodes_a_replacement_asset_without_a_downloader() {
+    let k = kernel(1);
+    let images = Images::local(assets());
+    let mut next = images.candidate(assets());
+    next.sync(&k, &k.roots());
+    next.wait(SETTLED);
+    assert!(next.bitmaps.contains_key(&1));
+    assert!(next.backend.downloads.is_none());
 }
 
 #[test]
