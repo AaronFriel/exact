@@ -1127,6 +1127,7 @@ impl Parser {
                     headers.push(format!("{}:{}", json_string(&name), json_string(&value)));
                 }
                 let (body, content_type) = match self.peek_kind() {
+                    _ if self.at_ident("after") => (String::new(), "text/plain; charset=utf-8"),
                     TokenKind::Newline | TokenKind::Eof => (String::new(), "text/plain; charset=utf-8"),
                     TokenKind::Str(_) => (self.str_lit("a text body")?, "text/plain; charset=utf-8"),
                     _ => (self.json_value()?, "application/json"),
@@ -1134,7 +1135,16 @@ impl Parser {
                 if !headers.iter().any(|h| h.starts_with("\"content-type\":")) {
                     headers.push(format!("\"content-type\":{}", json_string(content_type)));
                 }
-                let response = format!("{{\"status\":{status},\"headers\":{{{}}},\"body\":{}}}", headers.join(","), json_string(&body));
+                let delay = if self.at_ident("after") {
+                    self.next();
+                    let ms = self.step_number("a delay in milliseconds")?;
+                    if ms.fract() != 0.0 || !(0.0..=u32::MAX as f64).contains(&ms) {
+                        return self.err("syntax-expected-step", "answer fetch: after takes a nonnegative whole number of milliseconds up to 4294967295");
+                    }
+                    if self.at_ident("ms") { self.next(); }
+                    format!(",\"afterMs\":{ms}")
+                } else { String::new() };
+                let response = format!("{{\"status\":{status},\"headers\":{{{}}},\"body\":{}{delay}}}", headers.join(","), json_string(&body));
                 if body.len() > 65536 || prefix.len() + response.len() + 20 > 65536 {
                     return self.err("syntax-expected-step", "answer fetch: encoded fixture exceeds 64 KiB");
                 }

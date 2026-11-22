@@ -93,6 +93,8 @@ pub struct Fault {
     pub prefix: String,
     /// The HTTP method selected by this response fixture.
     pub method: Option<String>,
+    /// Delay before this fixture answers, in milliseconds on the session clock.
+    pub after_ms: u32,
     /// The count given at arming, if any.
     pub times: Option<u32>,
     /// What is left of it.
@@ -107,10 +109,14 @@ pub struct Fault {
     pub response: Option<Arc<Response>>,
 }
 
-fn response_json(response: &Response) -> serde_json::Value {
-    serde_json::json!({"status": response.status,
+fn response_json(response: &Response, after_ms: u32) -> serde_json::Value {
+    let mut value = serde_json::json!({"status": response.status,
         "headers": response.headers.iter().cloned().collect::<std::collections::BTreeMap<_, _>>(),
-        "body": String::from_utf8_lossy(&response.body)})
+        "body": String::from_utf8_lossy(&response.body)});
+    if after_ms != 0 {
+        value["afterMs"] = after_ms.into();
+    }
+    value
 }
 
 fn check_method(method: &str) -> Result<String, String> {
@@ -124,7 +130,7 @@ fn check_method(method: &str) -> Result<String, String> {
     Ok(method.into())
 }
 
-fn parse_response(value: &serde_json::Value) -> Result<Response, String> {
+fn parse_response(value: &serde_json::Value) -> Result<(Response, u32), String> {
     let bad = || {
         "answer fetch needs a status (200–599, excluding redirects), string headers and a text body of at most 64 KiB".to_string()
     };
@@ -162,11 +168,23 @@ fn parse_response(value: &serde_json::Value) -> Result<Response, String> {
             ))
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(Response {
-        status,
-        headers,
-        body: body.as_bytes().to_vec(),
-    })
+    let after_ms = value
+        .get("afterMs")
+        .map(|v| {
+            v.as_u64()
+                .and_then(|n| u32::try_from(n).ok())
+                .ok_or_else(|| "answer fetch: invalid delay in milliseconds".to_string())
+        })
+        .transpose()?
+        .unwrap_or(0);
+    Ok((
+        Response {
+            status,
+            headers,
+            body: body.as_bytes().to_vec(),
+        },
+        after_ms,
+    ))
 }
 
 fn table_spec(entries: &[Fault]) -> String {
@@ -183,7 +201,7 @@ fn table_spec(entries: &[Fault]) -> String {
                 u8::from(f.armed),
                 f.response
                     .as_ref()
-                    .map(|r| response_json(r).to_string())
+                    .map(|r| response_json(r, f.after_ms).to_string())
                     .unwrap_or_default(),
                 f.failure_hits,
                 f.method
@@ -289,6 +307,7 @@ impl Faults {
                         .and_then(|v| parse_response(&v))
                 })
                 .transpose()?;
+            let (response, after_ms) = response.map_or((None, 0), |(r, ms)| (Some(r), ms));
             let failure_hits =
                 count(fields.next())?.unwrap_or(if counts_as_failure(response.as_ref()) {
                     hits
@@ -303,6 +322,7 @@ impl Faults {
             faults.push(Fault {
                 prefix: prefix.to_string(),
                 method,
+                after_ms,
                 times,
                 left,
                 hits,
@@ -342,6 +362,7 @@ impl Faults {
         next.push(Fault {
             prefix: prefix.to_string(),
             method: None,
+            after_ms: 0,
             times,
             left: times,
             hits: 0,
@@ -370,7 +391,7 @@ impl Faults {
         value: &serde_json::Value,
     ) -> Result<(), String> {
         let method = method.map(check_method).transpose()?;
-        let response = parse_response(value)?;
+        let (response, after_ms) = parse_response(value)?;
         if prefix.is_empty() || prefix.contains(['\t', '\r', '\n']) {
             return Err("answer fetch needs a URL prefix without tabs or newlines".into());
         }
@@ -388,6 +409,7 @@ impl Faults {
                 .map_or(0, |f| f.failure_hits),
             armed: true,
             method,
+            after_ms,
             response: Some(Arc::new(response)),
         });
         table_fits(&next)?;
@@ -474,7 +496,10 @@ impl Faults {
             ));
             out.push_str(&format!(",\"failureHits\":{}", f.failure_hits));
             if let Some(response) = &f.response {
-                out.push_str(&format!(",\"response\":{}", response_json(response)));
+                out.push_str(&format!(
+                    ",\"response\":{}",
+                    response_json(response, f.after_ms)
+                ));
             }
             out.push('}');
         }
@@ -542,14 +567,15 @@ impl<D: DataSource> Runner<D> {
         let answers = self.links.grants.is_some_and(|link| {
             (link.admitting)(&self.grants(), request.grants.as_deref(), &request.url).is_some()
         });
-        let (prefix, response) = self
+        let (prefix, response, after_ms) = self
             .faults
             .table()
             .iter()
             .filter(|f| f.matches(&request.url, &request.method, answers))
             .max_by_key(|f| f.priority())
-            .map(|f| (f.prefix.clone(), f.response.clone()))?;
+            .map(|f| (f.prefix.clone(), f.response.clone(), f.after_ms))?;
         if let Some(fixture) = response {
+            self.delay_fetch_fixture(r.ticket, self.now_ms, after_ms, request.timeout_ms);
             let (faults, request) = (self.faults.clone(), request.clone());
             return Some(Dispatch::Run(Work::HttpResponse(Arc::new(move || {
                 let mut response = (*fixture).clone();

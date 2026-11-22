@@ -18,7 +18,43 @@ export function fixtureResponse(response) {
     if (['set-cookie', 'set-cookie2'].includes(name.toLowerCase())) throw new Error('answer fetch: set-cookie and set-cookie2 headers are not exposed on every host');
     if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) || typeof value !== 'string' || /[^\t\x20-\x7e\x80-\xff]/.test(value)) throw new Error('answer fetch: invalid header name or value');
   }
-  return { status: response.status, headers: { ...response.headers }, body: response.body };
+  const after = response.afterMs;
+  if (after !== undefined && (!Number.isInteger(after) || after < 0 || after > 0xffffffff)) throw new Error('answer fetch: invalid delay in milliseconds');
+  return { status: response.status, headers: { ...response.headers }, body: response.body, ...(after ? {afterMs: after} : {}) };
+}
+
+/** Once the body is ready, its owner waits on the session clock. Other fetches by the same
+ * answer keep their original counts. An abort wakes this fetch even with the clock frozen. */
+export function delayFixture(runtime, wait, due, signal) {
+  const { clock } = runtime;
+  if (!clock) throw new Error('a delayed fetch fixture requires the session clock');
+  if (signal?.aborted) return Promise.reject(signal.reason);
+  if (clock.now >= due) return Promise.resolve();
+  const { call, kind, loose } = wait ?? {};
+  const counted = kind && call?.[kind] > 0;
+  function timer(delta) {
+    if (call) {
+      if (counted) call[kind] -= delta;
+      call.timers = (call.timers ?? 0) + delta;
+    }
+    loose?.(-delta);
+    call?.recount?.();
+  }
+  return new Promise((resolve, reject) => {
+    const live = () => !call?.settled && (call?.wanted?.() ?? true);
+    const entry = { due, once: true, data: true, call, live, action() { finish(); resolve(); return true; } };
+    const abort = () => { finish(); reject(signal.reason); };
+    function finish() {
+      signal?.removeEventListener('abort', abort);
+      const index = clock.timers.indexOf(entry);
+      if (index >= 0) clock.timers.splice(index, 1);
+      timer(-1);
+    }
+    clock.timers.push(entry);
+    timer(1);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (!clock.agent) runtime.drive?.();
+  });
 }
 
 /** A synthetic final response still passes the executor's normal body reader. */

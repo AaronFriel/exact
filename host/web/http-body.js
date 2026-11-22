@@ -695,6 +695,7 @@ export async function request(op, { grantSet, loadPageNative, moduleLoader, loca
       if (expired()) return failed(10, `the request timed out after ${op.timeoutMs} ms`);
       if (signal.aborted) return failed(4, 'request aborted');
       countFault(url, fixture);
+      if (fixture.response.afterMs) result.afterMs = fixture.response.afterMs;
     }
     return result;
   } catch (error) {

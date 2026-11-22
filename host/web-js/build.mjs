@@ -836,7 +836,7 @@ let admission = readFileSync(resolve(here, 'admission.js'), 'utf8');
 if (siteBase !== '/') admission = admission.replace('new URL(String(input), globalThis.location?.href)',
   `new URL(String(input).slice(1), globalThis.document?.baseURI ?? new URL(${JSON.stringify(siteBase)}, globalThis.location?.href))`);
 const stubbed = [
-  ["import { answeredFetch, countFault, faultMessage, matchFault } from '../web/faults.js';", "const matchFault = () => false, countFault = () => {}, faultMessage = () => '', answeredFetch = () => null;"],
+  ["import { answeredFetch, countFault, delayFixture, faultMessage, matchFault } from '../web/faults.js';", "const matchFault = () => false, countFault = () => {}, delayFixture = () => {}, faultMessage = () => '', answeredFetch = () => null;"],
   ["import { redirectFor, reachRefusal, UNATTRIBUTED } from '../web/address-space.js';", "const redirectFor = (origin, redirect) => redirect, reachRefusal = () => null, UNATTRIBUTED = 'unattributed';"],
 ].reduce((text, [line, stub]) => {
   if (!admission.includes(line)) throw new Error(`host/web-js/admission.js: build.mjs replaces a line it no longer has: ${line}`);

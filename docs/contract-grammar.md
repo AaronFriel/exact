@@ -1105,13 +1105,19 @@ dropping it. Long polls use `fail fetch` on their individual HTTP attempts
 because their transport repeats buffered requests. Upload progress streams
 and local listeners are outside this step's scope. The web's wasm host
 opens event streams and WebSockets. It reads byte streams as buffered replies.
-`answer fetch "<prefix>" [method GET] with <status> [header "<name>" "<value>"]… [<body>]`
-supplies an immediate HTTP response, with no request to the service. It may lead
+`answer fetch "<prefix>" [method GET] with <status> [header "<name>" "<value>"]… [<body>] [after <ms>]`
+supplies an HTTP response, with no request to the service. It may lead
 a test or the file, like `fail fetch`, so the first resource load receives it.
 An HTTP method limits the answer to those requests. A test can return the old
 value for `method GET` and the saved value for `method PUT` at the same URL.
 A later rule replaces the rule for the same prefix and method. A test's
 leading rule overrides the matching rule in the file.
+
+By default the response arrives immediately. With `after 200`, the request
+selects its response when it starts and delivers it 200 milliseconds later on
+the test clock. Replacing the rule leaves that response in flight. `clock data`
+can finish a save while its earlier read waits. `clock +200` delivers the read.
+
 JSON bodies are sent as `application/json`; a quoted string is sent as
 `text/plain; charset=utf-8`, and an omitted body is empty. An explicit
 `content-type` header overrides that default. The status is 200 through 599,
@@ -1135,8 +1141,8 @@ A web launch revalidates only matching checkpoint answers through the real sourc
 unrelated rendered answers stay settled.
 The real source parses the response, so an HTTP error status is a response,
 where `fail fetch` is a rejected connection. These fixtures cover buffered HTTP
-requests, including a worker's; streams, long polls, redirects, `exactBodyTo`,
-delays and response files are not supported.
+requests, including a worker's; streams, long polls, redirects, `exactBodyTo`
+and response files are not supported.
 
 `answer source pairing with {"phase": "code", "code": "123456"}` supplies a typed
 answer in `contract verify`. It applies to every argument list for that source.
