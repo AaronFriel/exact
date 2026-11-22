@@ -77,7 +77,7 @@ impl Painter {
         let rows = self.has_rows(walk, node);
         let group = rows && !self.rows_wrapper(node.key);
         let wrap = group && self.wraps_rows(walk, &children);
-        let split_sections = rows && self.backend.split_sticky_sections();
+        let split_sections = rows && self.backend.independent_section_rows();
         let sections = (split_sections && !wrap).then(|| self.row_sections(walk.scene.kernel));
         if group {
             self.group_begin(walk, node.id);

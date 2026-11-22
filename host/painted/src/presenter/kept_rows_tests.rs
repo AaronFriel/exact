@@ -143,6 +143,8 @@ component App
 /// transform.
 #[derive(Default)]
 struct Heard {
+    geometry_without_drawing: bool,
+    viewport_row_coordinates: bool,
     begun: Vec<(u32, Option<u32>)>,
     freed: Vec<u32>,
     drawn: Vec<u32>,
@@ -176,6 +178,9 @@ impl Backend for Keeps {
     crate::paints_nothing!();
     fn name(&self) -> &'static str {
         "keeps-rows"
+    }
+    fn needs_geometry_paint(&self) -> bool {
+        !self.heard.borrow().geometry_without_drawing
     }
     fn begin(&mut self, _: f32, _: f32, _: f32) {}
     fn fill(&mut self, _: &Shape, _: [u8; 4], _: Transform) {}
@@ -211,11 +216,14 @@ impl Backend for Keeps {
     fn rows(&self) -> bool {
         true
     }
-    fn split_sticky_sections(&self) -> bool {
+    fn independent_section_rows(&self) -> bool {
         !self.heard.borrow().whole_sections
     }
     fn rows_through(&self) -> bool {
         true
+    }
+    fn row_local(&self) -> bool {
+        !self.heard.borrow().viewport_row_coordinates
     }
     fn group_begin(&mut self, _: ViewId, _: (f32, f32)) {
         let mut heard = self.heard.borrow_mut();
@@ -303,66 +311,6 @@ fn a_row_includes_a_removed_branches_paint_bounds() {
         "{:?}",
         heard.bounds
     );
-}
-
-/// A row a commit bound to another item (LLP 1078) is a new row to the
-/// backend: not the row it was, whose recording is the other item's (a
-/// reader told otherwise draws that in its place until the new one is
-/// made), and the old recording is freed. A row that only changed is still
-/// the row it was.
-#[test]
-fn a_renewed_row_is_not_the_row_it_was() {
-    let cells: String = (0..6)
-        .map(|i| format!("        box height=50 width=200 testId=\"c{i}\"\n"))
-        .collect();
-    let (mut p, error) = Presenter::boot_with_fixture_fonts(
-        &contract::compile(&format!(
-            "component App\n  view\n    scroll testId=\"port\" width=200 height=400\n      column\n{cells}"
-        ))
-        .unwrap()
-        .encode(),
-        (),
-        (400., 500.),
-        1.,
-        PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/caltrain")),
-        PainterChoice::Cpu,
-    )
-    .unwrap();
-    assert!(error.is_none(), "{error:?}");
-    let heard = Rc::new(RefCell::new(Heard::default()));
-    p.brush.replace_backend(Box::new(Keeps {
-        heard: heard.clone(),
-        row: 0,
-    }));
-    let _ = p.frame();
-    let first = std::mem::take(&mut *heard.borrow_mut());
-    assert_eq!(first.begun.len(), 6, "each cell a kept row");
-    assert!(first.begun.iter().all(|(_, previous)| previous.is_none()));
-    // () changed: nothing is recorded again.
-    let _ = p.frame();
-    assert!(heard.borrow().begun.is_empty());
-    // One row changed, one was bound to another item.
-    let key = |name: &str| p.host.kernel().find_by_test_id(name)[0];
-    let (changed, renewed) = (key("c1"), key("c4"));
-    p.host.row_dirty.commit(
-        &exact_kernel::CommitReceipt {
-            touched: vec![changed, renewed],
-            renewed: vec![renewed],
-            ..Default::default()
-        },
-        0.0,
-    );
-    let _ = p.frame();
-    let heard = heard.borrow();
-    let (was_changed, was_renewed) = (first.begun[1].0, first.begun[4].0);
-    assert_eq!(heard.begun.len(), 2);
-    assert_eq!(
-        heard.begun[0].1,
-        Some(was_changed),
-        "a changed row is the row it was"
-    );
-    assert_eq!(heard.begun[1].1, None, "a renewed row is a new one");
-    assert!(heard.freed.contains(&was_renewed), "its old recording goes");
 }
 
 /// A reader made again holds none of the last one's rows (LLP 1115.001
@@ -1028,6 +976,86 @@ fn a_retained_row_does_not_hold_a_sticky_descendant_at_its_old_position() {
 }
 
 #[test]
+fn retained_geometry_preserves_hits_after_short_and_long_scrolls() {
+    let source = r#"component App
+  state slop = 0
+  action widen_hit
+    slop = 80
+  view
+    scroll testId="port" width=100 height=80
+      column
+        column height=20 flex-shrink=0
+          box testId="target" width=100 height=20 flex-shrink=0 overflow="visible" -exact-hit-slop-bottom=slop
+        box width=100 height=1000100 flex-shrink=0 pointer-events="none"
+        box width=100 height=20 flex-shrink=0
+"#;
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
+        &crate::test_plan(source),
+        (),
+        (100., 100.),
+        1.,
+        PathBuf::new(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    assert_eq!(error, None);
+    let id = |name| {
+        let k = p.host.kernel();
+        k.node_by_key(k.find_by_test_id(name)[0]).unwrap().id
+    };
+    let port = id("port");
+    let target = id("target");
+    for (recorded_scroll, arrival, inside, hit_height, replays) in [
+        (0., 0.25, 19.74, 20., 3),
+        (1_000_000.25, 0.25, 19.74, 20., 1),
+        (32_768., 0.9995, 19., 20., 1),
+        (32_768., 80.9995, 19., 100., 1),
+    ] {
+        if hit_height > 20. {
+            let receipt = p.host.runner_mut().act("widen_hit", vec![]).unwrap();
+            let at_ms = p.host.now();
+            assert_eq!(
+                p.host
+                    .commit(&[exact_runner::Timed { at_ms, receipt }], None),
+                None
+            );
+            assert_eq!(p.after_commit(), None);
+        }
+        let check_hit = |p: &mut Presenter<()>| {
+            assert_eq!(
+                p.hit(5., inside),
+                Some(target),
+                "recorded at {recorded_scroll}"
+            );
+            assert_ne!(p.hit(5., hit_height - arrival), Some(target));
+        };
+        let heard = Rc::new(RefCell::new(Heard {
+            viewport_row_coordinates: true,
+            ..Heard::default()
+        }));
+        p.reader_replaced(Box::new(Keeps {
+            heard: heard.clone(),
+            row: 0,
+        }));
+        assert_eq!(
+            p.scroll_to(port, (0., recorded_scroll)),
+            Some((0., recorded_scroll))
+        );
+        p.frame();
+        assert_eq!(heard.borrow().begun.len(), 3, "each row was recorded");
+
+        heard.borrow_mut().geometry_without_drawing = true;
+        let before = p.brush.geometry_rows_replayed();
+        assert_eq!(p.scroll_to(port, (0., arrival)), Some((0., arrival)));
+        check_hit(&mut p);
+        assert_eq!(p.brush.geometry_rows_replayed() - before, replays);
+
+        p.frame();
+        check_hit(&mut p);
+    }
+}
+
+#[test]
 fn inline_frame_retained_rows_keep_initial_and_scrolled_viewport_origins() {
     use exact_runner::geometry::InlineGeometry;
 
@@ -1039,9 +1067,9 @@ fn inline_frame_retained_rows_keep_initial_and_scrolled_viewport_origins() {
       scroll testId="port" width=200 height=200
         column
           text height=80
-            text "first" testId="first"
+            text "first" href="/first" testId="first"
           text height=80
-            text "second" testId="second"
+            text "second" href="/second" testId="second"
           box height=400
 "#
         );
@@ -1049,7 +1077,7 @@ fn inline_frame_retained_rows_keep_initial_and_scrolled_viewport_origins() {
             &crate::test_plan(&source),
             (),
             (400., 500.),
-            1.,
+            1.25,
             PathBuf::new(),
             PainterChoice::Cpu,
         )
@@ -1083,6 +1111,33 @@ fn inline_frame_retained_rows_keep_initial_and_scrolled_viewport_origins() {
         );
         let replayed = runs.map(|id| p.ranges.frame(id));
         let shift = if transform.is_empty() { 20. } else { 25. };
+        // At a fractional device origin the first link lies above the
+        // scroll port. Its inline metadata moves, but must stay clipped.
+        heard.borrow_mut().geometry_without_drawing = true;
+        p.scroll_to(port, (0., 20.25)).unwrap();
+        let moved_before = p.brush.geometry_rows_replayed();
+        p.boxes();
+        assert_eq!(
+            p.brush.geometry_rows_replayed() - moved_before,
+            3,
+            "the links' rows and the box are moved, not walked"
+        );
+        let first = p.ranges.frame(runs[0]);
+        let shift_fractional = 20.25 * if transform.is_empty() { 1. } else { 1.25 };
+        assert!((first.y - (ordinary[0].y - shift_fractional)).abs() < 0.001);
+        let second = p.ranges.frame(runs[1]);
+        assert_ne!(
+            p.hit((first.x + 1.) as f32, (first.y + first.height / 2.) as f32),
+            Some(runs[0])
+        );
+        assert_eq!(
+            p.hit(
+                (second.x + 1.) as f32,
+                (second.y + second.height / 2.) as f32
+            ),
+            Some(runs[1])
+        );
+
         for ((expected, got), moved) in ordinary.into_iter().zip(recorded).zip(replayed) {
             assert!(!got.unavailable && !moved.unavailable);
             assert_eq!(
@@ -1107,17 +1162,23 @@ fn inline_frame_retained_rows_keep_initial_and_scrolled_viewport_origins() {
 #[test]
 fn fractional_row_scroll_matches_a_fresh_walk_with_clips_and_hinted_text() {
     let source = r##"component App
+  state caption = "Hinted text"
+  action rename
+    caption = "Updated caption"
   view
-    scroll testId="port" width=120 height=80
-      column
-        view width=120 height=70 clip-path="path('M 5 5 Q 115 0 115 65 L 5 65 Z')" background-color="#2488bb"
-          text "Hinted text" font-size=17 color="#ffffff"
-        view width=120 height=200 background-color="#44aa33"
+    column
+      scroll testId="port" width=120 height=80
+        column
+          view testId="row" width=120 height=70 clip-path="path('M 5 5 Q 115 0 115 65 L 5 65 Z')" background-color="#2488bb"
+            text caption testId="caption" font-size=17 color="#ffffff"
+          view width=120 height=320 background-color="#44aa33"
+      button testId="rename" press=rename height=20
+        text "Rename"
 "##;
     let (mut p, _) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(source),
         (),
-        (140., 100.),
+        (140., 240.),
         1.,
         PathBuf::new(),
         PainterChoice::Ink,
@@ -1126,14 +1187,72 @@ fn fractional_row_scroll_matches_a_fresh_walk_with_clips_and_hinted_text() {
     p.frame();
     let k = p.host.kernel();
     let port = k.node_by_key(k.find_by_test_id("port")[0]).unwrap().id;
-    for offset in [0.25, 0.5, 1., 1.25] {
+    let row = k.find_by_test_id("row")[0];
+    // Scroll the hinted row fully out of view at a fractional phase,
+    // then show it again at another phase.
+    let offsets = [0.25, 0.5, 1., 1.25, 119.5, 123., 0.75];
+    let kept = offsets.map(|offset| {
         p.scroll_to(port, (0., offset)).unwrap();
-        let kept = p.frame();
+        p.frame()
+    });
+    for (offset, kept) in offsets.into_iter().zip(kept) {
         p.brush.forget_rows();
+        p.scroll_to(port, (0., offset)).unwrap();
         p.repaint();
         let fresh = p.frame();
         assert!(kept.data() == fresh.data(), "scroll {offset}");
     }
+
+    // A row kept while clipped after a fractional move records its glyphs
+    // again when it shows. The jump is within `MAX_TRANSLATION`.
+    p.brush.forget_rows();
+    p.scroll_to(port, (0., 200.75)).unwrap();
+    p.frame();
+    let clipped_id = p.brush.retained_row_id(row).expect("clipped row recorded");
+    p.scroll_to(port, (0., 201.25)).unwrap();
+    p.frame();
+    assert_eq!(p.brush.retained_row_id(row), Some(clipped_id));
+    p.scroll_to(port, (0., 0.75)).unwrap();
+    let revealed = p.frame();
+    let revealed_id = p.brush.retained_row_id(row).expect("revealed row recorded");
+    assert_ne!(revealed_id, clipped_id, "recorded again");
+    p.brush.forget_rows();
+    p.repaint();
+    let before = p.frame();
+    assert!(
+        revealed.data() == before.data(),
+        "reveal at the original phase"
+    );
+
+    // Recorded again above the port, inside the row's margin, at another
+    // phase, then moved back by whole pixels: its glyphs' negative device
+    // rows must move by the same pixels.
+    p.scroll_to(port, (0., 0.5)).unwrap();
+    p.frame();
+    p.scroll_to(port, (0., 80.75)).unwrap();
+    p.frame();
+    p.scroll_to(port, (0., 0.75)).unwrap();
+    let moved = p.frame();
+    p.brush.forget_rows();
+    p.repaint();
+    assert!(
+        moved.data() == p.frame().data(),
+        "moved back by whole pixels"
+    );
+
+    p.scroll_to(port, (0., 119.5)).unwrap();
+    p.frame();
+    stage::tests::tap(&mut p, "rename");
+    p.frame();
+    p.scroll_to(port, (0., 0.75)).unwrap();
+    let updated = p.frame();
+    assert!(
+        before.data() != updated.data(),
+        "the revealed caption changes"
+    );
+    p.brush.forget_rows();
+    p.repaint();
+    assert!(updated.data() == p.frame().data(), "no stale row on reveal");
 }
 
 /// Tabs whose pages each hold a list of twenty red rows, half as wide as the
@@ -1358,4 +1477,5 @@ fn a_removed_pages_rows_scale_in_pixels() {
     }
 }
 
+mod moved;
 mod reach;
