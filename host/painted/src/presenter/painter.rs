@@ -698,6 +698,7 @@ impl<D: DataSource> Presenter<D> {
             None,
             "/",
             None,
+            crate::executor::Executor::start,
         )?;
         presenter.measure();
         Ok((presenter, error))
@@ -940,6 +941,7 @@ mod tests {
             output_rotation: Default::default(),
             #[cfg(target_os = "macos")]
             painted_boot: None,
+            start_executor: crate::executor::Executor::start,
             content_region: None,
             launch: "/".into(),
             plan: plan.into(),
@@ -984,7 +986,33 @@ mod tests {
             "/",
             None,
             PainterBoot::new(PainterChoice::Gpu, open),
+            crate::executor::Executor::start,
         )
+    }
+
+    #[test]
+    fn a_new_plan_uses_the_shells_data_executor() {
+        thread_local! { static STARTS: Cell<usize> = const { Cell::new(0) }; }
+        fn start(grants: &str) -> crate::executor::Executor {
+            STARTS.with(|n| n.set(n.get() + 1));
+            crate::executor::Executor::local(grants)
+        }
+        let plan = plan();
+        let mut config = fixture_config(plan.clone());
+        config.start_executor = start;
+        let (mut presenter, error) = crate::app::boot_presenter_with_painter::<()>(
+            &mut config,
+            (8., 8.),
+            PainterBoot::cpu(),
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        assert_eq!(STARTS.with(Cell::get), 1);
+        assert_eq!(
+            presenter.reload(&plan, ()).unwrap(),
+            crate::presenter::ReloadResult::Applied(None)
+        );
+        assert_eq!(STARTS.with(Cell::get), 2);
     }
 
     #[test]

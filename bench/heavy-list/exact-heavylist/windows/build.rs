@@ -32,8 +32,9 @@ fn main() {
     std::fs::write(
         out_dir.join("window.rs"),
         format!(
-            "const ADMIT_AGENT: bool = {};\nfn window() -> exact_windows::Window {{ {} }}",
+            "const ADMIT_AGENT: bool = {};\nconst START_EXECUTOR: fn(&str) -> exact_windows::Executor = {};\nfn window() -> exact_windows::Window {{ {} }}",
             compat.admits_agent(),
+            compat.windows_data_executor(),
             manifest.windows_window().unwrap()
         ),
     )

@@ -8,6 +8,29 @@
 use crate::compat::{compatibility_digest, Compat};
 use exact_runner::{Capability, Uses};
 
+impl Compat {
+    /// The data executor linked into a Windows shell. Development can add source origins on reload.
+    pub fn windows_data_executor(&self) -> &'static str {
+        windows_data_executor(self.admits_agent(), self.inputs["grantCeiling"].as_str())
+    }
+}
+
+fn windows_data_executor(development: bool, ceiling: Option<&str>) -> &'static str {
+    let network = ceiling.is_none_or(|grants| {
+        grants.lines().any(|line| {
+            matches!(
+                line.split_whitespace().next(),
+                Some("net.fetch" | "net.websocket")
+            )
+        })
+    });
+    if development || network {
+        "exact_windows::Executor::start"
+    } else {
+        "exact_windows::Executor::local"
+    }
+}
+
 /// Name what a native artifact links into `compat`'s inputs (`linked`), from
 /// the plan its build script baked into `out`, before the id is taken and
 /// everything that binds it (the GPU module's card, the receipts) is written.
@@ -486,6 +509,34 @@ mod tests {
             name: "Link".into(),
             declared: true,
         }
+    }
+
+    #[test]
+    fn windows_data_transports_follow_the_baked_grant_ceiling() {
+        use super::windows_data_executor as executor;
+        let full = "exact_windows::Executor::start";
+        let local = "exact_windows::Executor::local";
+        assert_eq!(executor(true, Some("")), full);
+        assert_eq!(executor(false, None), full);
+        assert_eq!(executor(false, Some("")), local);
+        assert_eq!(
+            executor(
+                false,
+                Some("fs.read app:/data/notes\n# net.fetch https://example.test")
+            ),
+            local
+        );
+        assert_eq!(
+            executor(
+                false,
+                Some("fs.read app:/data/notes\nnet.fetch https://example.test")
+            ),
+            full
+        );
+        assert_eq!(
+            executor(false, Some("net.websocket wss://socket.test")),
+            full
+        );
     }
 
     #[test]

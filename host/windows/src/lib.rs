@@ -144,13 +144,32 @@ pub fn run_baked<D: exact_runner::DataSource + Default + 'static, const DEVELOPM
     compat: &str,
     composed: exact_painted::Composed,
 ) -> i32 {
+    run_with_executor::<D, DEVELOPMENT>(name, window, plan, compat, composed, Executor::start)
+}
+
+pub use exact_painted::executor::Executor;
+
+/// Run a baked shell with the executor selected from its data grants.
+pub fn run_with_executor<
+    D: exact_runner::DataSource + Default + 'static,
+    const DEVELOPMENT: bool,
+>(
+    name: &str,
+    window: Window,
+    plan: &[u8],
+    compat: &str,
+    composed: exact_painted::Composed,
+    start_executor: exact_painted::executor::Start,
+) -> i32 {
     #[cfg(windows)]
     {
-        on_desktop_stack(|| window::run::<D, DEVELOPMENT>(name, window, plan, compat, composed))
+        on_desktop_stack(|| {
+            window::run::<D, DEVELOPMENT>(name, window, plan, compat, composed, start_executor)
+        })
     }
     #[cfg(not(windows))]
     {
-        let _ = (name, window, plan, compat, composed);
+        let _ = (name, window, plan, compat, composed, start_executor);
         refuse()
     }
 }

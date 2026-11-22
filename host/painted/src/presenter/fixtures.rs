@@ -47,6 +47,7 @@ impl<D: DataSource> Presenter<D> {
             None,
             "/",
             region,
+            crate::executor::Executor::start,
         )?;
         p.measure();
         Ok((p, error))

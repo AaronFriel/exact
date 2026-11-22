@@ -406,7 +406,7 @@ export const classifications = [
     ["painted:host/painted/src/height_binding.rs", "Host::discover_height_handles Host::resolved_height_target"],
     ["painted:host/painted/src/holds.rs", "Host::retained_input_eligible"],
     ["painted:host/painted/src/host.rs",
-      "Host::agent Host::app_roots Host::carry Host::content_region Host::document_value Host::engine Host::executor Host::grants Host::kernel Host::log " +
+      "Host::agent Host::app_roots Host::carry Host::content_region Host::document_value Host::engine Host::executor Host::executor_with Host::grants Host::kernel Host::log " +
       "Host::now Host::preorder Host::presented Host::project_navigation Host::roots Host::router_op Host::runner Host::size_new_symbols " +
       "Host::take_commands Host::take_surface_updates Host::viewport Host::wants_frames"],
     ["painted:host/painted/src/lower.rs", "Host::layer_tracks Host::lower_eligibility Host::spinner_tracks"],
@@ -865,7 +865,7 @@ export const classifications = [
       "background_priority baked baked_canvas_surfaces baked_grants console fast_cores fast_set Handle::send Handle::stop log redirect_stdio release_library_pages release_library_pages_after " +
       "release_module_pages_too section_begin section_end start trace"],
     ["painted:host/painted/src/app.rs",
-      "boot_presenter boot_presenter_with_metal boot_scanout_presenter boot_window_presenter Config::from_bake Config::from_env Config::from_env_static Config::headless " +
+      "boot_presenter boot_presenter_with_metal boot_scanout_presenter boot_window_presenter Config::from_bake Config::from_bake_with_executor Config::from_env Config::from_env_static Config::headless " +
       "Config::initial_window_background Config::painter Config::use_updates Config::windowed Config::windowed_from_env incoming_location launch_argument launch_location " +
       "prepare_environment prepare_window_painter print_baked_receipt row_reuse_from_env run_headless show_material_look show_neutral_look"],
     ["painted:host/painted/src/canvas/codec.rs", "attach"],
@@ -1004,7 +1004,7 @@ export const classifications = [
     ["painted:host/painted/src/executor.rs",
       "Executor::again Executor::begin_pump Executor::cancel Executor::drain Executor::fd Executor::forget Executor::let_go_started Executor::listen_reader " +
       "Executor::note Executor::notify Executor::ordered_idle Executor::resume_ordered Executor::retry_reader Executor::run Executor::set_app_roots Executor::socket " +
-      "Executor::socket_reader Executor::start Executor::waker Executor::work_clock"],
+      "Executor::socket_reader Executor::local Executor::start Executor::waker Executor::work_clock"],
     ["painted:host/painted/src/package.rs", "Reply::error Reply::send"],
   ], "durable when the request names retained effectful/background work; the executor also carries these requests."),
   group("frame landings", ["one-shot"], "current window/frame submission, reader acknowledgement and diagnostic capture", "UI-owned",

@@ -166,6 +166,8 @@ fn has_explicit_locator(plan: Option<&str>, dev_plan: Option<&str>) -> bool {
 
 /// What the environment asked for.
 pub struct Config {
+    /// Native I/O services linked by the app for its data modules.
+    pub start_executor: crate::executor::Start,
     /// Viewport preferences the carrier read before boot (LLP 1039 D10).
     pub preferences: Option<exact_runner::Preferences>,
     /// Explicit consumer registration before the first layout; ordinary default
@@ -324,20 +326,34 @@ impl Config {
     /// A shell that knows its baked trust can omit the unsigned plan loaders
     /// from a production executable. Development shells also check the receipt.
     pub fn from_bake<const DEVELOPMENT: bool>(baked: &[u8], compat: &str) -> Config {
-        Self::from_env_lent::<DEVELOPMENT>(baked, None, compat)
+        Self::from_bake_with_executor::<DEVELOPMENT>(
+            baked,
+            compat,
+            crate::executor::Executor::start,
+        )
+    }
+
+    /// Load a baked shell with the data executor selected by its build.
+    pub fn from_bake_with_executor<const DEVELOPMENT: bool>(
+        baked: &[u8],
+        compat: &str,
+        start: crate::executor::Start,
+    ) -> Config {
+        Self::from_env_lent::<DEVELOPMENT>(baked, None, compat, start)
     }
 
     /// [`Config::from_env`] of a plan linked into the binary: booting it
     /// copies none of it (its data pool, a baked app's largest part, is
     /// read in place).
     pub fn from_env_static(baked: &'static [u8], compat: &str) -> Config {
-        Self::from_env_lent::<true>(baked, Some(baked), compat)
+        Self::from_env_lent::<true>(baked, Some(baked), compat, crate::executor::Executor::start)
     }
 
     fn from_env_lent<const DEVELOPMENT: bool>(
         baked: &[u8],
         lent: Option<&'static [u8]>,
         compat: &str,
+        start_executor: crate::executor::Start,
     ) -> Config {
         // Drop development overrides before reading plans, storage or launch mode (LLP 1069.007 D2).
         prepare_environment(compat);
@@ -417,6 +433,7 @@ impl Config {
             })
             .unwrap_or((420.0, 860.0));
         Config {
+            start_executor,
             preferences: None,
             content_region: None,
             // An argument, else `EXACT_LAUNCH_URL`: the Android reader's launching intent's data has no
@@ -771,6 +788,7 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
                     &config.launch,
                     config.content_region,
                     painter,
+                    config.start_executor,
                 )
             })
         });
@@ -823,6 +841,7 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
                     &config.launch,
                     config.content_region,
                     painter,
+                    config.start_executor,
                 )
             })
             .map(|v| delivered(v, updates, None))

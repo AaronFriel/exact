@@ -583,7 +583,7 @@ impl<D: DataSource> Presenter<D> {
         // begun to go out; the rest never left (LLP 1016.000 D10).
         self.executor.forget(|_| false);
         let started = self.executor.let_go_started(|_| false);
-        self.executor = self.host.executor();
+        self.executor = self.host.executor_with(self.start_executor);
         self.host.runner_mut().uploads_started(&started);
         self.replaced();
         if self.display.new_session() {

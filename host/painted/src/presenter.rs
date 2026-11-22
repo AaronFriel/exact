@@ -412,6 +412,7 @@ pub struct Presenter<D: DataSource> {
     pub painter: PainterInfo,
     /// The executor for a request that leaves the process (LLP 1016 D2).
     executor: crate::executor::Executor,
+    start_executor: crate::executor::Start,
     /// Requests held at dispatch until a commit or source wake releases them (LLP 1027.002 D3).
     parked: BTreeMap<u64, exact_runner::RequestOut>,
     refusal_turn: bool,
@@ -497,6 +498,7 @@ impl<D: DataSource> Presenter<D> {
         launch: &str,
         region: Option<crate::content_region::ContentRegionRegistration>,
         painter: PainterBoot,
+        start_executor: crate::executor::Start,
     ) -> Result<(Presenter<D>, Option<String>), HostError> {
         let assets = match selected {
             Some(set) => Assets::selected(root, set),
@@ -513,6 +515,7 @@ impl<D: DataSource> Presenter<D> {
             Some(delivery),
             launch,
             region,
+            start_executor,
         )?;
         presenter.compat = compat.to_string();
         presenter.host.web_mount = crate::app::web_mount(compat);
@@ -532,6 +535,7 @@ impl<D: DataSource> Presenter<D> {
         delivery: Option<exact_runner::Delivery>,
         launch: &str,
         region: Option<crate::content_region::ContentRegionRegistration>,
+        start_executor: crate::executor::Start,
     ) -> Result<(Presenter<D>, Option<String>), HostError> {
         let choice = painter.choice;
         if region.is_some() && choice != PainterChoice::Cpu {
@@ -612,7 +616,7 @@ impl<D: DataSource> Presenter<D> {
         // Initial selected layout and asset metadata/integrity accepted.
         // Decoded pixels and their natural dimensions arrive together later.
         // Only now may the app's queued requests reach its executor.
-        let executor = host.executor();
+        let executor = host.executor_with(start_executor);
         if let Some(note) = executor.note() {
             host.log(note.to_string());
         }
@@ -624,6 +628,7 @@ impl<D: DataSource> Presenter<D> {
             snap_rested: BTreeMap::new(),
             host,
             executor,
+            start_executor,
             parked: BTreeMap::new(),
             refusal_turn: false,
             collection: collection::State::default(),

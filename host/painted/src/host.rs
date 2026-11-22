@@ -768,7 +768,14 @@ impl<D: DataSource> Host<D> {
 
     /// An executor for the app's grants, which the source's announced topics also wake (LLP 1016.002).
     pub fn executor(&mut self) -> crate::executor::Executor {
-        let executor = crate::executor::Executor::start(&self.grants());
+        self.executor_with(crate::executor::Executor::start)
+    }
+
+    pub(crate) fn executor_with(
+        &mut self,
+        start: crate::executor::Start,
+    ) -> crate::executor::Executor {
+        let executor = start(&self.grants());
         if let Some(roots) = self.app_roots() {
             executor.set_app_roots(roots);
         }

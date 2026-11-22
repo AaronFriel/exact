@@ -107,6 +107,7 @@ fn painted_boot_requests_no_images_below_the_first_screen() {
         "/",
         None,
         PainterBoot::selected(PainterChoice::Cpu),
+        crate::executor::Executor::start,
     )
     .unwrap();
     assert!(error.is_none(), "{error:?}");

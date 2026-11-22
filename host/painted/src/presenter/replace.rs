@@ -116,6 +116,7 @@ impl<D: DataSource> Presenter<D> {
             access: _,
             // The window's, the device's and the session's.
             make_text: _,
+            start_executor: _,
             live_clock: _,
             presents: _,
             native_timers: _,
