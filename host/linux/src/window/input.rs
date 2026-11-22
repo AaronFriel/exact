@@ -30,6 +30,10 @@ enum Preedit {
 }
 
 impl Input {
+    pub(super) fn active(&self) -> bool {
+        self.focused && !self.occluded
+    }
+
     pub(super) fn handle<D: DataSource>(
         &mut self,
         presenter: &mut Presenter<D>,

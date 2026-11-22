@@ -1,10 +1,12 @@
 //! A Wayland window presents Exact's painted frames through a compositor
 //! surface. Winit waits for compositor input, keyboard repeats and presenter work.
 
+mod caret;
 mod input;
 
 use crate::event_loop::LocalPlan;
 use exact_painted::app::{boot_presenter, Config};
+use exact_painted::desktop::WindowSettings;
 use exact_painted::presenter::{wall_since, Presenter};
 use exact_painted::window_title::WindowTitle;
 use exact_runner::DataSource;
@@ -26,7 +28,7 @@ pub(super) fn run<D: DataSource + Default>(config: &mut Config, started: Instant
         config,
         started,
         live: None,
-        desktop_dark: None,
+        settings: WindowSettings::default(),
         error: None,
         closed: Rc::new(Cell::new(false)),
     };
@@ -46,7 +48,7 @@ pub(super) fn run<D: DataSource + Default>(config: &mut Config, started: Instant
 
 enum Event {
     Wake,
-    Appearance(Option<bool>),
+    Settings(WindowSettings),
 }
 
 struct App<'a, D: DataSource> {
@@ -54,7 +56,7 @@ struct App<'a, D: DataSource> {
     local_plan: Option<LocalPlan>,
     started: Instant,
     live: Option<Live<D>>,
-    desktop_dark: Option<bool>,
+    settings: WindowSettings,
     error: Option<String>,
     closed: Rc<Cell<bool>>,
 }
@@ -68,6 +70,7 @@ struct Live<D: DataSource> {
     presented: bool,
     app_name: String,
     title: WindowTitle,
+    caret: caret::Blink,
 }
 
 impl<D: DataSource + Default> App<'_, D> {
@@ -76,10 +79,10 @@ impl<D: DataSource + Default> App<'_, D> {
             .build()
             .map_err(|error| error.to_string())?;
         let proxy = events.create_proxy();
-        let appearance = exact_painted::desktop::watch_appearance(move |dark| {
-            let _ = proxy.send_event(Event::Appearance(dark));
+        let settings = exact_painted::desktop::watch_window_settings(move |settings| {
+            let _ = proxy.send_event(Event::Settings(settings));
         });
-        self.desktop_dark = appearance.as_ref().and_then(|a| a.initial);
+        self.settings = settings.as_ref().map(|s| s.initial).unwrap_or_default();
         let wake = events.create_proxy();
         exact_painted::set_event_waker(Some(Arc::new(move || {
             let _ = wake.send_event(Event::Wake);
@@ -102,7 +105,7 @@ impl<D: DataSource + Default> App<'_, D> {
             .as_str()
             .unwrap_or(&id)
             .to_owned();
-        let dark = self.desktop_dark;
+        let dark = self.settings.dark;
         let window = Rc::new(
             events
                 .create_window(
@@ -152,6 +155,7 @@ impl<D: DataSource + Default> App<'_, D> {
             presented: false,
             app_name,
             title: WindowTitle::default(),
+            caret: caret::Blink::default(),
         })
     }
 }
@@ -180,13 +184,24 @@ impl<D: DataSource + Default> ApplicationHandler<Event> for App<'_, D> {
             plan.poll(&mut live.presenter, D::default);
         }
         live.input.update_ime(&mut live.presenter, &live.window);
-        if live.presenter.dirty()
+        let caret = live.caret.update(
+            &mut live.presenter,
+            live.input.active(),
+            self.settings.cursor,
+            now,
+        );
+        if caret == caret::Next::Frame
+            || live.presenter.dirty()
             || live.presenter.wants_frames()
             || live.presenter.needs_animation_frame()
         {
             live.window.request_redraw();
         }
         let mut wait = live.presenter.turn_due_ms(now);
+        if let caret::Next::At(at) = caret {
+            let delay = (at - now).max(0.);
+            wait = Some(wait.unwrap_or(delay).min(delay));
+        }
         if self.local_plan.is_some() {
             wait = Some(wait.unwrap_or(100.0).min(100.0));
         }
@@ -196,14 +211,19 @@ impl<D: DataSource + Default> ApplicationHandler<Event> for App<'_, D> {
     }
 
     fn user_event(&mut self, _: &ActiveEventLoop, event: Event) {
-        let Event::Appearance(dark) = event else {
+        let Event::Settings(settings) = event else {
             return;
         };
-        if self.desktop_dark == dark {
-            return;
-        }
-        self.desktop_dark = dark;
+        let previous = std::mem::replace(&mut self.settings, settings);
         if let Some(live) = &mut self.live {
+            if settings.cursor != previous.cursor {
+                live.caret
+                    .restart(self.started.elapsed().as_secs_f64() * 1000.);
+            }
+            let dark = settings.dark;
+            if previous.dark == dark {
+                return;
+            }
             live.window.set_theme(dark.map(theme));
             let mut preferences = live.presenter.host().runner().viewport().preferences;
             preferences.dark =
@@ -241,6 +261,12 @@ impl<D: DataSource + Default> ApplicationHandler<Event> for App<'_, D> {
             WindowEvent::Destroyed => events.exit(),
             WindowEvent::RedrawRequested => {
                 live.input.finish_ime_events(&mut live.presenter);
+                live.caret.update(
+                    &mut live.presenter,
+                    live.input.active(),
+                    self.settings.cursor,
+                    now,
+                );
                 if let Err(error) = live.draw(self.started) {
                     self.error = Some(error);
                     events.exit();
@@ -250,6 +276,7 @@ impl<D: DataSource + Default> ApplicationHandler<Event> for App<'_, D> {
                 live.window.request_redraw();
             }
             event => {
+                live.caret.input(&event, now);
                 if let WindowEvent::Focused(focused) = &event {
                     live.presenter.update_foreground(*focused);
                 }

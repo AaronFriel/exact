@@ -678,7 +678,7 @@ impl Painter {
                         ts,
                     );
                 }
-                if focused && !self.caret_hidden {
+                if focused && self.caret_opacity != 0 {
                     if let Some([x, y, w, h]) = exact_ink::device::d3d11::fields::caret(node.id) {
                         self.backend.fill(
                             &Shape::rect((
@@ -687,7 +687,7 @@ impl Painter {
                                 w / self.scale,
                                 h / self.scale,
                             )),
-                            value_ink,
+                            self.caret_ink(value_ink),
                             ts,
                         );
                     }

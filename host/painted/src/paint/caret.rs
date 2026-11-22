@@ -40,7 +40,7 @@ impl super::Painter {
         selection: FieldSelection,
         upstream: bool,
     ) {
-        if selection.start != selection.end || self.caret_hidden {
+        if selection.start != selection.end || self.caret_opacity == 0 {
             return;
         }
         let rect = field.caret_rect(crate::text::field::Cursor {
@@ -48,7 +48,12 @@ impl super::Painter {
             upstream,
         });
         self.backend
-            .fill(&Shape::rect(rect), color, field.transform);
+            .fill(&Shape::rect(rect), self.caret_ink(color), field.transform);
+    }
+
+    pub(super) fn caret_ink(&self, mut ink: [u8; 4]) -> [u8; 4] {
+        ink[3] = ((u16::from(ink[3]) * u16::from(self.caret_opacity) + 127) / 255) as u8;
+        ink
     }
 
     /// A field's painted focus: a two-point ring in the accent

@@ -429,7 +429,7 @@ pub struct Painter {
     pub(crate) reader_highlights:
         BTreeMap<exact_kernel::NodeKey, inline_frame::selection::Highlight>,
     pub(crate) field_text: HashMap<ViewId, Rc<field::PaintedField>>,
-    pub(crate) caret_hidden: bool,
+    pub(crate) caret_opacity: u8,
     pub(crate) composition: Option<Rc<field::Composition>>,
     pub(crate) inline_text: HashMap<ViewId, Rc<inline_frame::PaintedInline>>,
     region_picture: Option<Rc<region::Picture>>,
@@ -584,7 +584,7 @@ impl Painter {
             field_content: HashMap::new(),
             field_text: HashMap::new(),
             reader_highlights: BTreeMap::new(),
-            caret_hidden: false,
+            caret_opacity: 255,
             composition: None,
             inline_text: HashMap::new(),
             rows: Default::default(),
