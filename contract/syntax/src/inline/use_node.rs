@@ -141,7 +141,11 @@ fn prepare_use(node: &Node, subst: &mut Subst<'_, Expr>, ctx: &mut Ctx<'_>) -> O
         ctx.refuse("syntax-missing-prop", c.missing_props_message(args), *span);
     }
     for p in &c.props {
-        let Some(a) = args.iter().find(|a| a.name == p.name) else {
+        let Some(a) = args
+            .iter()
+            .find(|a| a.name == p.name)
+            .filter(|a| !ctx.refused_arguments.contains(&a.span))
+        else {
             child_subst.insert(p.name.clone(), absent(*span));
             continue;
         };

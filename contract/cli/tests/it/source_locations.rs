@@ -104,6 +104,63 @@ fn conditional_action_bindings_name_the_callers_file_and_binding() {
 }
 
 #[test]
+fn a_forwarded_prop_names_its_supplier_and_keeps_the_consumers_own_error() {
+    let app = App::new("forwarded-name");
+    let root = app.write(
+        "app.contract",
+        "use Frame from \"./frame.contract\"\ncomponent App\n  view\n    Frame()\n",
+    );
+    app.write(
+        "forward.contract",
+        "use Inspector from \"./inspector.contract\"\ncomponent Forward\n  props\n    value: string\n  view\n    Inspector(title=value)\n",
+    );
+    app.write(
+        "inspector.contract",
+        "component Inspector\n  props\n    title: string\n  view\n    if title\n      text title\n",
+    );
+    for (state, caller) in [
+        (
+            "state label =",
+            Some(("syntax-expected-expression", 3, 16, 16)),
+        ),
+        ("state other = 1", Some(("type-unknown-name", 5, 19, 24))),
+        ("state label = \"ok\"", None),
+    ] {
+        app.write(
+            "frame.contract",
+            &format!("use Forward from \"./forward.contract\"\ncomponent Frame\n  {state}\n  view\n    Forward(value=label)\n"),
+        );
+        let errors = contract::compile_path_all(&root, false)
+            .err()
+            .expect("if needs a bool");
+        let mut found: Vec<_> = errors
+            .iter()
+            .map(|e| {
+                let file = e
+                    .file
+                    .as_deref()
+                    .unwrap()
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
+                (
+                    file,
+                    (e.id.as_str(), e.span.line, e.span.col, e.span.end_col),
+                )
+            })
+            .collect();
+        found.sort();
+        let mut expected: Vec<_> = caller
+            .into_iter()
+            .map(|at| ("frame.contract", at))
+            .collect();
+        expected.push(("inspector.contract", ("type-condition", 5, 8, 13)));
+        assert_eq!(found, expected, "{state}");
+    }
+}
+
+#[test]
 fn imported_type_analyze_and_lower_errors_keep_the_offending_token_range() {
     let app = App::new("passes");
     for (source, pass, token) in [

@@ -242,15 +242,20 @@ fn first((expanded, mut errors): (Expanded, Vec<SyntaxError>)) -> Result<Expande
 /// when no error is returned; a file without a component returns an empty
 /// expansion and a refusal. `mapped` keeps source provenance.
 pub fn expand_all(file: &File, mapped: bool) -> (Expanded, Vec<SyntaxError>) {
-    let (mut expanded, errors) = expand_with_sites(file, mapped, false);
+    let (mut expanded, errors) = expand_with_sites(file, mapped, false, &BTreeSet::new());
     hygiene(&mut expanded, file);
     (expanded, errors)
 }
 
 /// [`expand_all`] before [`hygiene`]: what the type pass checks, so a
 /// caller's own names are still the author's when a `let` is refused.
-pub fn expand_checked(file: &File, mapped: bool) -> (Expanded, Vec<SyntaxError>) {
-    expand_with_sites(file, mapped, false)
+/// Arguments already refused in their authored scope read as missing during expansion.
+pub fn expand_checked(
+    file: &File,
+    mapped: bool,
+    refused_arguments: &BTreeSet<crate::Span>,
+) -> (Expanded, Vec<SyntaxError>) {
+    expand_with_sites(file, mapped, false, refused_arguments)
 }
 
 /// [`expand_all`] with every typed prop's and inject's argument ascribed
@@ -259,7 +264,7 @@ pub fn expand_checked(file: &File, mapped: bool) -> (Expanded, Vec<SyntaxError>)
 /// semantics' checker to judge. The plan compiler expands without it.
 /// Its calls are renamed apart as the plan's are ([`hygiene`]).
 pub fn expand_typed(file: &File) -> (Expanded, Vec<SyntaxError>) {
-    let (mut expanded, errors) = expand_with_sites(file, false, true);
+    let (mut expanded, errors) = expand_with_sites(file, false, true, &BTreeSet::new());
     hygiene(&mut expanded, file);
     (expanded, errors)
 }
@@ -391,6 +396,7 @@ fn expand_with_sites(
     file: &File,
     _capture_sites: bool,
     typed_props: bool,
+    refused_arguments: &BTreeSet<crate::Span>,
 ) -> (Expanded, Vec<SyntaxError>) {
     // Same-component calls first, each in its own component's scope (LLP
     // 1089 D7): lifting then substitutes caller and callee alike.
@@ -496,6 +502,7 @@ fn expand_with_sites(
         instance: 0,
         capture_sites: true,
         typed_props,
+        refused_arguments,
         errors: Vec::new(),
         instances: vec![Instance {
             component: file.components[0].name.clone(),
@@ -656,6 +663,7 @@ struct Ctx<'a> {
     capture_sites: bool,
     /// Ascribe every typed prop's and inject's argument (`expand_typed`).
     typed_props: bool,
+    refused_arguments: &'a BTreeSet<crate::Span>,
     /// Every instantiation so far, the root first (LLP 1035.005 D3).
     instances: Vec<Instance>,
     /// Uses that could not be expanded, in the order met.

@@ -1357,19 +1357,25 @@ fn check_with_sites(
         });
     }
     check_children(&called, &mut types, &mut sink);
+    let mut child_uses = Sink::default();
+    let refused_arguments = uses::check_child_uses(file, &types, &mut child_uses);
     // The root is checked against its inlined view, so a handler's real call
     // site (behind a child's prop) types the action's parameters.
     // The expanded root (LLP 1017 P4c): the inlined view plus every stateful
     // child's own declarations, lifted in — what lowering will lower.
     // A use that cannot be expanded is refused and left out; the rest of the
     // root is still checked, what it lacked reading as `?`.
-    let (mut expanded, refused) = contract_syntax::expand_checked(&called, capture_sites);
+    let (mut expanded, refused) =
+        contract_syntax::expand_checked(&called, capture_sites, &refused_arguments);
     for e in refused {
         sink.push(TypeError {
             id: e.id,
             message: e.message,
             span: e.span,
         });
+    }
+    for error in child_uses.errors {
+        sink.push(error);
     }
     let independent = check_root(file, &mut types, &expanded, &mut sink);
     persist::check(file, &types, &expanded, &mut sink);
@@ -1421,17 +1427,14 @@ fn check_children(file: &File, types: &mut Types, sink: &mut Sink) {
     }
 }
 
-/// Check child uses before the expanded root; return the boundary between
-/// independent errors and errors substitution may have caused.
+/// Check the expanded root and return the boundary between independent
+/// errors and errors substitution may have caused.
 fn check_root(
     file: &File,
     types: &mut Types,
     expanded: &contract_syntax::Expanded,
     sink: &mut Sink,
 ) -> usize {
-    for (c, ct) in file.components.iter().zip(&types.components).skip(1) {
-        uses::check_uses(&c.view, &types.component_scope(c, ct), types, file, sink);
-    }
     for u in &expanded.owned_uses {
         if let Some(repeat) = u.repeat {
             sink.push(tasks::repeated_owner(file, u, repeat));
