@@ -1078,7 +1078,7 @@ impl Em<'_> {
                     continue;
                 }
                 // A trap belongs to this binding instance even before it has a DOM element.
-                let f = self.binding_value(i, "{}", &b, scope)?;
+                let f = self.binding_value(i, "{}", &b, scope, true)?;
                 let f = self.counted(i, k, f);
                 let read = format!("{e}{name}");
                 let memo = self.uses.rt("bindingMemo");
@@ -1266,7 +1266,7 @@ impl Em<'_> {
             }
             let raw = (lowers && b.kind == BindingKind::Style).then(|| self.out[at..].to_string());
             // Include dependencies added by lowering, such as a text row's shorthand.
-            if let Some(m) = crate::reads::field_mask(&self.out[at..]) {
+            if let Some(m) = self.mount_templates.field_mask(scope, &self.out[at..]) {
                 let (fm, stmt) = (self.uses.rt("fm"), self.out.split_off(at));
                 let _ = write!(self.out, "{fm}({m},()=>{{{stmt}}});");
             }
