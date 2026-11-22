@@ -1848,25 +1848,25 @@ fixture does next: `{"action": "expire-access", "profile": "spec"}`, and
 returns once the app's token request is held, and `release-token` lets it
 go), `deny-authorize`; `fixture.ts`'s `control` lists them all.
 
-The fixture app can exercise a signed-in screen with a fixed backend answer.
-`authorize` completes the nonce-bound code exchange. `reload` reopens the
-app with the session saved in this test's scratch store.
+To open a fresh test already signed in, configure the app's provider with the
+local fixture's `/p/spec` issuer. Give `signed-in` the provider's plain
+`secret.keep` name, its `clientId`, and the test person's `sub`. The fixture
+completes the code exchange before launch. The first data read, a token refresh
+and a relaunch all see the same person. Signing out clears the test's session.
 
 ```contract-test
-test "loads an authenticated screen from a saved OIDC session"
+test "opens the reader's profile"
+  signed-in "oauth.spec" {"clientId":"client-spec","sub":"reader-2","name":"Grace Hopper"}
   answer fetch "http://127.0.0.1:4400/p/spec/api/me" with 200 {"name":"Offline reader"}
-  request POST "/control" {"action":"reset"}
-  clock data
-  tap "sign-in"
-  authorize
-  clock data
-  expect text "status" == "Signed in"
-  expect text "name" == "Offline reader"
-  reload
-  clock data
   expect text "status" == "Signed in"
   expect text "name" == "Offline reader"
 ```
+
+`name` defaults to `sub`, and `email` defaults to the empty string. The
+fixture generates a bearer token. Give `token` a test value to choose the
+first bearer, for example `"token":"reader-2-test"`. The fixture refuses a
+value it already issued until reset. To exercise the sign-in button and the
+callback itself, start signed out, tap the button and use `authorize`.
 
 #### HTTPS callbacks
 
