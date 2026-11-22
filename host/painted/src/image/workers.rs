@@ -24,6 +24,7 @@ pub(super) enum Prepared {
 pub(super) struct SourceOwner {
     pub id: u64,
     generation: u64,
+    pub(super) canvas: std::sync::atomic::AtomicBool,
     name: String,
     assets: Weak<Assets>,
     prepared: Mutex<Prepared>,
@@ -238,6 +239,7 @@ impl Backend {
                     generation,
                     name: name.to_owned(),
                     assets: Arc::downgrade(assets),
+                    canvas: Default::default(),
                     prepared: Mutex::new(Prepared::Queued),
                     remote,
                     transient: Default::default(),
@@ -502,7 +504,9 @@ impl Backend {
             // This charge precedes the decoder and output allocations. On an
             // error decode_rows destroys both before the permit can retire.
             let charge = permit.allocation_charge();
-            let pixels = super::jpeg_decode::decode_pixels(input, &plan, || permit.is_cancelled())?;
+            let pixels = super::jpeg_decode::decode_pixels(input, &plan, key.variant, || {
+                permit.is_cancelled()
+            })?;
             let bitmap = Arc::new(Bitmap::from_source(
                 pixels,
                 plan.natural(),

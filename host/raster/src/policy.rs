@@ -844,6 +844,10 @@ impl RasterSession {
         drop(garbage);
         self.owner.gate.inner.wake.notify();
     }
+    /// Capacity shared by resident images and in-flight decodes.
+    pub fn budget(&self) -> u64 {
+        self.owner.account.budget()
+    }
     /// Bytes available for a new allocation at the session's current budget.
     pub fn available_bytes(&self) -> u64 {
         self.owner.account.available()

@@ -306,19 +306,19 @@ fn a_replaced_still_refreshes_image_and_canvas_handles() {
     .unwrap();
     assert!(error.is_none(), "{error:?}");
     presenter.wait_images(std::time::Duration::from_secs(30));
-    presenter.host.sync_canvases(1., true, &presenter.assets);
+    presenter.sync_canvases(true);
     let pixels = |p: &Presenter<StillCanvas>| {
+        let bitmap = p.images().bitmaps.values().next().unwrap();
+        let handle = p.host().cached_canvas_image("freeze/screen-0.png").unwrap();
+        assert_eq!(
+            bitmap.pixels().data().as_ptr(),
+            handle.data().as_ptr(),
+            "both consumers share the decoded allocation"
+        );
+        let canvases = p.host().canvas_snapshots().borrow();
         (
-            p.images().bitmaps.values().next().unwrap().pixels().data()[..4].to_vec(),
-            p.host()
-                .canvas_snapshots()
-                .borrow()
-                .values()
-                .next()
-                .unwrap()
-                .pixels
-                .data()[..4]
-                .to_vec(),
+            bitmap.pixels().data()[..4].to_vec(),
+            canvases.values().next().unwrap().pixels.data()[..4].to_vec(),
         )
     };
     assert_eq!(
@@ -341,11 +341,31 @@ fn a_replaced_still_refreshes_image_and_canvas_handles() {
         .unwrap();
     presenter.run_commands(StillCanvas::default);
     presenter.wait_images(std::time::Duration::from_secs(30));
-    presenter.host.sync_canvases(1., true, &presenter.assets);
+    presenter.sync_canvases(true);
     assert_eq!(
         pixels(&presenter),
         (vec![192, 64, 128, 255], vec![192, 64, 128, 255])
     );
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        let encoding = Encoding::new("image/jpeg", Some(0.6));
+        let answer = write(
+            &files.roots(),
+            "app:/tmp/freeze",
+            displays(96),
+            &encoding,
+            &Mutex::new(true),
+            &|_| {},
+        )
+        .unwrap();
+        let path = files.local(&answer["captures"][0]);
+        std::fs::copy(path, files.roots()[2].join("freeze/screen-0.png")).unwrap();
+        presenter.picture_changed("freeze/screen-0.png", false);
+        presenter.wait_images(std::time::Duration::from_secs(30));
+        let (image, canvas) = pixels(&presenter);
+        assert_eq!(image, canvas);
+        assert!(image[0].abs_diff(96) < 5, "{image:?}");
+    }
 }
 
 #[test]
@@ -366,7 +386,8 @@ fn a_canvas_whose_still_was_missing_draws_it_once_captured() {
     .unwrap();
     assert!(error.is_none(), "{error:?}");
     let pixel = |p: &mut Presenter<StillCanvas>| {
-        p.host.sync_canvases(1., true, &p.assets);
+        p.sync_canvases(true);
+        p.wait_images(std::time::Duration::from_secs(30));
         let canvases = p.host().canvas_snapshots().borrow();
         canvases.values().next().unwrap().pixels.data()[..4].to_vec()
     };
@@ -409,7 +430,8 @@ fn a_still_reloads_only_for_mounted_canvases_and_a_remount_draws_it() {
         k.node_by_key(k.find_by_test_id(id)[0]).unwrap().id
     };
     let pixel = |p: &mut Presenter<StillCanvas>| {
-        p.host.sync_canvases(1., true, &p.assets);
+        p.sync_canvases(true);
+        p.wait_images(std::time::Duration::from_secs(30));
         let canvases = p.host().canvas_snapshots().borrow();
         canvases[&named(p, "still")].pixels.data()[..4].to_vec()
     };
@@ -491,7 +513,8 @@ fn a_retained_pattern_keeps_its_image_across_draws() {
         assert!(error.is_none(), "{error:?}");
         for frame in 0..4 {
             presenter.host.advance(16. * frame as f64);
-            presenter.host.sync_canvases(1., true, &presenter.assets);
+            presenter.sync_canvases(true);
+            presenter.wait_images(std::time::Duration::from_secs(30));
             let canvases = presenter.host().canvas_snapshots().borrow();
             let pixel = &canvases.values().next().unwrap().pixels.data()[..4];
             assert_eq!(pixel, [192, 64, 128, 255], "{surface}, frame {frame}");

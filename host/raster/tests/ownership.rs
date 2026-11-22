@@ -1076,7 +1076,12 @@ fn a_variant_names_its_bytes_per_pixel_and_an_unknown_one_is_refused() {
     let session = gate.session();
     // 256 pixels wide: 1024 bytes a row at 4 bytes a pixel, 2048 at 8.
     let base = demand(1, 1, 1, 0);
-    for v in [variant::SRGB8, variant::OWN8, variant::REDUCED8] {
+    for v in [
+        variant::SRGB8,
+        variant::OWN8,
+        variant::REDUCED8,
+        variant::HARDWARE_SRGB8,
+    ] {
         let mut d = base;
         d.key.variant = v;
         d.view.view = u64::from(v);
@@ -1095,7 +1100,7 @@ fn a_variant_names_its_bytes_per_pixel_and_an_unknown_one_is_refused() {
         d.key.pixels.height /= 2;
         assert!(session.request(d).is_ok(), "variant {v} at 8 bytes a pixel");
     }
-    for v in [0, 6, u32::MAX] {
+    for v in [0, 7, u32::MAX] {
         let mut d = base;
         d.key.variant = v;
         d.view.view = 100 + u64::from(v % 1000);
