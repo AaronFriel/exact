@@ -1190,7 +1190,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/control.rs", "Presenter::click_control Presenter::dispatch_control_press Presenter::menu_geometry Presenter::menu_press Presenter::set_control_value Presenter::size_controls"],
     ["painted:host/painted/src/presenter/edit_menu.rs", "Presenter::make_edit_menu Presenter::menu_field"],
     ["painted:host/painted/src/presenter/events.rs",
-      "Presenter::blur_command Presenter::contextmenu Presenter::focus_command Presenter::focus_fixup Presenter::focus_refusal Presenter::key_event " +
+      "Presenter::blur_command Presenter::contextmenu Presenter::focus_and_reveal Presenter::focus_command Presenter::focus_fixup Presenter::focus_refusal Presenter::key_event " +
       "Presenter::pointer_target Presenter::take_focus_commands Presenter::unringed"],
     ["painted:host/painted/src/presenter/field_pointer.rs", "Presenter::begin_field_drag Presenter::dragged_field Presenter::field_drag_edge"],
     ["painted:host/painted/src/presenter/field_scroll.rs", "Presenter::reveal_field_cursor"],
@@ -1213,7 +1213,7 @@ export const classifications = [
       "Presenter::prepare_retained_target Presenter::retained_node Presenter::retained_picture_current Presenter::retained_press Presenter::retained_press_target " +
       "Presenter::retained_route Presenter::retire_retained_motion_picture"],
     ["painted:host/painted/src/presenter/reveal.rs",
-      "Presenter::clear_of_sticky Presenter::hold_fragment Presenter::reveal_shift Presenter::scroll_by Presenter::scroll_element_by " +
+      "Presenter::reveal_before_paint Presenter::clear_of_sticky Presenter::hold_fragment Presenter::reveal_shift Presenter::scroll_by Presenter::scroll_element_by " +
       "Presenter::open_arrived Presenter::scroll_element_into_view Presenter::scroll_into_with Presenter::scroll_page_by Presenter::scroll_to_fragment Presenter::sticky_at"],
     ["painted:host/painted/src/presenter/scrollbar.rs", "Presenter::scrollbar_pointer"],
     ["painted:host/painted/src/presenter/scrollers.rs", "Presenter::claims_at Presenter::hidden_scrollers Presenter::scroll_bounds_of Presenter::scroll_to_completion Presenter::touch_kept"],

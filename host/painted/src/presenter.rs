@@ -279,6 +279,8 @@ pub struct Presenter<D: DataSource> {
     /// when another replaces the one it measured (LLP 1079 D3).
     pub(crate) hosts: u64,
     pub(crate) focus: Option<ViewId>,
+    /// A focus command selected a node before its first presented layout.
+    pub(crate) focus_reveal: Option<exact_kernel::NodeKey>,
     /// What was typed into a menu in its last half second (`tabs.rs`).
     type_ahead: exact_kernel::TypeAhead,
     /// Last connected path from the focused node, for a removal commit.
@@ -651,6 +653,7 @@ impl<D: DataSource> Presenter<D> {
             compat: String::new(),
             hosts: 0,
             focus: None,
+            focus_reveal: None,
             type_ahead: Default::default(),
             focus_out: Vec::new(),
             autofocus_from: None,

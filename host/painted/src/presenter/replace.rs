@@ -25,6 +25,7 @@ impl<D: DataSource> Presenter<D> {
             glides,
             zooms,
             page,
+            focus_reveal,
             focus_out,
             type_ahead,
             autofocus_from,
@@ -182,6 +183,7 @@ impl<D: DataSource> Presenter<D> {
         *glides = Default::default();
         *zooms = zoom::Zooms::kept(zooms);
         *page = (0.0, 0.0);
+        *focus_reveal = None;
         focus_out.clear();
         *type_ahead = Default::default();
         *autofocus_from = None;
