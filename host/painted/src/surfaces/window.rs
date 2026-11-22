@@ -273,7 +273,16 @@ impl Startup {
         }
     }
 
+    fn allow_hardware(&mut self) {
+        if let Some(attempts) = &mut self.attempts {
+            attempts.allow_hardware();
+        }
+    }
+
     fn refused(&mut self, warp: bool, error: String) {
+        if warp {
+            self.allow_hardware();
+        }
         eprintln!(
             "exact-ink: {}: {error}",
             if warp { "WARP" } else { "hardware" }
@@ -490,6 +499,9 @@ impl DirectWindow {
         // Pixels returned here have not reached the window.
         self.presented = matches!(frame, Ok(None)) && p.last_frame_succeeded;
         self.ever_presented |= self.presented;
+        if self.presented && self.recovering {
+            self.startup.allow_hardware();
+        }
         frame
     }
 
@@ -576,7 +588,7 @@ impl DirectWindow {
             })();
             match presented {
                 Err(e) => {
-                    eprintln!("exact-ink: recovery present: {e}");
+                    self.refused(true, format!("recovery present: {e}"));
                     self.fallback = None;
                 }
                 Ok(ms) => {

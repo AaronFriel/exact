@@ -364,6 +364,21 @@ fn hiding_a_resident_window_releases_its_painter_and_preserves_its_canvas_and_ed
             assert!(!cloaked());
             assert_eq!(app.window.as_ref().unwrap().is_visible(), Some(true));
             let p = app.presenter.as_mut().unwrap();
+            if direct && p.painter.name == "cpu" {
+                assert_eq!(p.painter.api.as_deref(), Some("direct D3D11 WARP"));
+                verify(p);
+                while app.presenter.as_ref().unwrap().painter.name == "cpu" {
+                    events.pump_app_events(
+                        Some(deadline.saturating_duration_since(Instant::now())),
+                        &mut app,
+                    );
+                    assert!(
+                        !app.failed && Instant::now() < deadline,
+                        "hardware handoff missing"
+                    );
+                }
+            }
+            let p = app.presenter.as_mut().unwrap();
             assert_eq!(p.painter.name, name);
             verify(p);
         }
