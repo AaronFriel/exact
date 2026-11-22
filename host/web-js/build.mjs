@@ -874,7 +874,12 @@ if (how !== 'none' || markdownReaders) {
 // bytes a page downloads before its runtime is up.
 const preloadModules = [];
 {
-  const b = await rolldown({ input: resolve(gen, 'main.js'), ...(ts ? { tsconfig: resolve(tsStage, '__exact_tsconfig.json') } : {}), transform: { ...bundleOptions.transform, define: { ...bundleOptions.transform.define, ...versionDefines, 'globalThis.__exactRender': 'false' } },
+  // `--scoped`: one file whose page globals are the scoped-document.js shim's (host/web/scoped-mount.mjs mounts it in a shadow root).
+  const shim = resolve(gen, 'scoped-document.js'), scoped = args.includes('--scoped');
+  // Under `gen`, like the rest of the runtime: the app-module sandbox below (`scopedModule`) would turn the shim's `self` into `absent`.
+  if (scoped) cpSync(resolve(here, 'scoped-document.js'), shim);
+  const inject = scoped ? { __sw: [shim, 'sw'], document: [shim, 'document'], history: [shim, 'history'], location: [shim, 'location'] } : undefined;
+  const b = await rolldown({ input: resolve(gen, 'main.js'), ...(ts ? { tsconfig: resolve(tsStage, '__exact_tsconfig.json') } : {}), transform: { ...bundleOptions.transform, ...(inject ? { inject } : {}), define: { ...bundleOptions.transform.define, ...versionDefines, ...(scoped ? { globalThis: '__sw', window: '__sw' } : { 'globalThis.__exactRender': 'false' }) } },
     plugins: scopedPlugins(), logLevel: 'warn', onLog });
   // In a development reload build, put the TypeScript data module and every
   // helper it imports in one chunk the page really loads. Its emitted bytes,
@@ -892,9 +897,10 @@ const preloadModules = [];
   // app's mount calls most of them (the Bluesky
   // clone's release page: runtime up at 1.7–1.9 s, 0.5 s with it; ~23 MB
   // more heap). Other browsers read a comment.
-  const built = await b.write({ dir: out, format: 'esm', minify: true, comments: false, entryFileNames: 'app.js', chunkFileNames: '[name]-[hash].js',
+  const built = await b.write({ dir: out, format: 'esm', minify: true, comments: false, entryFileNames: 'app.js', chunkFileNames: '[name]-[hash].js', ...(scoped ? { codeSplitting: false } : {}),
     postBanner: (chunk) => chunk.isEntry ? '//# allFunctionsCalledOnLoad' : undefined,
     ...(devReload && ts ? { manualChunks: (id, { getModuleInfo }) => fromData(id, getModuleInfo) ? 'dev-data' : undefined } : {}) });
+  if (scoped) cpSync(resolve(root, 'host/web/scoped-mount.mjs'), resolve(out, 'scoped-mount.mjs'));
   preloadModules.push(...built.output.filter(file => file.type === 'chunk').map(file => file.fileName));
   if (devReload && ts) for (const chunk of built.output.filter(file => file.type === 'chunk' && Object.keys(file.modules).includes(pageAppTs))) {
     devLogic.push(['typescript', createHash('sha256').update(readFileSync(resolve(out, chunk.fileName))).digest('hex')]);
