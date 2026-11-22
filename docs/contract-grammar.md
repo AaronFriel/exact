@@ -483,8 +483,10 @@ commit of its own after each change, as an answer's `then` runs.
 ### Live Activities: `startActivity`, `updateActivity`, `endActivity`
 
 The three reserved mutation sources (LLP 1126.001 WP9) compile on every host.
-They run on iOS through an ActivityKit arm loaded at first use; other hosts
-refuse the send with `… is not linked into this artifact`.
+They run on iOS through an ActivityKit arm loaded at first use, and on Android,
+for an entry with an `android` mapping, as an ongoing notification (LLP 1126
+D13; reference.md "Live Activities"); other hosts refuse the send with `… is
+not linked into this artifact`.
 Declare the entry in `app.json`'s `live_activities`, its state shape and slots
 as in `apps/caltrain/activities.contract`. Each send answers a record whose only field is
 `id: string`; the compiler refuses other result shapes:
@@ -524,10 +526,14 @@ whose fields are `activities: Activity[]`, `frequentPushesEnabled: bool`,
 `linked: bool` (the host packaged its arm), `pushToStartToken:
 option<string>` and `pushToStartActivities: PushStartActivity[]`.
 An activity has `id`, `kind`, `state` (a JSON string), `activityState`
-(`pending`, `active`, `stale`, `ended`, `dismissed`) and `token: option<string>`.
+(`pending`, `active`, `stale`, `ended`, `dismissed`), `token: option<string>`
+and `promoted: bool`, true when Android posted its notification as a promoted
+Live Update (`FLAG_PROMOTED_ONGOING`; false elsewhere).
 A push-start activity has `kind`, `generation` and `shape`, all strings.
-Readers may name only the fields they need. Off iOS the lists are empty, the
-push-to-start token is absent and frequent pushes are false. A first demand
+Readers may name only the fields they need. Off iOS and Android the lists are
+empty; off iOS the push-to-start token is absent and frequent pushes are false.
+Android lists the activities its `app.json` row maps (`android`, reference.md
+"Live Activities"). A first demand
 enumerates existing activities, including after a relaunch without a send;
 later token, state and content updates re-answer the source. A token is absent
 until ActivityKit supplies it, and exists only for an entry declaring

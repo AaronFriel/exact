@@ -523,8 +523,12 @@ export const classifications = [
     "runner/src/runner/modules/bound.rs binds live module instances; runner/src/runner/kept.rs data_ready reconciles the current source/store before settlement.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_bind_extensions exact_data_ready exact_extension exact_prepare_data exact_prepare_module exact_set_app_module"],
     ["painted:host/painted/src/activation.rs", "Host::activate_data"],
+    ["painted:host/painted/src/activities.rs", "Host::activities Host::link_activities"],
+    ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_activities"],
     ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_bindExtensions"],
+    ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::activities"],
     ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::bind_extensions"],
+    ["painted:host/painted/src/presenter/activities.rs", "Presenter::activities Presenter::activity_send Presenter::link_activities"],
     ["runner:runner/src/runner/activities.rs", "Runner::activities_failed Runner::link_activities Runner::set_activities Runner::take_activities_demand"],
     ["runner:runner/src/runner/device_links.rs", "Runner::device_links Runner::set_device_links"],
     ["runner:runner/src/runner/module_seam/forward.rs", "Runner::extension_agent Runner::extensions_json"],

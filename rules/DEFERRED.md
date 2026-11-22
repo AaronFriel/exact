@@ -611,6 +611,16 @@ tool arguments, a control's tool run in the extension, Live Activity
 buttons, discoverable faces that capture or gain background activity
 authority, and the Android add-tile prompt.
 
+**Expanded (Charlie, 2026-11-20, accepting the Android mapping proposed on
+expo/exact#1057; LLP 1126 D13):** an activity
+on Android is an ongoing notification that asks to be promoted to a Live
+Update. A row's `android` object names state fields for its title, text,
+chip text, time and progress, on a declared channel; only a row with one is
+shown on Android. Consumer: the reporter's guard app, whose "Attend" stays in
+the status bar until resolved. Take: none named; the ruling stands as its own
+waiver. Still out: a custom view in it, which Android forbids; a direct link to
+the promotion setting; and hearing a dismissal before the app is next in front.
+
 **Admitted (Charlie, 2026-10-06: "this is pretty great. commit and push this
 and document that TUI is now an officially supported platform for Exact2";
 LLP 1101, 1101.000, 1101.001):** the terminal is an officially supported,

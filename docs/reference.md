@@ -1060,6 +1060,52 @@ false. Kinds are unique across both entry lists, ignoring case. Unknown keys fai
 the bake with an edit. Capability flags and labels require a new binary; state
 shapes, previews and views ride the bundle.
 
+On Android an activity is an ongoing notification that asks to be promoted to a
+[Live Update](https://developer.android.com/develop/ui/views/notifications/live-update):
+at the top of the shade and on the lock screen, with a chip in the status bar.
+Android allows no custom view there, so the placements are not drawn; a row's
+`android` object names the state fields the system's template shows, and only a
+row with one is shown (Android refuses the sends of the others):
+
+```json
+"android":{"channel":"patrol","title":"headline","text":"detail","chip":"short","when":"at","progress":"done"}
+```
+
+`title` (required) names a `string` field. `text` and `chip` name `string` or
+`option<string>` fields; `chip` is the chip's text (`setShortCriticalText`),
+which Android shows whole only under seven characters, and which takes the chip
+from the time. `when` names a `number` (or `option<number>`) field of Unix
+milliseconds, the notification's time: one at least two minutes ahead when it is
+posted, the chip counts down to ("5min"); one already past, the notification
+counts up from as a chronometer, in the chip too. `progress` names a `number` (or
+`option<number>`) field from 0 to 1, as HTML's `progress` without `max`: Android
+16's `ProgressStyle`, a plain progress bar before it. An option that is none
+shows nothing. Each send's state must have the mapped fields with those types,
+or it is refused; the rest of it stays in the app's private storage, not in the
+notification, which other apps with notification access can read. `channel` is a channel
+`host.android.notificationChannels` declares, not of importance `min`, or
+`default` when absent. The bake refuses a field the shape lacks or of another
+type, an undeclared or `min` channel, and a mapping in an app that does not grant
+`device.notifications`. A mapping adds `POST_PROMOTED_NOTIFICATIONS` (a normal
+permission) to the manifest.
+
+Starting one needs the notification permission, which the app asks for first
+(`requestNotificationPermission()`, [Notifications](#notifications)); without it, or on a
+channel the person turned off, `startActivity` is refused. The system promotes
+the notification where it supports Live Updates and the person allows them for
+the app; otherwise it stays an ordinary ongoing notification. Each activity in
+`exactActivities()` says which with `promoted: bool`, the system's
+`FLAG_PROMOTED_ONGOING` (false on iOS); `openURL("app-settings:")` opens the app's
+Settings page, where the person allows them. The activity's id is its notification's
+tag, so a relaunched process lists it again. If the person dismisses it (Android
+14 and later let them swipe away an ongoing notification the system has not
+promoted), it leaves the list when the app is next in front, and a later send to
+it is refused. A send is answered once the system shows its notification.
+An `updateActivity` with an alert alerts again, with its text as the
+accessibility ticker; a stale date is listed as `stale` once past.
+`endActivity` with `"immediate"` removes the notification; `"default"` leaves an
+ordinary, dismissable one for four hours, and Unix milliseconds until then.
+
 Declare the placements in that one component's view with `view slot="lockScreen"`,
 `view slot="compactLeading"`, `view slot="compactTrailing"`, `view slot="minimal"`
 and `view slot="expanded"`. Under `expanded`, declare four `view` children with

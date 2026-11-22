@@ -610,6 +610,7 @@ open class ExactActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus && reads()) pads.background()
+        if (hasFocus) Activities.resumed()
     }
 
     override fun onStop() {
@@ -658,6 +659,7 @@ open class ExactActivity : Activity() {
         Auth.resumed()
         requests.resumed()
         Extensions.resumed()
+        Activities.resumed()
     }
 
     override fun onPause() {

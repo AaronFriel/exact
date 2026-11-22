@@ -442,6 +442,20 @@
           "frequent": {
             "type": "boolean",
             "default": false
+          },
+          "android": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title"],
+            "description": "Android's ongoing notification for this activity, which asks to be promoted to a Live Update. Each field but channel names a field of the state shape.",
+            "properties": {
+              "channel": { "type": "string", "minLength": 1, "default": "default", "description": "A channel host.android.notificationChannels declares, or \"default\"; not one of importance \"min\"." },
+              "title": { "type": "string", "minLength": 1, "description": "A string field: the notification's title." },
+              "text": { "type": "string", "minLength": 1, "description": "A string field: the notification's text." },
+              "progress": { "type": "string", "minLength": 1, "description": "A number field, 0 to 1: the progress bar." },
+              "chip": { "type": "string", "minLength": 1, "description": "A string field: the status-bar chip's text, whole under 7 characters." },
+              "when": { "type": "string", "minLength": 1, "description": "A number field of Unix milliseconds: counted down in the chip while ahead, up once past." }
+            }
           }
         }
       }
