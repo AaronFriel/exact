@@ -110,7 +110,10 @@ export const HELP = {
          the app needs no dev server.`,
     bodyAll: `Ports    one HTTP port on 127.0.0.1 (--lan: every interface), printed with the URL. A native
          client opening <url>__dev/open starts the producers on a second, loopback-only port.
-         The server stops with its process however it ends.`,
+         The server stops with its process however it ends.
+Frames   To embed the app in a local canvas at http://127.0.0.1:7420, start the loop with
+         EXACT_TOOL_PORT=7420 bun exact.mjs web. This selects the canvas as the loop's
+         framing origin alongside the app's own origin. The default canvas port is 7740.`,
     example: 'bun exact.mjs web --port 9000      # then open http://127.0.0.1:9000/',
   },
   'web-build': {
