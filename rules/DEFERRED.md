@@ -1583,6 +1583,17 @@ reading. Nothing that isn't HTML is added by it.
   copies, through LLP 1115.001 D5's existing request channel. This unblocks
   gallery attachments. Take waived by the scoped implementation request;
   document handles and export remain unavailable on Android.
+  **Expanded (Charlie, 2026-11-18, accepting LLP 1133.019.000 for build, for
+  expo/exact#714 after his issue panels 9 and 11):** `photoChanges` in
+  `@exact/photos` gives PhotoKit changes from an app-owned checkpoint under
+  full access without a fetch hatch. Other native views use a paged
+  replacement read. `photoAssets` and `photoChanges` share a `screenshot`
+  subtype on Apple and Android. Web reports absence. The module persists no
+  data. The consumer imports a library of screenshots and updates its index
+  on later launches. Take: waived by the acceptance. Still out (LLP
+  1133.019.000 D3 and §4): a change feed from MediaStore's deletion history,
+  album changes, videos, edits to pixels as an event of their own, date
+  filters and further subtypes.
 - **Expanded (Charlie, 2026-10-25, "Waive both (Recommended)", on LLP
   1133.026 §16 question 8):** the person's health store, read
   (`healthStatus`, `requestHealthAuthorization`, `healthStatistics` and
