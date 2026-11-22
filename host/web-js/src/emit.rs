@@ -217,6 +217,11 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
     // Emitting parses the plan's CSS, and a plan decoded from a file has
     // not passed the compiler, which links every grammar.
     exact_kernel::style::link_all();
+    // @ref LLP 1013.002 §8 — placement comes to the JS target as its own piece.
+    if (plan.bindings.iter()).any(|b| b.kind == BindingKind::Prop && b.id == PropId::Portal as u16)
+    {
+        return Err("the JS target does not place `portal` yet (LLP 1013.002 §8)".into());
+    }
     // A development build makes every token a property (LLP 1121 stage 4).
     let _every = crate::modes::every_for(plan, dev_reload);
     // And every overridden role its sheet's property (stage 5).

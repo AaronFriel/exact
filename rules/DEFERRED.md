@@ -1116,6 +1116,11 @@ reading. Nothing that isn't HTML is added by it.
   stage 3. What stays no from
   exact1's webview: `top` topology, navigation policy, the controller ops, `allow`,
   author-facing `srcdoc` — each with its return trigger in LLP 1020 §5.)
+- **Admitted (Charlie, 2026-11-18, waiver; LLP 1013.002):** LLP 1013.002 admits moving
+  a live element by `portal` to keep #698's playing video and counter through a
+  card-to-detail move. It also admits pairing the replacement destinations across a route
+  change **only when both route parts cut**. Flights between mounted places and element
+  flights composed with route motion remain deferred.
 - **Expanded (Daehyeon Mun, 2026-10-19; trade):** `postMessage(text, iframeId)` sends
   ordered strings to one mounted iframe: D2r's replies and host-initiated updates (LLP
   1020 §11). Unblocks T3 Code's HTML and MCP App documents: live theme, shortcut and

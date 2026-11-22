@@ -1462,3 +1462,13 @@ fn a_drags_constant_data_is_bound_for_drag_js_to_admit() {
         );
     }
 }
+
+#[test]
+fn a_portal_is_refused_until_the_js_target_places_it() {
+    let plan = contract::compile(
+        "component App\n  view\n    column\n      box id=\"slot\"\n      box portal=\"slot\"\n        text \"Playing\"\n",
+    )
+    .unwrap();
+    let error = crate::emit::emit(&plan, false, false).err().unwrap();
+    assert!(error.contains("`portal`"), "{error}");
+}
