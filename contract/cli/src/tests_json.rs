@@ -237,10 +237,17 @@ fn step_json(step: &Step, s: &mut String) {
             }
         }
         Step::AnswerFetch {
-            prefix, response, ..
+            prefix,
+            method,
+            response,
+            ..
         } => {
             s.push_str("{\"op\":\"answer-fetch\",\"prefix\":");
             q(prefix, s);
+            if let Some(method) = method {
+                s.push_str(",\"method\":");
+                q(method, s);
+            }
             s.push_str(",\"response\":");
             s.push_str(response);
         }

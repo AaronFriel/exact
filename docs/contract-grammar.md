@@ -1105,11 +1105,13 @@ dropping it. Long polls use `fail fetch` on their individual HTTP attempts
 because their transport repeats buffered requests. Upload progress streams
 and local listeners are outside this step's scope. The web's wasm host
 opens event streams and WebSockets. It reads byte streams as buffered replies.
-`answer fetch "<prefix>" with <status> [header "<name>" "<value>"]… [<body>]`
+`answer fetch "<prefix>" [method GET] with <status> [header "<name>" "<value>"]… [<body>]`
 supplies an immediate HTTP response, with no request to the service. It may lead
 a test or the file, like `fail fetch`, so the first resource load receives it.
-A later line replaces the current answer or failure at that prefix. A test's
-leading answer or failure overrides the file's entry for the same prefix.
+An HTTP method limits the answer to those requests. A test can return the old
+value for `method GET` and the saved value for `method PUT` at the same URL.
+A later rule replaces the rule for the same prefix and method. A test's
+leading rule overrides the matching rule in the file.
 JSON bodies are sent as `application/json`; a quoted string is sent as
 `text/plain; charset=utf-8`, and an omitted body is empty. An explicit
 `content-type` header overrides that default. The status is 200 through 599,
@@ -1121,9 +1123,9 @@ refused because browsers hide them. Request validation, grants, file-body
 preparation, aborts, deadlines and response-size limits still apply. A refused fixture records no hit
 or answered journal line.
 
-Answers use the same longest-live-prefix rule as failures. `fail fetch` replaces
-an answer, and `pass fetch` clears either at that prefix; a shorter live prefix
-may then match. Long polls ignore answer entries when choosing a failure, so
+The longest matching prefix wins. At the same prefix, an explicit method wins
+over a rule that matches any method. `fail fetch` replaces the rule for any
+method. `pass fetch` clears all rules at that prefix. Long polls ignore answer entries when choosing a failure, so
 a longer answer prefix does not hide a shorter failure. Otherwise the request
 goes to the network. Each test starts with its own table; `reload` keeps the
 current answers and cleared entries. On the web, only the top-level document on

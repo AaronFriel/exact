@@ -199,6 +199,8 @@ pub enum Step {
     AnswerFetch {
         /// What a matching fetch's URL starts with.
         prefix: String,
+        /// An explicit HTTP method restricts the fixture to that method.
+        method: Option<String>,
         /// Response status, headers and text body, encoded as JSON.
         response: String,
         /// Where.

@@ -718,7 +718,7 @@ export function faultSpec(spec) {
   for (const line of lines) {
     const [prefix, ...fields] = line.split('\t'), counts = fields.slice(0, 4); if (fields[4]) fixtureResponse(JSON.parse(fields[4]));
     if (!prefix) throw new Error('fail fetch: each fault names a non-empty URL prefix');
-    if (fields.length > 6 || (fields[5] !== undefined && !/^\d+$/.test(fields[5])) || counts.some((c, i) => !(c === '-' || /^\d+$/.test(c)) && !(i === 3 && /^[01]$/.test(c)))) throw new Error(`fail fetch: an unreadable fault line: ${JSON.stringify(line)}`);
+    if (fields.length > 7 || (fields[5] !== undefined && !/^\d+$/.test(fields[5])) || counts.some((c, i) => !(c === '-' || /^\d+$/.test(c)) && !(i === 3 && /^[01]$/.test(c)))) throw new Error(`fail fetch: an unreadable fault line: ${JSON.stringify(line)}`);
     if (counts[0] === '0') throw new Error('fail fetch: `times` is a positive integer');
   }
   const out = lines.join('\n'); if (lines.some(l => l.split('\t')[5]) && new TextEncoder().encode(out).length > 65536) throw new Error('answer fetch: launch fixtures exceed 64 KiB'); parseFaults(out); return out;

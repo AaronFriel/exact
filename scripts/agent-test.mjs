@@ -427,7 +427,7 @@ export async function failureMark(s) {
   return {
     failures: Object.fromEntries(Object.entries(state.failures ?? {}).map(([name, f]) => [name, f.count])),
     failed: state.failed ?? {}, mutations: state.mutationFailures ?? {},
-    faults: Object.fromEntries((state.faults ?? []).map((f) => [f.prefix, f.failureHits ?? (!f.response || f.response.status >= 400 ? f.hits : 0)])), journal,
+    faults: Object.fromEntries((state.faults ?? []).map((f) => [f.method === undefined ? f.prefix : JSON.stringify([f.prefix, f.method]), f.failureHits ?? (!f.response || f.response.status >= 400 ? f.hits : 0)])), journal,
   };
 }
 
@@ -819,7 +819,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       else if (st.op === 'fresh') reset = st;
       else if (st.op === 'stored') stored.push([st.window ? '#window.' + st.name : st.name, st.json]);
       else if (st.op === 'fail-fetch') { early(st); facts.failFetch = [facts.failFetch, st.times == null ? st.prefix : `${st.prefix}\t${st.times}`].filter(Boolean).join('\n'); if (st.times != null) armed.set(st.prefix, st.line); }
-      else if (st.op === 'answer-fetch') facts.failFetch = [facts.failFetch, faultSpecOf([{prefix: st.prefix, hits: 0, armed: true, response: st.response}])].filter(Boolean).join('\n');
+      else if (st.op === 'answer-fetch') facts.failFetch = [facts.failFetch, faultSpecOf([{prefix: st.prefix, method: st.method, hits: 0, armed: true, response: st.response}])].filter(Boolean).join('\n');
       else if (st.op === 'size') facts.size = [st.width, st.height];
       else if (st.op === 'at') opensAt = st.value;
       else if (st.op === 'prefer') preferences.push(st);
@@ -994,7 +994,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
         armed.delete(prefix);
         let state;
         try { state = await s.state(); } catch (e) { failures.push(`${t.name}: line ${line}: fail fetch ${JSON.stringify(prefix)}: could not read whether it fired: ${e.message}`); return; }
-        const f = (state.faults ?? []).find((e) => e.prefix === prefix);
+        const f = (state.faults ?? []).find((e) => e.prefix === prefix && e.method === undefined);
         if (!f || f.hits === 0) failures.push(`${t.name}: line ${line}: fail fetch ${JSON.stringify(prefix)} times ${f?.times ?? '?'} matched no fetch`);
       };
       // Before an input while counted faults are outstanding: those that fired leave the check, so a press the app
@@ -1003,7 +1003,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       const settleFired = async () => {
         if (!armed.size) return;
         const faults = (await s.state()).faults ?? [];
-        for (const f of faults) if (f.hits > 0) armed.delete(f.prefix);
+        for (const f of faults) if (f.method === undefined && f.hits > 0) armed.delete(f.prefix);
       };
       // The last `perf` block's counts, and what had failed at launch or at the last `expect no failures` (LLP 1146 D3, D4).
       // The launch's mark is empty: a failure while the app booted is one the test did not arrange.
@@ -1032,8 +1032,8 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
           }
           case 'answer-fetch': {
             if (n < leading) break;
-            await unfired(st.prefix);
-            const r = await s.op({ op: 'prefer', faults: { answer: st.prefix, response: st.response } });
+            if (st.method === undefined) await unfired(st.prefix);
+            const r = await s.op({ op: 'prefer', faults: { answer: st.prefix, method: st.method, response: st.response } });
             if (r?.error) throw new Error(r.error);
             break;
           }

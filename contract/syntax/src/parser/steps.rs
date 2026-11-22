@@ -1103,6 +1103,13 @@ impl Parser {
             "answer" => {
                 self.expect_word("fetch")?;
                 let prefix = self.launch_str("answer fetch", "a URL prefix")?;
+                let method = if self.at_ident("method") {
+                    self.next();
+                    let (name, _) = self.ident()?;
+                    Some(name)
+                } else {
+                    None
+                };
                 self.expect_word("with")?;
                 let status = self.step_number("an HTTP status from 200 through 599")?;
                 if status.fract() != 0.0 || !(200.0..=599.0).contains(&status)
@@ -1131,7 +1138,7 @@ impl Parser {
                 if body.len() > 65536 || prefix.len() + response.len() + 20 > 65536 {
                     return self.err("syntax-expected-step", "answer fetch: encoded fixture exceeds 64 KiB");
                 }
-                Step::AnswerFetch { prefix, response, span }
+                Step::AnswerFetch { prefix, method, response, span }
             }
             // @ref LLP 1116.006 D8 — `request POST "/items" {"title": "Bread"} as grace`.
             "request" => self.request_step(span)?,
@@ -1379,11 +1386,14 @@ pub fn is_launch(step: &Step) -> bool {
 /// Whether two launch lines set the same fact: `fail fetch` lines, the same
 /// prefix; preferences, the same fact after resolving drive aliases.
 pub fn same_launch(a: &Step, b: &Step) -> bool {
-    if let (
-        Step::FailFetch { prefix: x, .. } | Step::AnswerFetch { prefix: x, .. },
-        Step::FailFetch { prefix: y, .. } | Step::AnswerFetch { prefix: y, .. },
-    ) = (a, b)
-    {
+    fn fetch_rule(step: &Step) -> Option<(&str, Option<&str>)> {
+        match step {
+            Step::FailFetch { prefix, .. } => Some((prefix, None)),
+            Step::AnswerFetch { prefix, method, .. } => Some((prefix, method.as_deref())),
+            _ => None,
+        }
+    }
+    if let (Some(x), Some(y)) = (fetch_rule(a), fetch_rule(b)) {
         return x == y;
     }
     if let (Step::AnswerSource { source: x, .. }, Step::AnswerSource { source: y, .. }) = (a, b) {

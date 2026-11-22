@@ -25,30 +25,7 @@ fn a_test_answers_a_pending_presence_prompt() {
     }
 }
 
-#[test]
-fn authored_http_responses_are_launch_facts_and_steps() {
-    let tests = contract::tests(
-        r#"answer fetch "https://api.example.com/" with 200 {"text":"Stubbed greeting"}
-test "inherited"
-  expect text "greeting" == "Stubbed greeting"
-test "overridden"
-  fail fetch "https://api.example.com/"
-  clock data
-  answer fetch "https://api.example.com/" with 503 "unavailable"
-  reload
-"#,
-    )
-    .unwrap();
-    let json: serde_json::Value = serde_json::from_str(&contract::tests_json(&tests)).unwrap();
-    assert_eq!(json[0]["steps"][0]["op"], "answer-fetch");
-    assert_eq!(json[0]["steps"][0]["response"]["status"], 200);
-    assert_eq!(json[1]["steps"][0]["op"], "fail-fetch");
-    assert_eq!(json[1]["steps"][2]["op"], "answer-fetch");
-    assert!(contract::tests(
-        "answer fetch \"x\" with 200\nfail fetch \"x\"\ntest \"t\"\n  clock data\n"
-    )
-    .is_err());
-}
+mod fetch;
 
 #[test]
 fn a_test_block_parses_to_the_eight_operations_and_expects() {

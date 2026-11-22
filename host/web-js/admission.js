@@ -99,14 +99,17 @@ export async function fetchWith(set, input, init = {}, expires = null, redirect 
   if (invalid) throw new FetchError('Refused', invalid);
   if (!asset && !admitsNetwork(set, value, 'fetch')) throw new FetchError('Refused', refusal('net.fetch'));
   // @ref LLP 1103 D1, D2 — a driver fault: the refused connection's failure, never sent.
-  const fixture = !asset && matchFault(value, true);
+  const suppliedMethod = init.method;
+  const method = suppliedMethod === undefined ? input?.method ?? 'GET' : String(suppliedMethod);
+  const fixture = !asset && matchFault(value, true, /^(get|post|put|head|delete|options)$/i.test(method) ? method.toUpperCase() : method);
   if (fixture && !fixture.response) { countFault(value, fixture); throw new FetchError('Network', faultMessage(value)); }
   if (fixture && init.exactBodyTo !== undefined) throw new FetchError('Refused', 'answer fetch does not support exactBodyTo');
   const unreached = asset ? null : reachRefusal(value, origin);
   if (unreached) throw new FetchError('Refused', `NotAllowedError: ${unreached}`);
   redirect = redirectFor(origin, redirect);
   try {
-    const rest = ownWithout(init, ['exactBodyTo', 'exactTimeout', 'exactIndependentHttp', 'exactPreload', 'exactPrefetch', 'redirect', 'signal']);
+    const rest = ownWithout(init, ['method', 'exactBodyTo', 'exactTimeout', 'exactIndependentHttp', 'exactPreload', 'exactPrefetch', 'redirect', 'signal']);
+    if (suppliedMethod !== undefined) rest.method = method;
     // A forced ask reloads unless the request stores nothing; Fetch allows only-if-cached same-origin (LLP 1162 D4).
     const cache = init.cache ?? input?.cache, sent = forced && cache !== 'no-store' ? 'reload' : cache;
     const mode = init.mode ?? (sent === 'only-if-cached' && 'same-origin');

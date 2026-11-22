@@ -51,6 +51,22 @@ test('HTTP fixtures answer both web executors without a request and survive relo
   } finally { server.stop(true); }
 });
 
+test('one URL can answer GET and PUT independently on both web executors after reload', async () => {
+  const url = 'https://goals.example.test/goal', set = normalized('net.fetch https://goals.example.test');
+  for (const [method, body] of [['GET', 'old'], ['PUT', 'saved'], [undefined, 'fallback']]) {
+    expect(faultOp({ answer: url, method, response: {status: 200, headers: {}, body} }).error).toBeUndefined();
+  }
+  const {faultSpec} = await import('../../scripts/agent-launch.mjs');
+  globalThis.__exactFaults.entries = parseFaults(faultSpec(faultSpecOf(faultsJson())));
+  for (const [method, body] of [['GET', 'old'], ['PUT', 'saved'], ['POST', 'fallback']]) {
+    expect(await (await fetchWith(set, new Request(url, {method}))).text()).toBe(body);
+    const wasm = await request({ method, url, headers: [] }, {grantSet: set, controllers: new Set()});
+    expect([wasm.status, new TextDecoder().decode(wasm.body)]).toEqual([200, body]);
+  }
+  expect(faultsJson().map(f => f.hits)).toEqual([2, 2, 2]);
+  expect(faultOp({pass: url}).faults.every(f => !f.armed)).toBe(true);
+});
+
 test('fixture response clones keep the URL used by an app to resolve relative links', async () => {
   const url = 'https://api.test/items/first', set = normalized('net.fetch https://api.test');
   faultOp({answer: url, response: {status: 200, headers: {'content-type': 'application/json'}, body: '{"next":"second"}'}});

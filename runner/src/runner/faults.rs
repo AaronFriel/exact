@@ -91,6 +91,8 @@ impl<D: DataSource> Runner<D> {
 pub struct Fault {
     /// Matches a URL that starts with it.
     pub prefix: String,
+    /// The HTTP method selected by this response fixture.
+    pub method: Option<String>,
     /// The count given at arming, if any.
     pub times: Option<u32>,
     /// What is left of it.
@@ -109,6 +111,17 @@ fn response_json(response: &Response) -> serde_json::Value {
     serde_json::json!({"status": response.status,
         "headers": response.headers.iter().cloned().collect::<std::collections::BTreeMap<_, _>>(),
         "body": String::from_utf8_lossy(&response.body)})
+}
+
+fn check_method(method: &str) -> Result<String, String> {
+    if method.is_empty()
+        || !method
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b))
+    {
+        return Err("answer fetch: method must be an HTTP token".into());
+    }
+    Ok(method.into())
 }
 
 fn parse_response(value: &serde_json::Value) -> Result<Response, String> {
@@ -162,7 +175,7 @@ fn table_spec(entries: &[Fault]) -> String {
         .iter()
         .map(|f| {
             format!(
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}{}\n",
                 f.prefix,
                 n(f.times),
                 n(f.left),
@@ -172,7 +185,11 @@ fn table_spec(entries: &[Fault]) -> String {
                     .as_ref()
                     .map(|r| response_json(r).to_string())
                     .unwrap_or_default(),
-                f.failure_hits
+                f.failure_hits,
+                f.method
+                    .as_ref()
+                    .map(|m| format!("\t{m}"))
+                    .unwrap_or_default()
             )
         })
         .collect()
@@ -191,6 +208,17 @@ fn table_fits(entries: &[Fault]) -> Result<(), String> {
 }
 
 impl Fault {
+    fn matches(&self, url: &str, method: &str, answers: bool) -> bool {
+        self.live()
+            && (answers || self.response.is_none())
+            && url.starts_with(&self.prefix)
+            && self.method.as_deref().is_none_or(|m| m == method)
+    }
+
+    fn priority(&self) -> (usize, bool) {
+        (self.prefix.len(), self.method.is_some())
+    }
+
     fn live(&self) -> bool {
         self.armed && self.left != Some(0)
     }
@@ -267,9 +295,14 @@ impl Faults {
                 } else {
                     0
                 });
-            faults.retain(|f| f.prefix != prefix);
+            let method = fields.next().map(check_method).transpose()?;
+            if fields.next().is_some() || method.is_some() && response.is_none() {
+                return Err("answer fetch: invalid method in launch fixture".into());
+            }
+            faults.retain(|f| f.prefix != prefix || f.method != method);
             faults.push(Fault {
                 prefix: prefix.to_string(),
+                method,
                 times,
                 left,
                 hits,
@@ -305,15 +338,16 @@ impl Faults {
         }
         let mut table = self.table();
         let mut next = table.clone();
-        next.retain(|f| f.prefix != prefix);
+        next.retain(|f| f.prefix != prefix || f.method.is_some());
         next.push(Fault {
             prefix: prefix.to_string(),
+            method: None,
             times,
             left: times,
             hits: 0,
             failure_hits: table
                 .iter()
-                .find(|f| f.prefix == prefix)
+                .find(|f| f.prefix == prefix && f.method.is_none())
                 .map_or(0, |f| f.failure_hits),
             armed: true,
             response: None,
@@ -325,13 +359,24 @@ impl Faults {
 
     /// Replace a prefix with an immediate response. Validation precedes mutation.
     pub fn answer(&self, prefix: &str, value: &serde_json::Value) -> Result<(), String> {
+        self.answer_method(prefix, None, value)
+    }
+
+    /// Install a response for a prefix and an optional HTTP method.
+    pub fn answer_method(
+        &self,
+        prefix: &str,
+        method: Option<&str>,
+        value: &serde_json::Value,
+    ) -> Result<(), String> {
+        let method = method.map(check_method).transpose()?;
         let response = parse_response(value)?;
         if prefix.is_empty() || prefix.contains(['\t', '\r', '\n']) {
             return Err("answer fetch needs a URL prefix without tabs or newlines".into());
         }
         let mut table = self.table();
         let mut next = table.clone();
-        next.retain(|f| f.prefix != prefix);
+        next.retain(|f| f.prefix != prefix || f.method != method);
         next.push(Fault {
             prefix: prefix.into(),
             times: None,
@@ -339,9 +384,10 @@ impl Faults {
             hits: 0,
             failure_hits: table
                 .iter()
-                .find(|f| f.prefix == prefix)
+                .find(|f| f.prefix == prefix && f.method == method)
                 .map_or(0, |f| f.failure_hits),
             armed: true,
+            method,
             response: Some(Arc::new(response)),
         });
         table_fits(&next)?;
@@ -353,8 +399,12 @@ impl Faults {
     /// it was in the table.
     pub fn pass(&self, prefix: &str) -> bool {
         let mut table = self.table();
-        let entry = table.iter_mut().find(|f| f.prefix == prefix);
-        entry.map(|f| f.armed = false).is_some()
+        let mut found = false;
+        for entry in table.iter_mut().filter(|f| f.prefix == prefix) {
+            entry.armed = false;
+            found = true;
+        }
+        found
     }
 
     /// Whether a fetch of `url` fails, counting it: the longest live prefix
@@ -364,11 +414,15 @@ impl Faults {
     }
 
     fn take_response(&self, url: &str, answers: bool) -> Option<Option<Response>> {
+        self.take_method(url, "GET", answers)
+    }
+
+    fn take_method(&self, url: &str, method: &str, answers: bool) -> Option<Option<Response>> {
         let mut table = self.table();
         let hit = table
             .iter_mut()
-            .filter(|f| f.live() && (answers || f.response.is_none()) && url.starts_with(&f.prefix))
-            .max_by_key(|f| f.prefix.len());
+            .filter(|f| f.matches(url, method, answers))
+            .max_by_key(|f| f.priority());
         match hit {
             Some(f) => {
                 f.hits += 1;
@@ -407,6 +461,10 @@ impl Faults {
             }
             out.push_str("{\"prefix\":");
             crate::json::quote(&f.prefix, &mut out);
+            if let Some(method) = &f.method {
+                out.push_str(",\"method\":");
+                crate::json::quote(method, &mut out);
+            }
             out.push_str(&format!(
                 ",\"times\":{},\"left\":{},\"hits\":{},\"armed\":{}",
                 n(f.times),
@@ -488,10 +546,8 @@ impl<D: DataSource> Runner<D> {
             .faults
             .table()
             .iter()
-            .filter(|f| {
-                f.live() && (answers || f.response.is_none()) && request.url.starts_with(&f.prefix)
-            })
-            .max_by_key(|f| f.prefix.len())
+            .filter(|f| f.matches(&request.url, &request.method, answers))
+            .max_by_key(|f| f.priority())
             .map(|f| (f.prefix.clone(), f.response.clone()))?;
         if let Some(fixture) = response {
             let (faults, request) = (self.faults.clone(), request.clone());
@@ -540,7 +596,8 @@ impl<D: DataSource> Runner<D> {
                 Outcome::Response(response)
             }))));
         }
-        self.faults.take_response(&request.url, answers)?;
+        self.faults
+            .take_method(&request.url, &request.method, answers)?;
         let message = format!("fetch failed (driver fault): {}", request.url);
         self.log(message.clone());
         Some(Dispatch::Run(Work::Now(Box::new(move || {
@@ -555,6 +612,31 @@ impl<D: DataSource> Runner<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn method_specific_answers_share_a_prefix_and_survive_reload() {
+        let f = Faults::default();
+        let url = "https://goals.example.test/goal";
+        for (method, text) in [
+            (Some("GET"), "old"),
+            (Some("PUT"), "saved"),
+            (None, "fallback"),
+        ] {
+            f.answer_method(
+                url,
+                method,
+                &serde_json::json!({"status":200,"headers":{},"body":text}),
+            )
+            .unwrap();
+        }
+        let f = Faults::parse(&f.spec()).unwrap();
+        for (method, text) in [("GET", "old"), ("PUT", "saved"), ("POST", "fallback")] {
+            let response = f.take_method(url, method, true).unwrap().unwrap();
+            assert_eq!(response.body, text.as_bytes());
+        }
+        assert!(f.pass(url));
+        assert!(f.take_method(url, "GET", true).is_none());
+    }
 
     #[test]
     fn failure_counts_survive_replacement_and_reload() {
