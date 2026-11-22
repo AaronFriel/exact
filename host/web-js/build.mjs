@@ -873,12 +873,14 @@ if (how !== 'none' || markdownReaders) {
 // 25.8 → 23.6 KB, the feed bench's 30.9 → 27.9, the grid's 19.3 → 18.1),
 // bytes a page downloads before its runtime is up.
 const preloadModules = [];
+// `--scoped`: one file whose page globals are the scoped-document.js shim's (host/web/scoped-mount.mjs mounts it in a shadow root).
+const scopedShim = resolve(gen, 'scoped-document.js'), scopedBuild = args.includes('--scoped');
+const scopedInject = scopedBuild ? { __sw: [scopedShim, 'sw'], document: [scopedShim, 'document'], history: [scopedShim, 'history'], location: [scopedShim, 'location'] } : undefined;
 {
-  // `--scoped`: one file whose page globals are the scoped-document.js shim's (host/web/scoped-mount.mjs mounts it in a shadow root).
-  const shim = resolve(gen, 'scoped-document.js'), scoped = args.includes('--scoped');
+  const shim = scopedShim, scoped = scopedBuild;
   // Under `gen`, like the rest of the runtime: the app-module sandbox below (`scopedModule`) would turn the shim's `self` into `absent`.
   if (scoped) cpSync(resolve(here, 'scoped-document.js'), shim);
-  const inject = scoped ? { __sw: [shim, 'sw'], document: [shim, 'document'], history: [shim, 'history'], location: [shim, 'location'] } : undefined;
+  const inject = scopedInject;
   const b = await rolldown({ input: resolve(gen, 'main.js'), ...(ts ? { tsconfig: resolve(tsStage, '__exact_tsconfig.json') } : {}), transform: { ...bundleOptions.transform, ...(inject ? { inject } : {}), define: { ...bundleOptions.transform.define, ...versionDefines, ...(scoped ? { globalThis: '__sw', window: '__sw' } : { 'globalThis.__exactRender': 'false' }) } },
     plugins: scopedPlugins(), logLevel: 'warn', onLog });
   // In a development reload build, put the TypeScript data module and every
@@ -1070,6 +1072,21 @@ if (files || moduleStorage || extensionFiles || pageModules || /^\s*(?:fs|sqlite
     extensionFiles && resolve(gen, 'modules.js'), (pageModules || extensionFiles) && resolve(gen, 'native.js')].filter(Boolean);
   const roots = seeds.flatMap(seed => literalModuleURLs(readFileSync(seed, 'utf8'))).map(specifier => specifier.replace(/^\.\//, ''));
   await copyLazyModules(roots);
+}
+// `--scoped`: the lazy modules beside app.js (storage, documents, pickers) see the page as the instance that loads
+// them does. Each is bundled with the shim, and every module URL keeps the loader's `?scope=`, so each mount loads
+// its own copy, bound to its own globals (scoped-document.js) and never to the page's.
+if (scopedBuild) {
+  // The minifier writes these URLs as template literals; a `${` would not be a literal URL, so it is never matched.
+  const keepScope = code => code.replace(/new\s+URL\(\s*(['"`])([^'"`:/#$][^'"`$]*)\1\s*,\s*import\.meta\.url\s*\)/g, (_, q, specifier) => `new URL(${q}${specifier}${q} + new URL(import.meta.url).search, import.meta.url)`);
+  const lazy = [], walk = dir => { for (const entry of readdirSync(dir, { withFileTypes: true })) { const path = resolve(dir, entry.name); if (entry.isDirectory()) { if (!entry.name.startsWith('.')) walk(path); } else if (/\.m?js$/.test(entry.name) && path !== resolve(out, 'app.js') && path !== resolve(out, 'scoped-mount.mjs')) lazy.push(path); } };
+  walk(out);
+  for (const file of lazy) {
+    const b = await rolldown({ input: file, transform: { ...bundleOptions.transform, inject: scopedInject, define: { ...bundleOptions.transform.define, ...versionDefines, globalThis: '__sw', window: '__sw' } }, logLevel: 'warn', onLog });
+    try { await b.write({ file, format: 'esm', minify: true, comments: false, codeSplitting: false }); }
+    finally { await b.close(); }
+  }
+  for (const file of [resolve(out, 'app.js'), ...lazy]) writeFileSync(file, keepScope(readFileSync(file, 'utf8')));
 }
 // The plan beside the pages: a render server (either renderer) reads it.
 cpSync(opt('--plan') ? resolve(opt('--plan')) : resolve(gen, 'app.plan'), resolve(out, 'app.plan'));

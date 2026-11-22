@@ -149,3 +149,22 @@ test('a mismatched mount fails closed: a scoped build never falls through to the
   expect(await p.evaluate(() => document.title)).toBe('PAGE TITLE');
   await p.close();
 });
+
+test('lazy modules a scoped build loads later (storage, documents) are bound to the instance that loads them', () => {
+  // A storage grant makes the build ship the storage and documents adapters beside app.js, loaded on first use.
+  const stage = resolve(scratch, 'lazy', 'stage'), out = resolve(scratch, 'lazy', 'out');
+  mkdirSync(stage, { recursive: true });
+  writeFileSync(resolve(stage, 'app.contract'), view('Lazy'));
+  writeFileSync(resolve(stage, 'app.json'), JSON.stringify({ name: 'lazy', short_name: 'lazy', id: 'dev.exact.lazy', app: { id: 'dev.exact.lazy', name: 'lazy' }, host: { web: {} } }));
+  writeFileSync(resolve(stage, 'package.json'), '{"name":"v","private":true,"type":"module"}');
+  writeFileSync(resolve(stage, 'app.ts'), "export const grants = 'fs.read app:/data/';\nexport const answer = () => { throw Error('no sources'); };\n");
+  const built = spawnSync(bun, ['host/web-js/build.mjs', stage, '--scoped', '--render', 'none', '--out', out], { cwd: root, encoding: 'utf8' });
+  expect(built.status, built.stderr.slice(-600)).toBe(0);
+  const app = readFileSync(resolve(out, 'app.js'), 'utf8');
+  const lazy = [...app.matchAll(/new URL\(`\.\/([\w-]+\.js)`/g)].map(m => m[1]);
+  expect(lazy.length).toBeGreaterThan(0);
+  // every module URL keeps the loader's `?scope=`, so each mount loads its own copy
+  expect(app).not.toMatch(/new\s+URL\(\s*[`'"]\.\/[\w-]+\.js[`'"]\s*,\s*import\.meta\.url\s*\)/);
+  // and each lazy module reads its page through the shim, never the page's own globals
+  for (const name of lazy) expect(readFileSync(resolve(out, name), 'utf8'), name).toContain('__exactScopes');
+});
