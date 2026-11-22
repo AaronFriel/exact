@@ -3654,7 +3654,10 @@ entry, built-in inputs only, one `@location(0) vec4f` output and at most one
 resource: a uniform struct at group 0, binding 0. Members may be `f32`, `i32`,
 `u32` or `vec2f`–`vec4f`, without aliases,
 `@align` or `@size`. `time` and `devicePixelRatio` must be `f32`; `resolution` must
-be `vec2f`. `src`, `maxFps` and `animationPlayState` are reserved surface arguments.
+be `vec2f`. `src`, `maxFps`, `animationPlayState` and `alphaMode` are reserved surface
+arguments, and the compiler refuses a literal value of the last three that the surface would
+refuse. `alphaMode` is `"opaque"` (the default) or `"premultiplied"`, whose fragment returns
+colour already multiplied by alpha.
 Other named arguments bind members, with a CSS colour accepted for a `vec4f`.
 The compiler checks literal values and compares the uniform reader's layout with
 naga. Failures report `analyze-surface-shader` at the shader declaration or canvas,

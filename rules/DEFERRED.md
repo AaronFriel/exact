@@ -726,9 +726,17 @@ person prefers reduced motion; any other rests. The compiler checks a literal
 `src` at build. It draws on the web, macOS, iOS, tvOS, Android, Linux and
 Windows. Consumer: the reporter's full-screen shader, which is a GPU crate and
 about 100 lines of wgpu today. Take: none offered; waived by Charlie. Still
-out: textures, the canvas's children as a texture, several passes, compute, a
-translucent canvas, Display P3 and HDR, matrices and arrays as uniforms, a
-built-in pointer, and inline or downloaded source (LLP 1181 §8).
+out: textures, the canvas's children as a texture, several passes, compute,
+Display P3 and HDR, matrices and arrays as uniforms, a built-in pointer, and
+inline or downloaded source (LLP 1181 §8).
+
+**Expanded (Charlie, 2026-11-22, #1240; LLP 1181 D8):** a shader canvas may
+write `alphaMode="premultiplied"`, so the page shows through the fragment's
+alpha. Consumer: the reporter's avatar, a soft glowing blob over a ground
+that changes. Take: waived by Charlie on the issue, 2026-11-22: "`alphaMode`
+with `"opaque"` and `"premultiplied"` is the name and the values WebGPU's own
+canvas configuration uses, so the opt-in fits where you put it. I'm applying
+it on main now".
 
 **Expanded (Charlie, 2026-11-17, expo/exact#724; LLP 1133.039):**
 `@exact/model-viewer`, a GPU package showing a binary glTF from the app's
