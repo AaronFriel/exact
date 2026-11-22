@@ -634,18 +634,18 @@ fn pinned_old_allocation_causes_downsize_and_real_visible_progress() {
         PathBuf::new(),
         Arc::new(move |_| Ok(Some(bytes.clone()))),
     ));
-    let reservation = images
-        .backend
-        .session
-        .reserve_allocation(20 * 1024 * 1024)
-        .unwrap();
+    let session = &images.backend.session;
+    let budget = 48 * 1024 * 1024;
+    session.set_budget(budget);
+    let pinned_bytes = 36 * 1024 * 1024;
+    let reservation = session.reserve_allocation(pinned_bytes).unwrap();
     let charge = reservation.charge();
     let pinned = Bitmap::new(
-        tiny_skia::Pixmap::new(2560, 2048).unwrap(),
-        (2560, 2048),
+        tiny_skia::Pixmap::new(3072, 3072).unwrap(),
+        (3072, 3072),
         charge,
     );
-    drop(reservation.commit(20 * 1024 * 1024).unwrap());
+    drop(reservation.commit(pinned_bytes).unwrap());
     let k = kernel(1);
     images.sync(&k, &k.roots());
     images.wait(SETTLED);
@@ -653,7 +653,7 @@ fn pinned_old_allocation_causes_downsize_and_real_visible_progress() {
     assert_eq!(image.natural(), (2048, 2048));
     assert!(image.width() < 2048);
     assert_eq!(image.as_ref().as_ref()[0], 71);
-    assert!(images.stats().peak_bytes <= SESSION_BYTES);
+    assert!(images.stats().peak_bytes <= budget);
     drop(pinned);
 }
 

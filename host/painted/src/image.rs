@@ -847,9 +847,8 @@ impl Images {
                         continue;
                     }
                     Some(RequestStatus::WaitingBudget) => {
-                        let stats = self.backend.session.stats();
                         admission_budget =
-                            SESSION_BYTES - stats.resident_bytes - stats.reserved_bytes;
+                            admission_budget.min(self.backend.session.available_bytes());
                         let smaller = plan_view(header, view, scale, admission_budget);
                         if smaller.as_ref().is_ok_and(|p| p.pixels != pixels) {
                             self.backend.cancel(request);

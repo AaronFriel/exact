@@ -844,6 +844,10 @@ impl RasterSession {
         drop(garbage);
         self.owner.gate.inner.wake.notify();
     }
+    /// Bytes available for a new allocation at the session's current budget.
+    pub fn available_bytes(&self) -> u64 {
+        self.owner.account.available()
+    }
     /// Reserve a distinct allocation before an upload/conversion CPU copy.
     pub fn reserve_allocation(&self, bytes: u64) -> Result<AllocationReservation, Refusal> {
         let state = self.owner.gate.inner.state.lock().unwrap();
