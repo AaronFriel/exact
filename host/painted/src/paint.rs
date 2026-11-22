@@ -943,7 +943,7 @@ impl Painter {
         let f = node.frame;
         let (x, y, w, h) = paint_rect(f, offset);
         let p = (walk.scene.presented)(id);
-        self.row_node(walk.scene.kernel, node.key, f, &p);
+        self.row_node(walk.scene.kernel, &node, &p);
         // @ref LLP 1077 D8 — turned or moved in space: painted apart, warped.
         if self.spatial(walk, &node, &p, (x, y, w, h), ts, offset, clip_rect) {
             self.row_refuse();
@@ -1097,14 +1097,8 @@ impl Painter {
         // its looks and a press's background (LLP 1061 D7, LLP 1121 D8).
         let mut paint = BoxPaint::capture(node, walk.scene.kernel, self.dark)
             .presented(&shown.colors)
-            .states(node, &shown, self.dark);
-        if let Some(section) = walk.scene.kernel.grouped_card_section(node.id) {
-            if let Some(owner) = walk.scene.kernel.node(section) {
-                paint = paint.section_shadow(&owner, &(walk.scene.presented)(section), self.dark);
-            }
-        } else if walk.scene.kernel.grouped_section_card(node.id).is_some() {
-            paint.shadows.clear();
-        }
+            .states(node, &shown, self.dark)
+            .grouped(walk, node.id, self.dark);
         self.split_row(node, &mut paint);
         if self.bare(node) {
             paint.background = [0; 4];
@@ -1119,6 +1113,7 @@ impl Painter {
         // and a text node still walks its runs so a visible inline paints.
         if paints_self {
             surface.bleed = self.bleed(walk.scene.kernel, node.id, &surface.outer, ts);
+            self.row_box_reach(&paint.shadows, surface.outer.rect, geometry.outer.rect, ts);
             paint.paint(self.backend.as_mut(), &surface, ts);
             self.column_rules(walk.scene.kernel, node, rect, ts);
             self.prose_marker(walk, node, rect, ts);
@@ -1154,7 +1149,8 @@ impl Painter {
                 if let Some(clip) = &clip {
                     self.backend.push_clip(clip, ts);
                 }
-                let baseline = self.text_node(walk, node, &geometry, rect, ts);
+                let clips = (clip.as_ref().map(|c| c.rect), clip_rect);
+                let baseline = self.text_node(walk, node, &geometry, rect, clips, ts);
                 walk.boxes[owner].baseline = baseline;
                 if clip.is_some() {
                     self.backend.pop_clip();
