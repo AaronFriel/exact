@@ -43,12 +43,12 @@ impl super::Painter {
         if selection.start != selection.end || self.caret_hidden {
             return;
         }
-        let rect = field.geometry.caret(crate::text::field::Cursor {
+        let rect = field.caret_rect(crate::text::field::Cursor {
             offset: selection.start,
             upstream,
         });
         self.backend
-            .fill(&Shape::rect(field.place(rect)), color, field.transform);
+            .fill(&Shape::rect(rect), color, field.transform);
     }
 
     /// A field's painted focus: a two-point ring in the accent

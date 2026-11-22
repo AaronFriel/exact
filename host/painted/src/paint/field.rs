@@ -23,6 +23,7 @@ pub(crate) struct Composition {
     pub(crate) unconverted: Vec<(u32, u32)>,
 }
 
+#[derive(Clone)]
 pub(crate) struct PaintedField {
     pub(crate) geometry: Rc<Geometry>,
     paragraph: Rc<Paragraph>,
@@ -376,9 +377,12 @@ impl PaintedField {
         Some((point.x - origin.0, point.y - origin.1))
     }
 
+    pub(super) fn caret_rect(&self, cursor: Cursor) -> Rect4 {
+        super::intersect(self.place(self.geometry.caret(cursor)), self.text_clip)
+    }
+
     pub(crate) fn caret_frame(&self, cursor: Cursor) -> Rect4 {
-        let caret = super::intersect(self.place(self.geometry.caret(cursor)), self.text_clip);
-        super::bbox(self.transform, caret)
+        super::bbox(self.transform, self.caret_rect(cursor))
     }
 
     /// `rangeFrame` (LLP 1114.007): the UTF-16 range `start..end` of the
@@ -726,12 +730,12 @@ impl Painter {
             let painted = material::FieldText::painted(&paragraph, (ox, oy), ts);
             self.row_field_text(node.id, material::Part::Value, painted);
         }
-        if let Some(shadows) = shadows {
+        if let Some(shadows) = &shadows {
             let ink = self.capture_field_ink(
                 walk.scene.kernel,
                 &paragraph,
                 &palette,
-                &shadows,
+                shadows,
                 walk.reveal,
             );
             self.paint_text_ink(
@@ -742,14 +746,13 @@ impl Painter {
                 None,
                 Some((text_clip, padding.rect)),
             );
-        } else {
-            self.backend.push_clip(&Shape::rect(text_clip), ts);
+        }
+        self.backend.push_clip(&Shape::rect(text_clip), ts);
+        if shadows.is_none() {
             let mut engine = self.text.borrow_mut();
             self.backend
                 .text(&mut engine, &paragraph, &palette, (ox, oy), ts);
-            self.backend.pop_clip();
         }
-        self.backend.push_clip(&Shape::rect(text_clip), ts);
         if let Some(composition) = &composition {
             let line = 1. / self.scale.max(1.);
             let mut underline = |start, end, dotted| {
@@ -784,6 +787,7 @@ impl Painter {
             }
             underline(start, composition.range.end, false);
         }
+        self.backend.pop_clip();
         if focused && composition.as_ref().is_none_or(|c| c.cursor) {
             let caret = computed
                 .caret_color
@@ -796,7 +800,6 @@ impl Painter {
                 walk.scene.caret_upstream,
             );
         }
-        self.backend.pop_clip();
         self.backend.pop_clip();
         if ringed {
             let accent = control::ring(node, self.dark);
