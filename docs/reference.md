@@ -5659,6 +5659,13 @@ attached, without any userinfo: `https://name:password@x.test/trip` arrives as
 from the member and an Android build its intent filters; the web's member takes the
 text members only. `apps/fieldnotes` receives text and files this way.
 
+On iOS and macOS the extension saves the share in an inbox. The app claims each share
+once and removes its inbox record when it delivers the action route. If the action needs
+sign-in or a network connection, save the pending text or URL in persistent app state
+when the route receives it. Restore it after a relaunch and clear it when the action
+succeeds or the person discards it. The extension’s checkmark means the share reached
+the inbox. The app’s submission may still be pending.
+
 `share_target.apple` holds Apple's words:
 
 - **`presentation`** is what the extension shows. `"compose"`, the default, is the
