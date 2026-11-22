@@ -246,8 +246,9 @@ impl BoxPaint {
                 gradient::paint(g, &back.outer, &clip, self.widths, backend, ts);
             }
         }
-        for band in self.inset_shadow_fills(geometry) {
-            backend.fill_border(&band, ts);
+        for s in self.shadows.iter().rev().filter(|s| s.inset()) {
+            let bands = || s.fills(&geometry.outer, self.widths);
+            backend.box_shadow(None, &geometry.outer, &bands, ts);
         }
         for part in self.borders(geometry) {
             backend.fill_border(&part, ts);

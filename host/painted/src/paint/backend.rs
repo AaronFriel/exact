@@ -205,7 +205,7 @@ pub trait Backend {
     ) -> bool {
         false
     }
-    /// One outer `box-shadow`: through [`Self::blurred_shadow`] when it can
+    /// One `box-shadow`: through [`Self::blurred_shadow`] when it can
     /// be blurred (`blurred`: its colour, sigma and shape) and the backend
     /// draws it, else as `bands`' fills.
     fn box_shadow(
@@ -220,7 +220,12 @@ pub trait Backend {
                 return;
             }
         }
-        for band in bands() {
+        self.shadow_bands(bands(), ts);
+    }
+
+    /// Composite the contours of one shadow in their shared colour.
+    fn shadow_bands(&mut self, bands: Vec<border::BorderFill>, ts: Transform) {
+        for band in bands {
             self.fill_border(&band, ts);
         }
     }
