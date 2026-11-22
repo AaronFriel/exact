@@ -217,8 +217,10 @@ component Card
 `);
     writeFileSync(resolve(app, 'app.ts'), "import type { Sources, Answer } from './app.contract.d.ts';\nexport const grants = '';\nconst sources: Sources = { caption: ([title]) => 'Live ' + title, count: () => 2 };\nexport const answer: Answer = (name, args, store, storage) => sources[name](args, store, storage);\n");
     writeFileSync(frame, 'use Card from "canvas-app/app.contract"\ncomponent App\n  view\n    Card(title="Frame")\n');
-    const built = Bun.spawnSync([process.execPath, 'host/web-js/build.mjs', app, '--frame', 'frames/card.contract',
-      '--out', out, '--check', '--dev'], { cwd: root, stdout: 'pipe', stderr: 'pipe' });
+    const check = (...args) => Bun.spawnSync([process.execPath, 'host/web-js/build.mjs', app, ...args, '--out', out, '--check'],
+      { cwd: root, stdout: 'pipe', stderr: 'pipe' });
+    const checkFrame = () => check('--frame', 'frames/card.contract', '--dev');
+    const built = checkFrame();
     expect(built.exitCode, built.stderr.toString()).toBe(0);
     const calls = readFileSync(resolve(gen, 'entry-answer.ts'), 'utf8');
     expect(calls).toContain('"caption":');
@@ -227,6 +229,30 @@ component Card
     const sources = JSON.parse(readFileSync(resolve(gen, 'dev-sources.json'))).sources;
     expect(sources).toContain(owner);
     expect(sources).toContain(frame);
+
+    // The frame may share a typed map with fixtures for sources used elsewhere in the app.
+    const fixture = resolve(app, 'frames/card.fixture.mts');
+    writeFileSync(fixture, `import type { TypeScriptSources } from '../app.contract.d.ts';
+const sample: Partial<TypeScriptSources> = { caption: ([title]) => title, count: () => 1 };
+export default sample;`);
+    const shared = checkFrame();
+    expect(shared.exitCode, shared.stderr.toString()).toBe(0);
+    // Even a fixture that omits its own type annotation is checked by the frame.
+    for (const object of ["{ caption: () => 10 }", "{ caption: ([n]: [number]) => String(n) }", "{ missing: () => 'bad' }"]) {
+      writeFileSync(fixture, `export default ${object};`);
+      const refused = checkFrame();
+      expect(refused.exitCode).toBe(1);
+      expect(refused.stderr.toString()).toMatch(/TS(2322|1360|2559)/);
+    }
+    writeFileSync(fixture, "import absent from 'missing-fixture-package'; export default absent;");
+    const release = check('--production');
+    expect(release.exitCode, release.stderr.toString()).toBe(0);
+    rmSync(fixture);
+    symlinkSync(owner, fixture, 'file');
+    const linked = checkFrame();
+    expect(linked.exitCode).toBe(1);
+    expect(linked.stderr.toString()).toContain('regular file inside the app');
+    rmSync(fixture);
 
     const compiler = webCompiler();
     const compile = (input, args) => Bun.spawnSync([compiler.cmd, ...compiler.pre, 'js', input, '-o', gen, ...args],

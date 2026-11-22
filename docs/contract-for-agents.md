@@ -132,6 +132,24 @@ its own URL. Editing a frame refreshes the pages whose compiled content
 changes. An error appears in the affected frame, which keeps its last good
 view while you edit.
 
+To supply sample data, place a TypeScript module named `card.fixture.mts`
+beside `card.contract`. Export an object keyed by the app's TypeScript
+source names. Each handler receives the same arguments as its handler in
+`app.ts`. This frame gives `frameData(title)` a fixed size.
+
+```ts
+import type { TypeScriptSources } from '../app.contract.d.ts';
+
+export default {
+  frameData: ([title]) => ({ title, width: 320, height: 200 }),
+} satisfies Partial<TypeScriptSources>;
+```
+
+The frame calls the fixture for `frameData` and the app for every other
+source. A fixture can return an empty list or throw to exercise an error
+state. Editing or removing the fixture updates its frame. The app's release
+build and other frames use their own handlers.
+
 From the Exact checkout, build the frame with
 `bun host/web-js/build.mjs /path/to/app --frame frames/card.contract --out /path/to/app/target/card`
 and serve the output directory. The app supplies the design, theme and declared

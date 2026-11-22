@@ -7,11 +7,12 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { builtSettings, sourceInputChanges } from '../../js/bake/src/__exact_env.mjs';
 import { changedContractReads, contractReadReceipt } from '../../scripts/web-build.mjs';
 import { within } from '../../scripts/paths.mjs';
 import { watchDirectoryInputs } from '../web/dev-watch.mjs';
 import { buildFileCards, buildTreeFileAsync as buildTreeFile, copyStaticTreeIfPresent, replaceBuild, sendStaticBody, webContentType } from '../web/serve.mjs';
-import { EXE, depInfoOf, frameURL, fresh, freshCompiler } from './module.mjs';
+import { EXE, depInfoOf, frameFixturePath, frameURL, fresh, freshCompiler } from './module.mjs';
 
 /** The gallery's build cache: under the app's nearest `node_modules` (which
  * package resolution reaches, and git and describe's files don't), else the
@@ -185,6 +186,7 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
   function ensure() {
     const wasActive = active;
     active = true;
+    if (frame && !wasActive) inputs.begin(frame, schedule);
     if (busy) { if (!wasActive || failed) again = true; } else if (!built || !wasActive || failed) refresh();
     quiet();
   }
@@ -328,15 +330,24 @@ function frameInputs() {
     return before;
   }
   return {
+    begin(frame, notify) { subscribe(notify, new Set([frame, frameFixturePath(frame)])); },
     read(frame, notify, stage, began, succeeded) {
       let graph;
       try { graph = JSON.parse(readFileSync(resolve(stage, '.gen/dev-sources.json'), 'utf8')); } catch { graph = {}; }
-      const paths = new Set([frame, ...(graph.sources ?? []), ...(graph.shallow ?? []).map(([dir, name]) => resolve(dir, name))].map(p => resolve(p)));
+      const contractPaths = [frame, frameFixturePath(frame), ...(graph.sources ?? []), ...(graph.shallow ?? []).map(([dir, name]) => resolve(dir, name))].map(p => resolve(p));
+      const paths = new Set(contractPaths);
+      const { sourceInputs } = builtSettings(stage);
+      // The checked capture names imported helpers, package code and type declarations.
+      // Its resolver also records missing candidates that could take precedence after an edit.
+      // Staging directories sit on the checker's lookup path and move when the build is published.
+      const staged = sourceInputs && realpathSync(stage);
+      const reads = (sourceInputs?.reads ?? []).filter(input => !within(staged, input.path));
+      for (const input of reads) paths.add(input.path);
       if (!succeeded) for (const p of owners.get(notify) ?? []) paths.add(p);
       const before = subscribe(notify, paths);
-      if (succeeded && changedContractReads(contractReadReceipt(resolve(stage, '.gen'))).length) return true;
+      if (succeeded && (changedContractReads(contractReadReceipt(resolve(stage, '.gen'))).length || sourceInputChanges({ reads }).length)) return true;
       // A newly discovered source could already have moved since the compiler read it.
-      for (const path of paths) if (!before.has(path)) {
+      for (const path of contractPaths) if (!before.has(path)) {
         const stat = statSync(path, { throwIfNoEntry: false });
         if (stat?.isFile() && stat.mtimeMs >= began) return true;
       }

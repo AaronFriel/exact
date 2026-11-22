@@ -38,7 +38,7 @@ import { namesStream } from './stream-names.mjs';
 import { bundleHostModule, localImports, stageHostGlue, writeFalse } from './glue.mjs';
 import { gateAgent } from './agent-gate.mjs';
 import { contentName, contentNames } from './content-names.mjs';
-import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, undeclaredRustData, fresh, frameURL, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp, sizeWarning, entrySizeReport } from './module.mjs';
+import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, undeclaredRustData, fresh, frameAnswer, frameFixture, frameURL, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp, sizeWarning, entrySizeReport } from './module.mjs';
 import { appDigest, developmentStore } from '../../scripts/agent-launch.mjs';
 import { settingLines } from '../../js/bake/src/__exact_env.mjs';
 import { colorSchemeMeta, interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from '../web/look.mjs';
@@ -130,9 +130,10 @@ if (rust && (process.env.EXACT_RUST_PLACEMENT ?? manifest.rust?.platforms?.web?.
 // TypeScript module the rest (ts-data.js, rust-data.js). A synthetic plan
 // over another app's sources (`--data`) asks the Rust module only.
 const ts = existsSync(resolve(appDir, 'app.ts')) && !(rust && opt('--data'));
+const fixture = frameFixture(appDir, frame);
+if (fixture && !ts) { console.error(`error: ${fixture} supplies TypeScript answers and needs the app's app.ts`); process.exit(1); }
 const appTypes = ts && (frame || (opt('--contract') && !opt('--plan') && !opt('--data') && resolve(input) !== resolve(appDir, 'app.contract')));
 const mixed = rust && ts;
-const appTs = resolve(appDir, 'app.ts');
 // The manifest's `typescript.sources` mounts (js/bake/src/lib.rs `mounts`):
 // `./<name>/…` from the app's own modules resolves into that directory in
 // every load this build makes (the module read below, the server and page
@@ -266,7 +267,7 @@ if (!checkOnly || prerequisitesOnly) {
 }
 // The checked capture of app.ts and what it imports (typecheck, below): the
 // page and its server render bundle it, never the app's own directory.
-const tsStage = resolve(realpathSync(gen), 'typescript'), pageAppTs = resolve(tsStage, 'app.ts');
+const tsStage = resolve(realpathSync(gen), 'typescript'), pageAppTs = resolve(tsStage, fixture ? '__exact_frame.ts' : 'app.ts');
 // App generation may create files imported by app.ts. A mixed app's composer
 // also owns the Rust source roster, so take its declarations from that bake.
 // A generated workspace's web crate composes the two when app.json names rust.data (LLP 1153.003 D2).
@@ -413,6 +414,7 @@ const orientationlock = existsSync(resolve(gen, 'orientationlock.flag'));
 // A dialog, an alertdialog, a menu or a popover (prompt-glue.js, alert-message.js, menu-rows.js; LLP 1047.002 D1).
 const dialogs = existsSync(resolve(gen, 'dialogs.flag'));
 async function typecheck(checking) {
+  if (fixture && existsSync(resolve(appDir, '__exact_frame.ts'))) throw new Error('__exact_frame.ts is reserved for the preview frame');
   const { configure, check, capturedSources, staticFacts, valueExports, CODE_WARNINGS } = await import(resolve(root, 'js/bake/src/typescript.mjs'));
   const libraries = resolve(dirname(fileURLToPath(import.meta.resolve(`@typescript/typescript-${process.platform}-${process.arch}/package.json`))), 'lib');
   const declarations = readFileSync(resolve(gen, 'app.contract.d.ts'), 'utf8');
@@ -434,10 +436,12 @@ async function typecheck(checking) {
   const output = realpathSync(out);
   const mounts = Object.entries(manifest.typescript?.sources ?? {}).map(([name, path]) => [name, mountDir(name, path)]);
   const capturedSettings = new Map();
-  for (const [file, path] of appSourceFiles(appDir, { manifest, mounts, output })) {
+  const files = appSourceFiles(appDir, { manifest, mounts, output });
+  if (fixture) files.set(fixture, resolve(realpathSync(appDir), fixture));
+  for (const [file, path] of files) {
     mkdirSync(dirname(resolve(stage, file)), { recursive: true });
     cpSync(path, resolve(stage, file));
-    if (/\.(ts|[cm]?js)$/.test(file) && !file.endsWith('.d.ts')) capturedSettings.set(file, readFileSync(path, 'utf8'));
+    if ((file === fixture || /\.(ts|[cm]?js)$/.test(file)) && !file.endsWith('.d.ts')) capturedSettings.set(file, readFileSync(path, 'utf8'));
   }
   writeFileSync(resolve(stage, 'app.contract.d.ts'), declarations);
   // The bake's optional data exports (js/bake/src/lib.rs `OPTIONAL_ENTRY`).
@@ -447,14 +451,16 @@ async function typecheck(checking) {
   // the id is the variant's, and an appId naming the base app is read as the variant's (LLP 1030.008 D2).
   const { app: { id }, variant } = (await import('../../scripts/app.mjs')).readManifest(appDir, app), base = variant?.base ?? id;
   const answerType = appTypes ? readFileSync(resolve(gen, 'entry-answer.ts'), 'utf8') : "import type { TypeScriptAnswer } from './app.contract.d.ts';";
-  writeFileSync(resolve(stage, '__exact_entry.ts'), `import * as app from './app';\n${answerType}\nconst named = (app as unknown as { appId?: string }).appId;\nexport const appId: string = named === undefined || named === ${JSON.stringify(base)} ? ${JSON.stringify(id)} : named;\nexport const grants: string = app.grants;\nexport const answer: TypeScriptAnswer = app.answer;\n` + optional
+  if (fixture) writeFileSync(pageAppTs, frameAnswer(fixture, answerType));
+  const provider = fixture ? './__exact_frame' : './app';
+  writeFileSync(resolve(stage, '__exact_entry.ts'), `import * as app from '${provider}';\n${answerType}\nconst named = (app as unknown as { appId?: string }).appId;\nexport const appId: string = named === undefined || named === ${JSON.stringify(base)} ? ${JSON.stringify(id)} : named;\nexport const grants: string = app.grants;\nexport const answer: TypeScriptAnswer = app.answer;\n` + optional
     + "export const draw: ((surface: string, args: any, ctx: any, frame: any) => unknown) | undefined = (app as { draw?: unknown }).draw as Optional<'draw'>;\nexport const surfaces = (app as { surfaces?: unknown }).surfaces as Optional<'surfaces'>;\n");
-  writeFileSync(resolve(stage, '__exact_paths.json'), JSON.stringify({ app: realpathSync(appDir), mounts, target: 'web' }));
+  writeFileSync(resolve(stage, '__exact_paths.json'), JSON.stringify({ app: realpathSync(appDir), mounts, target: 'web', privateInputs: !!appTypes }));
   writeFileSync(resolve(stage,'__exact_backend_source.json'), JSON.stringify(Object.fromEntries(capturedSettings)));
   const real = realpathSync(stage);
   if (real !== tsStage) throw new Error(`the TypeScript stage moved: ${real}`);
   const { rolldown } = await import('rolldown');
-  const metadata = await configure(real, false, parseSync, true, rolldown);
+  const metadata = await configure(real, false, parseSync, true, rolldown, basename(pageAppTs));
   const backendWarning=JSON.parse(readFileSync(resolve(real,'__exact_backend.json'),'utf8')).warning;
   if (backendWarning) console.warn(`warning: ${backendWarning}`);
   // The packages whose declarations the check reads (typescript.mjs
@@ -825,7 +831,7 @@ const storageGrants = tsGrantSet.entries.some(([, , grant]) => ['fs-read', 'fs-w
 const storageFlag = 'const STORAGE_GRANTED = true;';
 const tsData = readFileSync(resolve(here, 'ts-data.js'), 'utf8');
 for (const line of [uploadsImport, storageFlag, streamImport]) if (!tsData.includes(line)) throw new Error(`host/web-js/ts-data.js: build.mjs replaces a line it no longer has: ${line}`);
-if (ts) writeFileSync(resolve(gen, 'ts-data.js'), (seamLazy ? "import './held-hooks.js';\n" : '') + tsData.replace("'__APP_TS__'", JSON.stringify(pageAppTs))
+if (ts) writeFileSync(resolve(gen, 'ts-data.js'), (seamLazy ? "import './held-hooks.js';\n" : '') + tsData.replace("'__APP_TS__'", () => JSON.stringify(pageAppTs))
   .replace(uploadsImport, streams ? uploadsImport : "import { data as runtime } from './rt.js'; const ledger = runtime.uploads, requestKey = () => undefined;")
   .replace(streamImport, streams ? streamImport : 'Promise.reject(new Error("this page was built without the stream reader"))')
   .replace(storageFlag, production && !storageGrants ? 'const STORAGE_GRANTED = false;' : storageFlag)

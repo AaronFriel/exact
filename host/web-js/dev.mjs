@@ -752,11 +752,13 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // name with `.tmp` (and a hex or numeric suffix, a pid or a hash), `.swp`,
   // `.swx`, `~`, JetBrains' or Emacs's marks; anchored, so no other file
   // named after it (`app.forma.tmp.png`) is one.
-  const TEMPORARY = /^(?:\.?(.+\.(?:forma|contract))(?:\.tmp(?:[.-][0-9a-f]+)?|\.sw[px]|~|___jb_(?:tmp|old)___)|#(.+\.(?:forma|contract))#|\.#(.+\.(?:forma|contract)))$/;
+  const TEMPORARY = /^(?:\.?(.+\.(?:forma|contract|fixture\.mts))(?:\.tmp(?:[.-][0-9a-f]+)?|\.sw[px]|~|___jb_(?:tmp|old)___)|#(.+\.(?:forma|contract|fixture\.mts))#|\.#(.+\.(?:forma|contract|fixture\.mts)))$/;
   const temporaryOfSource = (path) => {
     const m = TEMPORARY.exec(basename(path));
     const source = m && (m[1] ?? m[2] ?? m[3]);
-    return !!source && (source.endsWith('.forma') || within(resolve(app.dir, 'frames'), path)) && existsSync(resolve(dirname(path), source));
+    if (!source) return false;
+    if (source.endsWith('.fixture.mts')) return within(resolve(app.dir, 'frames'), path);
+    return (source.endsWith('.forma') || within(resolve(app.dir, 'frames'), path)) && existsSync(resolve(dirname(path), source));
   };
   const outputIsInput = (name) => {
     const path = resolve(app.dir, name);
@@ -796,7 +798,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     // file is newer than nothing, and its target's time says nothing of it.
     if (fresh && name && !backendMoved && !movedSince(path, since)) return;
     // Frame Contract files have their own dependency watches. An app may also import one.
-    if (base === app.dir && (name === 'frames' || (name?.startsWith('frames/') && path.endsWith('.contract'))) && !compilerInput(path)) return;
+    if (base === app.dir && (name === 'frames' || (path.startsWith(resolve(app.dir, 'frames') + sep) && (path.endsWith('.contract') || path.endsWith('.fixture.mts')))) && !compilerInput(path)) return;
     if (!timer) saved = Date.now();
     edited.add(path);
     // A resident start that failed is tried again at the next request after

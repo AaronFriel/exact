@@ -255,6 +255,11 @@ test('each frame URL reloads its own document and recovers from its own errors',
   const dir = mkdtempSync(join(tmpdir(), 'exact-frame-pages-'));
   mkdirSync(join(dir, 'frames'));
   writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Canvas', app: { name: 'Canvas', id: 'test.frame-pages' } }));
+  const samples = join(dir, 'node_modules/preview-data');
+  mkdirSync(samples, { recursive: true });
+  writeFileSync(join(samples, 'package.json'), JSON.stringify({ name: 'preview-data', version: '1.0.0', type: 'module', main: 'index.js', types: 'index.d.ts' }));
+  writeFileSync(join(samples, 'index.d.ts'), 'export const prefix: string;');
+  writeFileSync(join(samples, 'index.js'), 'export const prefix = "Sample ";');
   const app = `routes nav
   home "/"
 component App
@@ -263,12 +268,16 @@ component App
 component Card
   props
     title: string
+  resource label = caption(title) as shape string
+  resource detail = detail() as shape string
   state count = 0
   action add
     count = count + 1
   view
     column
       text title
+      text label
+      text detail
       button press=add
         text count.toString()
 `;
@@ -279,6 +288,11 @@ component Frame
 `;
   const put = (name, content) => writeFileSync(join(dir, 'frames', name + '.contract'), content);
   writeFileSync(join(dir, 'app.contract'), app);
+  writeFileSync(join(dir, 'app.ts'), `import type { Answer, Sources } from './app.contract.d.ts';
+export const grants = '';
+const sources: Sources = { caption: ([title]) => 'Live ' + title, detail: () => 'Live detail' };
+export const answer: Answer = (name, args, store, storage) => sources[name](args, store, storage);
+`);
   put('card', source('Card A'));
   put('other', source('Card B'));
   let loop, browser;
@@ -303,6 +317,28 @@ component Frame
     expect(await full.evaluate(() => window.appDocument)).toBe('kept');
     expect(await count.textContent()).toBe('1');
 
+    const fixture = join(dir, 'frames/card.fixture.mts');
+    const sample = `import type { TypeScriptSources } from '../app.contract.d.ts';
+import { prefix } from 'preview-data';
+export default { caption: ([title]) => prefix + title } satisfies Partial<TypeScriptSources>;`;
+    const inputs = join(dir, '.exact/typescript-inputs.json');
+    const originalInputs = readFileSync(inputs, 'utf8');
+    writeFileSync(fixture, sample);
+    await a.getByText('Sample Card A edited', { exact: true }).waitFor({ timeout: 60_000 });
+    await a.getByText('Live detail', { exact: true }).waitFor();
+    expect(await b.getByText('Live Card B', { exact: true }).count()).toBe(1);
+    writeFileSync(join(samples, 'index.js'), 'export const prefix = "Edited ";');
+    await a.getByText('Edited Card A edited', { exact: true }).waitFor({ timeout: 60_000 });
+    writeFileSync(fixture, sample.replace('prefix + title', '42'));
+    const fixtureError = a.locator('pre').filter({ hasText: 'card.fixture.mts' });
+    await fixtureError.waitFor({ timeout: 60_000 });
+    expect(await fixtureError.textContent()).toContain('number');
+    expect(await b.evaluate(() => window.frameDocument)).toBe('kept');
+    expect(await full.evaluate(() => window.appDocument)).toBe('kept');
+    rmSync(fixture);
+    await a.getByText('Live Card A edited', { exact: true }).waitFor({ timeout: 60_000 });
+    expect(readFileSync(inputs, 'utf8')).toBe(originalInputs);
+
     put('other', source('Card B').replace('"Card B"', 'unknownTitle'));
     const error = b.locator('pre').filter({ hasText: 'unknownTitle' });
     await error.waitFor({ timeout: 60_000 });
@@ -316,6 +352,8 @@ component Frame
     writeFileSync(join(dir, 'app.contract'), app.replace('      text title', '      text "Shared edit"\n      text title'));
     await Promise.all([a, b, full].map(page => page.getByText('Shared edit', { exact: true }).waitFor({ timeout: 60_000 })));
     expect((await fetch(loop.base + '/__dev/frames/absent/')).status).toBe(404);
+  } catch (error) {
+    throw new Error(`${error.message}\n${loop?.said() ?? ''}`, { cause: error });
   } finally {
     await browser?.close();
     await loop?.stop();
