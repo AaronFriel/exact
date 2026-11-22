@@ -158,3 +158,34 @@ component App
     if (dir) rmSync(dir, { recursive: true, force: true });
   }
 }, 300_000);
+
+test('an alternate web entry checks its requests against the app’s TypeScript dispatcher', () => {
+  const root = resolve(import.meta.dir, '../..');
+  const dir = mkdtempSync(resolve(root, 'target/web-entry-sources-'));
+  const entry = resolve(dir, 'frame.contract');
+  const editor = resolve(dir, 'app.contract.d.ts');
+  try {
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'Frames', app: { name: 'Frames', id: 'test.frame-sources' } }));
+    writeFileSync(resolve(dir, 'app.contract'), 'component App\n  resource title = caption(1) as shape string\n  resource count = count() as shape number\n  view\n    text title\n');
+    writeFileSync(resolve(dir, 'app.ts'), "import type { Answer, Sources } from './app.contract.d.ts';\nexport const grants = '';\nconst sources: Sources = { caption: ([n]) => String(n), count: () => 2 };\nexport const answer: Answer = (name, args, store, storage) => sources[name](args, store, storage);\n");
+    const check = (ask, result) => {
+      writeFileSync(entry, `component Frame\n  resource title = ${ask} as shape ${result}\n  view\n    text "Frame"\n`);
+      return Bun.spawnSync([process.execPath, 'host/web-js/build.mjs', dir, '--contract', entry, '--out', resolve(dir, 'target/frame'), '--check'], {
+        cwd: root, env: { ...process.env, EXACT_WEB_TYPES: '' }, stdout: 'pipe', stderr: 'pipe',
+      });
+    };
+    writeFileSync(editor, 'stale editor declarations\n');
+    const passed = check('caption(7)', 'string');
+    expect(passed.exitCode, passed.stderr.toString()).toBe(0);
+    expect(readFileSync(editor, 'utf8')).toBe('stale editor declarations\n');
+    const declarations = readFileSync(resolve(dir, 'target/frame/.gen/app.contract.d.ts'), 'utf8');
+    expect(declarations).toContain('"count": { args: []');
+    expect(declarations).toContain('"caption": { args: [');
+    for (const [ask, result] of [['caption("seven")', 'string'], ['caption(7)', 'number'], ['missing()', 'string']]) {
+      const failed = check(ask, result);
+      expect(failed.exitCode, failed.stderr.toString()).toBe(1);
+      expect(failed.stderr.toString()).toContain('TS2322');
+      expect(readFileSync(editor, 'utf8')).toBe('stale editor declarations\n');
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 60_000);

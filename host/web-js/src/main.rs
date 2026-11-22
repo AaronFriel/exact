@@ -90,7 +90,7 @@ impl std::ops::Deref for TestDir {
     }
 }
 
-const USAGE: &str = "usage: exact-web-js js <app.contract | app.plan> -o <dir> [--dump] [--sites] [--dev-reload] [--sizes] [--app <dir>]\n       exact-web-js normalize-grants <file>\n       exact-web-js design <app.contract> <design text file, or - for stdin>\n       exact-web-js design-serve <app.contract>\n       exact-web-js inspect-table <app.plan> <out.json>";
+const USAGE: &str = "usage: exact-web-js js <app.contract | app.plan> -o <dir> [--dump] [--sites] [--dev-reload] [--sizes] [--app <dir>] [--app-types]\n       exact-web-js normalize-grants <file>\n       exact-web-js design <app.contract> <design text file, or - for stdin>\n       exact-web-js design-serve <app.contract>\n       exact-web-js inspect-table <app.plan> <out.json>";
 
 /// `inspect-table <app.plan> <out.json>` (LLP 1122 T2b, the JS target): the
 /// plan's inspect table (inspect.rs), made when the dev loop is first asked
@@ -259,6 +259,52 @@ fn patched(plan: &exact_plan::Plan, values: &[(String, Vec<String>)]) -> Option<
     Some(plan)
 }
 
+/// A selected entry calls the app's data module with its own source signatures.
+/// The module is authored against every source in the app, including widget refreshes.
+fn write_declarations(
+    dir: &std::path::Path,
+    input: &str,
+    app: Option<&str>,
+    plan: &exact_plan::Plan,
+    app_types: bool,
+) -> Result<(), String> {
+    use std::path::{Path, PathBuf};
+    let app = app.map(Path::new);
+    let contract_path = app
+        .map(|dir| dir.join("app.contract"))
+        .or_else(|| (!input.ends_with(".plan")).then(|| PathBuf::from(input)));
+    let exports = contract_path.as_deref().and_then(contract::design_exports);
+    let owner;
+    let data = if app_types {
+        let path = app
+            .ok_or("--app-types requires --app <dir>")?
+            .join("app.contract");
+        owner = contract::compile_path_all_unchecked(&path, false)
+            .map_err(|errors| {
+                errors
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })?
+            .0;
+        std::fs::write(
+            dir.join("entry-answer.ts"),
+            contract::typescript_entry_answer(plan)?,
+        )
+        .map_err(|e| e.to_string())?;
+        &owner
+    } else {
+        plan
+    };
+    let declared = match app {
+        Some(app) => contract::snapshot::source_plan(&contract::snapshot::entries(app)?, data)?,
+        None => data.clone(),
+    };
+    let declarations = contract::typescript_exporting(&declared, exports.as_deref(), &[])?;
+    std::fs::write(dir.join("app.contract.d.ts"), declarations).map_err(|e| e.to_string())
+}
+
 fn main() -> ExitCode {
     if let Err(e) = contract::root::find_for_executable() {
         eprintln!("exact-web-js: {e}");
@@ -305,6 +351,7 @@ fn main() -> ExitCode {
         }
     }
     let sites = all.iter().any(|a| a == "--sites");
+    let app_types = all.iter().any(|a| a == "--app-types");
     let sizes = all.iter().any(|a| a == "--sizes");
     let dev_reload = all.iter().any(|a| a == "--dev-reload");
     // `--app <dir>`: the app a baked plan is of, whose design's `exports`
@@ -319,7 +366,11 @@ fn main() -> ExitCode {
         .filter(|a| {
             let dropped = skip || a == "--app";
             skip = a == "--app";
-            !dropped && a != "--sites" && a != "--dev-reload" && a != "--sizes"
+            !dropped
+                && a != "--sites"
+                && a != "--dev-reload"
+                && a != "--sizes"
+                && a != "--app-types"
         })
         .collect();
     let (input, out, dump) = match args.as_slice() {
@@ -524,30 +575,7 @@ fn main() -> ExitCode {
                 eprintln!("app.bind.plan: {e}");
                 return ExitCode::from(1);
             }
-            // What `app.ts` is type-checked against, as the native bake
-            // checks it (host/web-js/build.mjs; calendar F9).
-            let contract_path = match (&app, input.ends_with(".plan")) {
-                (Some(app), _) => Some(std::path::Path::new(app).join("app.contract")),
-                (None, false) => Some(std::path::PathBuf::from(input)),
-                (None, true) => None,
-            };
-            let exports = contract_path.and_then(|p| contract::design_exports(&p));
-            // With the widget entries' refresh sources (LLP 1126 D2): the web
-            // draws no widget, but app.ts is one module for every host, and
-            // its `Sources` names each refresh.
-            let declared = match &app {
-                Some(app) => contract::snapshot::entries(std::path::Path::new(app))
-                    .and_then(|entries| contract::snapshot::source_plan(&entries, &plan)),
-                None => Ok(plan.clone()),
-            };
-            if let Err(e) = declared
-                .and_then(|declared| {
-                    contract::typescript_exporting(&declared, exports.as_deref(), &[])
-                })
-                .and_then(|d| {
-                    std::fs::write(dir.join("app.contract.d.ts"), d).map_err(|e| e.to_string())
-                })
-            {
+            if let Err(e) = write_declarations(dir, input, app.as_deref(), &plan, app_types) {
                 eprintln!("app.contract.d.ts: {e}");
                 return ExitCode::from(1);
             }
