@@ -97,6 +97,36 @@ component App
   });
 }, 60000);
 
+test('two regions share their condition and update the right keyed row', async () => {
+  await pageFor(`shape Item
+  id: string
+  detail: string
+fn shows(item: Item): bool = item.detail == "expanded" ? item.id != "archived" : false
+component App
+  state items = [Item(id="one", detail="compact"), Item(id="two", detail="expanded")]
+  action change
+    items = [Item(id="two", detail="compact"), Item(id="one", detail="expanded")]
+  view
+    column
+      button "Change" press=change testId="change"
+      for item in items key=item.id
+        column testId=item.id
+          if shows(item)
+            text "Title"
+          if shows(item)
+            link href="/details"
+              text "Details"
+`, async (page, js) => {
+    expect(js.split('"archived"')).toHaveLength(2);
+    const content = id => page.getByTestId(id).textContent();
+    expect(await content('one')).toBe('');
+    expect(await content('two')).toBe('TitleDetails');
+    await page.getByTestId('change').click();
+    expect(await content('one')).toBe('TitleDetails');
+    expect(await content('two')).toBe('');
+  });
+}, 60000);
+
 test('a symbol uses its current colour through disabled state changes', async () => {
   await pageFor(`component App
   state off = false

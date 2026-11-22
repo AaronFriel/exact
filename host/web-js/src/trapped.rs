@@ -44,12 +44,11 @@ impl Em<'_> {
         in_mount: bool,
     ) -> Result<String, String> {
         let before = self.uses.metered;
-        let mut f = self.f(b.expr, scope)?;
-        if in_mount && !self.site_attrs && !self.dev_reload && f.starts_with("()=>{") {
-            // Each evaluation reads the caller's bindings and starts its own budget.
-            let call = self.mount_templates.expression(f["()=>".len()..].into());
-            f = format!("()=>{call}");
-        }
+        let f = if in_mount {
+            self.mount_function(b.expr, scope)?
+        } else {
+            self.f(b.expr, scope)?
+        };
         let metered = self.uses.metered != before;
         if !metered {
             return Ok(f);
