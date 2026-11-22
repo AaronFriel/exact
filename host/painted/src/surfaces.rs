@@ -265,8 +265,10 @@ impl Abi {
         unsafe { std::mem::transmute_copy::<usize, T>(&address) }
     }
     fn lifecycle(&self, id: u32, code: u32) {
-        if self.rendered {
-            // SAFETY: validated rendered-module ABI; id belongs to this module.
+        // Android loads its device in `android::load`, without `rendered`; its
+        // canvases' game audio pauses and resumes on this call.
+        if self.rendered || self.device_loaded {
+            // SAFETY: a device module exports gpu_lifecycle; id belongs to this module.
             unsafe { self.symbol::<unsafe extern "C" fn(u32, u32)>(b"gpu_lifecycle")(id, code) };
         }
     }
@@ -546,7 +548,7 @@ pub(crate) struct Surfaces {
     posts: BTreeMap<String, Vec<Value>>,
     // Independent lifecycle causes; also applied before a newly mounted surface
     // can bind or render, including replacement while the window is suspended.
-    hidden: bool,
+    pub(crate) hidden: bool,
     interrupted: bool,
     /// Windows readers gave canvases, by view (Android).
     #[cfg(target_os = "android")]
