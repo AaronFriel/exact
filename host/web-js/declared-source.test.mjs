@@ -3,7 +3,7 @@
 // field, says a failure as a TypeScript `fetch` would, and posts a send's parameters as JSON. A release admits the
 // declaration's origin, though no module grants anything (build.mjs `admitsNothing`).
 import { test, expect } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runTests } from '../../scripts/agent-test.mjs';
 import { webCompiler } from './module.mjs';
@@ -187,5 +187,62 @@ test('an alternate web entry checks its requests against the app’s TypeScript 
       expect(failed.stderr.toString()).toContain('TS2322');
       expect(readFileSync(editor, 'utf8')).toBe('stale editor declarations\n');
     }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 60_000);
+
+test('a frame renders components from its routed app root with the app’s data', () => {
+  const root = resolve(import.meta.dir, '../..');
+  const dir = mkdtempSync(resolve(root, 'target/web-frame-'));
+  const app = resolve(dir, 'app'), owner = resolve(app, 'app.contract');
+  const frame = resolve(app, 'frames/card.contract'), outside = resolve(dir, 'other.contract');
+  const out = resolve(dir, 'dist'), gen = resolve(out, '.gen');
+  try {
+    mkdirSync(resolve(app, 'frames'), { recursive: true });
+    mkdirSync(resolve(app, 'node_modules'));
+    writeFileSync(resolve(app, 'app.json'), JSON.stringify({ name: 'Canvas', app: { name: 'Canvas', id: 'test.canvas' } }));
+    writeFileSync(resolve(app, 'package.json'), '{"name":"canvas-app"}');
+    symlinkSync(app, resolve(app, 'node_modules/canvas-app'), 'junction');
+    writeFileSync(owner, `routes nav
+  home "/"
+component App
+  resource count = count() as shape number
+  view
+    Card(title="App")
+component Card
+  props
+    title: string
+  resource label = caption(title) as shape string
+  view
+    text label
+`);
+    writeFileSync(resolve(app, 'app.ts'), "import type { Sources, Answer } from './app.contract.d.ts';\nexport const grants = '';\nconst sources: Sources = { caption: ([title]) => 'Live ' + title, count: () => 2 };\nexport const answer: Answer = (name, args, store, storage) => sources[name](args, store, storage);\n");
+    writeFileSync(frame, 'use Card from "canvas-app/app.contract"\ncomponent App\n  view\n    Card(title="Frame")\n');
+    const built = Bun.spawnSync([process.execPath, 'host/web-js/build.mjs', app, '--frame', 'frames/card.contract',
+      '--out', out, '--check', '--dev'], { cwd: root, stdout: 'pipe', stderr: 'pipe' });
+    expect(built.exitCode, built.stderr.toString()).toBe(0);
+    const calls = readFileSync(resolve(gen, 'entry-answer.ts'), 'utf8');
+    expect(calls).toContain('"caption":');
+    expect(calls).not.toContain('"count":');
+    expect(readFileSync(resolve(gen, 'app.contract.d.ts'), 'utf8')).toContain('"count":');
+    const sources = JSON.parse(readFileSync(resolve(gen, 'dev-sources.json'))).sources;
+    expect(sources).toContain(owner);
+    expect(sources).toContain(frame);
+
+    const compiler = webCompiler();
+    const compile = (input, args) => Bun.spawnSync([compiler.cmd, ...compiler.pre, 'js', input, '-o', gen, ...args],
+      { cwd: root, env: compiler.env, stdout: 'pipe', stderr: 'pipe' });
+    writeFileSync(frame, 'use Card from "../app.contract"\ncomponent App\n  view\n    Card(title=badName)\n');
+    const broken = compile(owner, ['--frame', frame]);
+    expect(broken.exitCode).toBe(1);
+    expect(broken.stderr.toString()).toContain(frame + ':4:');
+    writeFileSync(outside, 'component Other\n  view\n    text "Outside"\n');
+    symlinkSync(outside, resolve(app, 'frames/link.contract'), 'file');
+    const escaped = compile(owner, ['--frame', resolve(app, 'frames/link.contract')]);
+    expect(escaped.exitCode).toBe(1);
+    expect(escaped.stderr.toString()).toContain('contract-frame-path');
+    writeFileSync(frame, 'use Card from "canvas-app/app.contract"\ncomponent Frame\n  view\n    Card(title="Frame")\n');
+    const standalone = compile(frame, []);
+    expect(standalone.exitCode).toBe(1);
+    expect(standalone.stderr.toString()).toContain('analyze-routes-not-root');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 60_000);

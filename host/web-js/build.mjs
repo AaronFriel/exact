@@ -54,7 +54,7 @@ const given = args[0] && /[\\/]|^\.\.?$/.test(args[0]) ? resolve(args[0]) : null
 if (given) process.env.EXACT_APP_DIR = given;
 const app = given ? basename(given) : args[0];
 const opt = (name) => { const i = args.indexOf(name); return i < 0 ? null : args[i + 1]; };
-if (!app) { console.error('usage: bun host/web-js/build.mjs <app> [--plan <app.plan> | --contract <file>] [--out <dir>] [--inline] [--render rust|js|none] [--check]'); process.exit(2); }
+if (!app) { console.error('usage: bun host/web-js/build.mjs <app> [--plan <app.plan> | --contract <file> | --frame <file>] [--out <dir>] [--inline] [--render rust|js|none] [--check]'); process.exit(2); }
 // An app outside this repo is where `EXACT_APP_DIR` says (scripts/app.mjs).
 const appDir = process.env.EXACT_APP_DIR ? resolve(process.env.EXACT_APP_DIR) : resolve(root, 'apps', app);
 // Before anything reads a package: the dev loop runs this build directly, not through resolveApp (#115).
@@ -62,7 +62,6 @@ try { installedFileDependencies(appDir); } catch (error) { console.error(`error:
 const manifest = readManifest(appDir, app);
 const siteBase = manifest.host?.web?.base ?? "/";
 if (siteBase !== "/" && opt("--plan")) throw new Error("host.web.base: native update bakes require /; build the standalone JS site without --plan");
-const out = resolve(opt('--out') ?? `/tmp/exact-web-js-dist/${app}`);
 // Bun's runtime transpiler cache keys a module by its text and keeps the
 // imports this build's mount resolver gives it (below), so the same file at
 // another place (a second checkout, a moved mount) would resolve back into
@@ -83,6 +82,13 @@ if (process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH !== '0') {
 // With no bake (an app that names no native platform, LLP 1153 D3.6), it
 // builds the app's own Contract, links its web manifest, and has no envelope.
 const production = args.includes('--production');
+const framePath = opt('--frame');
+const frame = framePath && !framePath.startsWith('--') && resolve(appDir, framePath);
+if (args.includes('--frame') && (!frame || production || opt('--plan') || opt('--contract') || opt('--data'))) {
+  console.error('--frame takes one app-owned Contract file for a development build'); process.exit(2);
+}
+const defaultOut = frame ? resolve('/tmp/exact-web-js-frames', createHash('sha256').update(frame).digest('hex')) : `/tmp/exact-web-js-dist/${app}`;
+const out = resolve(opt('--out') ?? defaultOut);
 const sizes = args.includes('--sizes');
 // `--dev` (host/web-js/dev.mjs): typed state checkpoint hooks that ordinary
 // and production builds neither emit nor link.
@@ -124,7 +130,7 @@ if (rust && (process.env.EXACT_RUST_PLACEMENT ?? manifest.rust?.platforms?.web?.
 // TypeScript module the rest (ts-data.js, rust-data.js). A synthetic plan
 // over another app's sources (`--data`) asks the Rust module only.
 const ts = existsSync(resolve(appDir, 'app.ts')) && !(rust && opt('--data'));
-const appTypes = ts && opt('--contract') && !opt('--plan') && !opt('--data') && resolve(input) !== resolve(appDir, 'app.contract');
+const appTypes = ts && (frame || (opt('--contract') && !opt('--plan') && !opt('--data') && resolve(input) !== resolve(appDir, 'app.contract')));
 const mixed = rust && ts;
 const appTs = resolve(appDir, 'app.ts');
 // The manifest's `typescript.sources` mounts (js/bake/src/lib.rs `mounts`):
@@ -242,7 +248,7 @@ try { compiler = webCompiler(); } catch (error) { rustMissing(error); }
 let planCosts = ''; // the compiler's line of plan code by component, for the size warning at the end
 function compilePlan(undrawn, source = input) {
   rmSync(resolve(gen, 'canvas2d.flag'), { force: true });
-  const cargo = spawnSync(compiler.cmd, [...compiler.pre, 'js', source, '-o', gen, '--app', appDir, ...(appTypes ? ['--app-types'] : []), ...(production ? [] : ['--sites']), ...(devReload ? ['--dev-reload'] : []), ...(sizes ? ['--sizes'] : [])], { cwd: root, stdio: checkOnly ? ['ignore', 'ignore', 'pipe'] : ['inherit', 'pipe', 'inherit'], encoding: 'utf8', maxBuffer: 64 << 20, env: { ...compiler.env, EXACT_JS_GPU_SURFACES: (gpuSurfaces ?? []).join(','), EXACT_JS_UNREGISTERED_SURFACES: undrawn.join(',') } });
+  const cargo = spawnSync(compiler.cmd, [...compiler.pre, 'js', source, '-o', gen, '--app', appDir, ...(frame && source === input ? ['--frame', frame] : []), ...(appTypes ? ['--app-types'] : []), ...(production ? [] : ['--sites']), ...(devReload ? ['--dev-reload'] : []), ...(sizes ? ['--sizes'] : [])], { cwd: root, stdio: checkOnly ? ['ignore', 'ignore', 'pipe'] : ['inherit', 'pipe', 'inherit'], encoding: 'utf8', maxBuffer: 64 << 20, env: { ...compiler.env, EXACT_JS_GPU_SURFACES: (gpuSurfaces ?? []).join(','), EXACT_JS_UNREGISTERED_SURFACES: undrawn.join(',') } });
   if (!checkOnly) { process.stdout.write(cargo.stdout ?? ''); planCosts = /^ *own plan code by component[^\n]*/m.exec(cargo.stdout ?? '')?.[0].trim() ?? planCosts; }
   if (cargo.status !== 0) { if (checkOnly) process.stderr.write(cargo.stderr ?? ''); process.exit(cargo.status ?? 1); }
   compiler.done();

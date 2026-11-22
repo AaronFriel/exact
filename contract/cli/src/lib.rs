@@ -482,6 +482,15 @@ pub fn source_graph(path: &Path) -> SourceGraph {
 /// [`source_graph`]'s Contract half ([`sources::GraphBase`]), which reads no design file, or its refusal (the root
 /// unreadable) as the whole graph: the design server's walk keeps it across a design-only edit.
 pub fn source_graph_base(path: &Path) -> Result<GraphBase, SourceGraph> {
+    graph_base_for(path, None)
+}
+
+/// The inputs to a web frame built in its owning app.
+pub fn frame_source_graph(path: &Path, frame: &Path) -> SourceGraph {
+    graph_base_for(path, Some(frame)).map_or_else(|refused| refused, |base| base.tail())
+}
+
+fn graph_base_for(path: &Path, frame: Option<&Path>) -> Result<GraphBase, SourceGraph> {
     // The server's planned text of the root, where it has one (stage 8 D).
     let refused = |message: String| SourceGraph {
         sources: Vec::new(),
@@ -506,7 +515,7 @@ pub fn source_graph_base(path: &Path) -> Result<GraphBase, SourceGraph> {
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     match source_root.canonicalize() {
-        Ok(app_root) => Ok(sources::graph_base(path, &src, &app_root)),
+        Ok(app_root) => Ok(sources::graph_base(path, &src, &app_root, frame)),
         Err(e) => Err(refused(format!("{}: {e}", source_root.display()))),
     }
 }
@@ -801,7 +810,7 @@ pub type Warned = (
 /// [`contract_lower::MAX_WARNINGS`], whether lowering then succeeded or
 /// refused. A file the type checker refuses has none.
 pub fn compile_path_all_warned(path: &Path, mapped: bool) -> Warned {
-    compile_path_all_warned_with(path, mapped, false)
+    compile_path_all_warned_with(path, mapped, false, None)
 }
 
 /// [`compile_path_all`], surface arguments checked, with the warnings beside
@@ -809,10 +818,20 @@ pub fn compile_path_all_warned(path: &Path, mapped: bool) -> Warned {
 /// web's, a bake) prints, so they reach whoever ran it and not only
 /// `contract build` (LLP 1116.004 D7).
 pub fn compile_path_all_with_warnings(path: &Path, mapped: bool) -> Warned {
-    compile_path_all_warned_with(path, mapped, true)
+    compile_path_all_warned_with(path, mapped, true, None)
 }
 
-fn compile_path_all_warned_with(path: &Path, mapped: bool, surfaces: bool) -> Warned {
+/// Compile the frame's component tree with the declarations and data of the app at `path`.
+pub fn compile_frame_with_warnings(path: &Path, frame: &Path, mapped: bool) -> Warned {
+    compile_path_all_warned_with(path, mapped, true, Some(frame))
+}
+
+fn compile_path_all_warned_with(
+    path: &Path,
+    mapped: bool,
+    surfaces: bool,
+    frame: Option<&Path>,
+) -> Warned {
     let mut warned = Vec::new();
     let result = read_source(path).map_err(|e| vec![e]).and_then(|src| {
         compile_path_warned(
@@ -822,6 +841,7 @@ fn compile_path_all_warned_with(path: &Path, mapped: bool, surfaces: bool) -> Wa
             surfaces,
             contract_lower::Profile::Web,
             Some(&mut warned),
+            frame,
         )
     });
     warned.sort_by_key(warning_rank);
@@ -860,7 +880,7 @@ fn compile_path_checked(
     surfaces: bool,
     profile: contract_lower::Profile,
 ) -> Result<(Plan, Option<SourceMap>), Vec<CompileError>> {
-    compile_path_warned(path, src, mapped, surfaces, profile, None)
+    compile_path_warned(path, src, mapped, surfaces, profile, None, None)
 }
 
 fn compile_path_warned(
@@ -870,12 +890,13 @@ fn compile_path_warned(
     surfaces: bool,
     profile: contract_lower::Profile,
     warned: Option<&mut Vec<CompileError>>,
+    frame: Option<&Path>,
 ) -> Result<(Plan, Option<SourceMap>), Vec<CompileError>> {
     let app_root = app_root(path)?;
     // A file's syntax refusals do not stop the passes after it: they check
     // what parsed, and the refusals lead what they report (`Refused::join`).
     let mut refused = sources::Refused::default();
-    let loaded = sources::load_partial(path, src, &app_root, &mut refused);
+    let loaded = sources::load_partial_with(path, src, &app_root, &mut refused, None, frame);
     let mut own = Vec::new();
     let compiled = loaded.and_then(|(file, sources)| {
         let warned = warned

@@ -115,6 +115,22 @@ Inside the Exact checkout, for its own apps, the same commands are
 `cargo run -q -p contract -- <command> apps/<name>/app.contract …` and
 `bun host/web/dev.mjs --app <name>`. Run `bun install --frozen-lockfile` there once.
 
+To preview a component declared in your app's root, add a frame such as
+`frames/card.contract` inside the app. Its first component is the preview's
+root. It can pass props to the app's components and use the app's data handlers.
+
+```contract
+use Inspector from "../app.contract"
+component Frame
+  view
+    Inspector(title="Card")
+```
+
+From the Exact checkout, build the frame with
+`bun host/web-js/build.mjs /path/to/app --frame frames/card.contract --out /path/to/app/target/card`
+and serve the output directory. The app supplies the design, theme and declared
+data sources. A frame that needs navigation declares its own routes.
+
 Use `build --json` before and after the edit. It returns one JSON array with all
 independent diagnostics it can collect, capped at 20; success is `[]`. It is the
 whole output: stderr stays empty (but for a note while the compiler first

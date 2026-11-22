@@ -90,7 +90,7 @@ impl std::ops::Deref for TestDir {
     }
 }
 
-const USAGE: &str = "usage: exact-web-js js <app.contract | app.plan> -o <dir> [--dump] [--sites] [--dev-reload] [--sizes] [--app <dir>] [--app-types]\n       exact-web-js normalize-grants <file>\n       exact-web-js design <app.contract> <design text file, or - for stdin>\n       exact-web-js design-serve <app.contract>\n       exact-web-js inspect-table <app.plan> <out.json>";
+const USAGE: &str = "usage: exact-web-js js <app.contract | app.plan> -o <dir> [--dump] [--sites] [--dev-reload] [--sizes] [--app <dir>] [--app-types] [--frame <file>]\n       exact-web-js normalize-grants <file>\n       exact-web-js design <app.contract> <design text file, or - for stdin>\n       exact-web-js design-serve <app.contract>\n       exact-web-js inspect-table <app.plan> <out.json>";
 
 /// `inspect-table <app.plan> <out.json>` (LLP 1122 T2b, the JS target): the
 /// plan's inspect table (inspect.rs), made when the dev loop is first asked
@@ -360,12 +360,23 @@ fn main() -> ExitCode {
         .iter()
         .position(|a| a == "--app")
         .and_then(|i| all.get(i + 1).cloned());
+    let frame = match all.iter().position(|a| a == "--frame") {
+        Some(i) => match all.get(i + 1).filter(|name| !name.starts_with("--")) {
+            Some(name) => Some(std::path::PathBuf::from(name)),
+            None => {
+                eprintln!("{USAGE}");
+                return ExitCode::from(2);
+            }
+        },
+        None => None,
+    };
     let mut skip = false;
     let args: Vec<String> = all
         .into_iter()
         .filter(|a| {
-            let dropped = skip || a == "--app";
-            skip = a == "--app";
+            let option = matches!(a.as_str(), "--app" | "--frame");
+            let dropped = skip || option;
+            skip = option;
             !dropped
                 && a != "--sites"
                 && a != "--dev-reload"
@@ -388,10 +399,21 @@ fn main() -> ExitCode {
     // Direct compiler invocations use the same roles and metrics as web builds.
     exact_kernel::style::roles::set_column(exact_kernel::style::roles::Column::Neutral);
     let path = std::path::Path::new(input);
+    if frame.is_some() && path.file_name().is_none_or(|name| name != "app.contract") {
+        eprintln!("--frame requires the owning app.contract as input");
+        return ExitCode::from(2);
+    }
+    let compile = || match frame.as_deref() {
+        Some(frame) => contract::compile_frame_with_warnings(path, frame, true),
+        None => contract::compile_path_all_with_warnings(path, true),
+    };
     // The dev loop watches every package the Contract reads (LLP 1091 D10),
     // even when this compile fails: the fix may be in the library.
     if dev_reload && !input.ends_with(".plan") {
-        let graph = contract::source_graph(path);
+        let graph = match frame.as_deref() {
+            Some(frame) => contract::frame_source_graph(path, frame),
+            None => contract::source_graph(path),
+        };
         let mut roots: Vec<String> = graph
             .packages
             .iter()
@@ -506,7 +528,7 @@ fn main() -> ExitCode {
         }
     } else {
         // Every refusal, each naming its own file (LLP 1054 L9), as `contract build` prints them.
-        let (compiled, warnings) = contract::compile_path_all_with_warnings(path, true);
+        let (compiled, warnings) = compile();
         warned = warnings;
         match compiled {
             Ok((p, m)) => {
@@ -761,10 +783,7 @@ fn main() -> ExitCode {
             // says an error (LLP 1143 D3). A production build compiled no map,
             // so it compiles one now, on this failing path only.
             if map.is_none() && !input.ends_with(".plan") {
-                map = contract::compile_path_all_with_warnings(path, true)
-                    .0
-                    .ok()
-                    .and_then(|(_, m)| m);
+                map = compile().0.ok().and_then(|(_, m)| m);
             }
             match map.as_ref().and_then(|m| at_source(&e, m)) {
                 Some(located) => eprintln!("{located}{}", contract::excerpt(&located)),
