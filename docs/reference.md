@@ -5715,8 +5715,18 @@ An app's own predicate is used as written. On the iOS 27 simulator, Safari offer
 page to a predicate that accepts only `public.url` and still hands over the details;
 this has not been run on a phone or a Mac.
 
-A device build leaves the share extension out until the team registers the App Group
-and the extension's App ID, and says so; a Mac build signed ad hoc leaves it out too
+On iPhone, register the App IDs `<app id>` and `<app id>.share` on the same Apple
+Developer team and enable the App Group `group.<app id>` for both. Make and install a
+profile for each ID. For `bun exact.mjs ios --device`, both profiles must cover the
+phone and its development signing certificate. For a distribution archive, use profiles
+of the same distribution method. `EXACT_PROFILE` can select the containing app's profile.
+Exact finds the extension's by its ID and reports a missing grant before compiling.
+[Register an App Group](https://developer.apple.com/help/account/identifiers/register-an-app-group/).
+
+An unsigned device build includes `PlugIns/ExactShare.appex`. To install it, the signer
+must provision and sign both bundles for the same App Group. To build without the share
+extension, list the kinds to keep with `--extensions`, or use `--extensions none`.
+A Mac build signed ad hoc leaves out the share extension
 ([Mac development signing](#mac-development-signing)).
 
 ### Clipboard images
