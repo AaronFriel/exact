@@ -2412,7 +2412,10 @@ box width=(320 * z) height=(200 * z) overflow="hidden"
 
 For sharp text, `iframe "https://example.com/" width=320 height=200 zoom=z` enlarges
 the frame's own lengths and tells WebKit to render the page at that zoom. Line breaks
-can change even when the guest still reports a 320 × 200 CSS pixel viewport.
+can change even when the guest still reports a 320 × 200 CSS pixel viewport. On macOS,
+the time of the first displayed frame at the new size or zoom remains unknown to
+Exact. A WebKit snapshot completes when its image is ready, even in a hidden window.
+[Apple’s snapshot API](https://developer.apple.com/documentation/webkit/wksnapshotconfiguration/afterscreenupdates)
 
 On the web (same-origin frames), macOS and iOS, `tap live at 40 80` presses
 40 points right and 80 down from the top left of the iframe named `live`.
