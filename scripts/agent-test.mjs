@@ -861,10 +861,8 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       continue;
     }
     const heads = await Promise.all(shared.map((o) => backendHead(o)));
-    // A drag on an iOS simulator is the touch runner's real gesture (LLP 1080.000 §11; chat2 diary: an authored
-    // test could not drag there); every other step stays the agent's. A phone has no runner yet: its drag says so.
-    // `--touch platform` makes every tap a real touch too (splitter rough 12: a test of what a finger reaches).
-    const drags = !device && ['ios', 'host-ios'].includes(host) && t.steps.some((st) => st.op === 'drag');
+    // An authored drag uses XCTest on iOS. Other taps opt in with `--touch platform` (LLP 1080.000 §11).
+    const drags = ['ios', 'host-ios'].includes(host) && t.steps.some((st) => st.op === 'drag');
     const fingers = touch !== 'agent' ? touch : drags ? 'drag' : 'agent';
     // The date a relaunch starts at: this launch's date at the clock's zero plus the virtual time the test has reached
     // (every `clock +N`, settle and timer), as the runner reports it; whole milliseconds, which every host takes.

@@ -2477,11 +2477,13 @@ and dropped records. An ordinary launch on the wall clock is available on macOS 
 `bun scripts/agent.mjs macos --live --storage latency "tap change-station" "type station-search Palo" state`
 (use `ios --live` on a simulator or `ios --device --live` on a phone). The driver launches and closes this process and keeps input
 available. `--live` uses normal scheduling and the wall clock: `performanceNow()` and
-timers advance in real time between operations, and `perf frames` records real frames
-(with `--touch platform` on the simulator, a drag is a real touch and the `scroll`
-source observes it). The driver never holds the clock, so `clock` is refused; let time
-pass with `perf frames live <ms>`. On a physical iPhone, taps and drags still use the agent input path. A real
-UIKit drag requires an on-device XCTest runner. `--storage` chooses its
+timers advance in real time between operations, and `perf frames` records real frames.
+On iOS, `--touch platform` sends the gesture through XCTest so UIKit delivers the scroll callbacks.
+For example, `bun exact.mjs agent ios --device --live --touch platform "tap s drag 0 -300 over 100" "perf frames health scroll"`
+drags the scroll view named `s` on a phone. Unlock the paired phone, enable Developer Mode and UI Automation,
+and allow local network access if prompted. The Mac needs an Apple Development identity and a provisioning profile
+covering the phone and `com.exact.touches.xctrunner`. On the wall clock use `perf frames live <ms>` to observe an interval.
+`--storage` chooses the drive's
 scratch store. Set
 `EXACT_STORE=real` in the launch environment to use the app's real secret and preference
 stores and secret presence. App files still follow the drive's scratch-store setting
