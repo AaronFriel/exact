@@ -87,7 +87,7 @@ export function storedScript(env, origin) {
     globalThis.__exactSeedStored = (prefix, secret) => {
       for (const [name, json] of entries) {
         if (name.startsWith('#oauth.')) {
-          localStorage.setItem(secret + name.slice(6), json);
+          localStorage.setItem(secret + name.slice('#oauth.'.length), json);
           continue;
         }
         const storage = name.startsWith('#window.') ? sessionStorage : localStorage;
