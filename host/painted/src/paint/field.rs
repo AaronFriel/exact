@@ -659,6 +659,7 @@ impl Painter {
                 ],
                 size: computed.font_size * self.scale,
                 color: value_ink,
+                selection_colors: look::contrast().map(|p| [p.highlight, p.highlighted_text]),
                 value,
                 placeholder: node.props.str(PropId::Placeholder).unwrap_or(""),
                 selection: [selection.start, selection.end],
@@ -721,10 +722,22 @@ impl Painter {
         }
         // Windows reports the active conversion clause as a selection. Its
         // native editor underlines that clause without a selection background.
-        if let Some(s) = selection.filter(|_| !cfg!(target_os = "windows") || composition.is_none())
-        {
-            let top = padding.rect.1 - oy;
-            self.field_highlight(&field, s, top..top + padding.rect.3);
+        let marks = selection
+            .filter(|s| s.start != s.end && (!cfg!(windows) || composition.is_none()))
+            .map(|s| {
+                let top = padding.rect.1 - oy;
+                field.selection_rects(s, top..top + padding.rect.3, self.scale)
+            })
+            .unwrap_or_default();
+        let contrast = (!marks.is_empty()).then(look::contrast).flatten();
+        if contrast.is_none() {
+            for &rect in &marks {
+                self.backend.fill(
+                    &Shape::rect(rect),
+                    super::caret::HIGHLIGHT[usize::from(self.dark)],
+                    ts,
+                );
+            }
         }
         if !placeholder {
             let painted = material::FieldText::painted(&paragraph, (ox, oy), ts);
@@ -752,6 +765,32 @@ impl Painter {
             let mut engine = self.text.borrow_mut();
             self.backend
                 .text(&mut engine, &paragraph, &palette, (ox, oy), ts);
+        }
+        if let Some(contrast) = contrast {
+            // Replace the background and its antialiased glyphs together, including
+            // where the selection cuts through a decorated or bidirectional run.
+            let depth = self.push_selection_clip(&marks, ts);
+            if depth > 0 {
+                self.backend
+                    .fill(&Shape::rect(text_clip), contrast.highlight, ts);
+                let selected = vec![
+                    RunPaint {
+                        color: contrast.highlighted_text,
+                        ..base
+                    };
+                    palette.len()
+                ];
+                self.backend.text(
+                    &mut self.text.borrow_mut(),
+                    &paragraph,
+                    &selected,
+                    (ox, oy),
+                    ts,
+                );
+                for _ in 0..depth {
+                    self.backend.pop_clip();
+                }
+            }
         }
         if let Some(composition) = &composition {
             let line = 1. / self.scale.max(1.);
