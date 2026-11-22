@@ -380,6 +380,10 @@
   /* Authored flex/grid display must not expose a closed native popover. */
   [popover]:not(:popover-open) { display: none !important; }
   dialog:not([open]) { display: none !important; }
+  #exact-root dialog[data-exact-dialog-closing]:not([data-exiting]) { animation: none !important; }
+  @media (prefers-reduced-motion: no-preference) {
+    #exact-root dialog[data-exact-dialog-closing="play"]:not([data-exiting]) { animation: var(--exact-exit-animation) !important; }
+  }
   /* Gesture feedback is decorative, including when its opacity is zero. */
   [swipeIndicator="true"] { pointer-events: none; }
   /* Modal dimming belongs to the host; UIKit supplies its own backdrop. It dims the route the

@@ -2099,6 +2099,11 @@ where the target is inside the modal's subtree; a target the modal makes
 inert stays as it is, as a `contextPopover` on an ancestor behind the modal
 opens no menu.
 
+On the web, a modal `dialog` stays in the top layer while its
+`-exact-exit-animation` plays. Its `close` event and focus return follow the
+animation. Reduced motion closes it immediately. An unpositioned modal
+dialog uses the browser’s viewport positioning.
+
 A text field, a checkbox or another form control takes a tap or a click
 itself, so an ancestor's `press` does not fire, in the page or in a dialog.
 That is the platform's rule on macOS and iOS (a hand-built screen's control
