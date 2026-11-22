@@ -554,8 +554,8 @@ renderer whose snapshot driver WidgetKit archives (LLP 1126). watchOS is an
 Apple platform like the others; it has no UIKit presenter, so its app is
 drawn by that renderer's live driver. Unblocks an app's content outside its
 window (the Home Screen, the Lock Screen, StandBy, CarPlay, HomeView, the
-Mac) and Exact apps on the watch. Templates (CarPlay apps, controls) await
-their own RFC. The take is waived.
+Mac) and Exact apps on the watch. Templates (CarPlay apps) await their own
+RFC; controls have LLP 1126.004 (below). The take is waived.
 
 **Expanded (Charlie, 2026-10-26, "Accept all (Recommended)", on LLP 1133.023
 §15 question 8):** the app's content and actions reached from outside its
@@ -568,7 +568,7 @@ origin `tool`. Consumer: Shelf's Add Book, Continue Reading, books in
 Spotlight and Log Pages. Unblocks reaching an app's screens and writes
 without opening it. Take: none named; the ruling is its own waiver. Still
 out, each until a consumer asks (LLP 1133.023 §13): further App Intents in
-widgets beyond the configuration below; controls and Live Activities; interactive snippets and
+widgets beyond the configuration below; Live Activities (controls: LLP 1126.004, below); interactive snippets and
 `requestConfirmation`'s snippet content; assistant schemas; `IndexedEntity`
 and Spotlight's semantic index; `NSUserActivity` and Handoff; long-running
 intents; an App Intents extension; a structured `returns` through a face;
@@ -597,6 +597,19 @@ The Expo Services Active Users widget can list the person’s projects. Edit
 Widget reads the list the app published to the App Group. Its refresh and
 render receive the selected ID. Computing options in the extension, images,
 dependent parameters and entity choices on watchOS and Android stay deferred.
+
+**Expanded (Charlie, 2026-11-18, #710, "the `rules/DEFERRED.md` waiver is
+granted"; LLP 1126.004):** controls, a button the system draws outside the
+app that runs one of its tools or opens one of its locations: `controls` in
+`app.json`, WidgetKit controls on Apple and Quick Settings tiles on
+Android. A press is the person's and enters as origin `action`; a recording
+control may start audio capture from a locked iPhone once that path is
+qualified on a device. Consumer: #710's app, which starts a voice recording
+from the Lock Screen without opening. Take: none named; Charlie waives the trade. Still out
+(LLP 1126.004 §3): toggles, state providers, configurable controls, fixed
+tool arguments, a control's tool run in the extension, Live Activity
+buttons, discoverable faces that capture or gain background activity
+authority, and the Android add-tile prompt.
 
 **Admitted (Charlie, 2026-10-06: "this is pretty great. commit and push this
 and document that TUI is now an officially supported platform for Exact2";

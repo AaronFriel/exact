@@ -9,6 +9,8 @@ mod widgets;
 pub use widgets::{Choices, Configuration, Parameter, Widget};
 mod activities;
 pub use activities::Activity;
+mod controls;
+pub use controls::{Control, ControlAction};
 mod watch;
 pub use watch::{WatchEntry, WatchSync, WATCH_KIND};
 mod variant;

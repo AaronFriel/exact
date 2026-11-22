@@ -672,6 +672,102 @@
         }
       }
     },
+    "controls": {
+      "type": "array",
+      "description": "Buttons the system draws outside the app: in Control Center, on the Lock Screen and on the Action button (LLP 1126.004). Each names exactly one of `tool` and `url`: a press runs that declared tool or opens that location at the navigation root. Rows are compiled into the binary. A build names each control its host cannot offer, and why.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "title",
+              "symbol",
+              "tool"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+                "description": "The control's stable identity, unique among the app's controls regardless of case. A person's placed control keeps it, so renaming it removes the placed one."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*(?![\\s\\S])",
+                "description": "What the system labels the button with."
+              },
+              "symbol": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*(?![\\s\\S])",
+                "description": "An SF Symbol name for the button's glyph."
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*(?![\\s\\S])",
+                "description": "What the controls gallery says about it."
+              },
+              "tool": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A tool line's name: a press calls it with no arguments, passing none for each optional parameter. It needs no `intents.tools` face, may not destroy, and may take no required parameter."
+              },
+              "authentication": {
+                "enum": [
+                  "required",
+                  "local",
+                  "always"
+                ],
+                "description": "Who may press a tool control on a locked device (LLP 1133.023 D10): `required` (the default) asks for the person, `local` for this device unlocked, `always` runs it locked."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "title",
+              "symbol",
+              "url"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+                "description": "The control's stable identity, unique among the app's controls regardless of case. A person's placed control keeps it, so renaming it removes the placed one."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*(?![\\s\\S])",
+                "description": "What the system labels the button with."
+              },
+              "symbol": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*(?![\\s\\S])",
+                "description": "An SF Symbol name for the button's glyph."
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*(?![\\s\\S])",
+                "description": "What the controls gallery says about it."
+              },
+              "url": {
+                "type": "string",
+                "pattern": "^/(?!/)",
+                "description": "A location one of the navigation root's routes matches: a press opens the app there."
+              }
+            }
+          }
+        ]
+      }
+    },
     "intents": {
       "type": "object",
       "description": "Faces: the app's tools offered to the system's callers, compiled into each native binary (LLP 1133.023 D8). A tool with no face is offered to none of them. Parameters are strings, numbers or bools; a file face uses a string for the imported app:/ path and names only the apple door, as a destroys tool does (D10). A web face needs a tool description and a name of at most 128 characters (WebMCP).",
