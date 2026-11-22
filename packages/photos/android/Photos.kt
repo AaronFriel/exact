@@ -216,13 +216,14 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
                 query.putInt(android.content.ContentResolver.QUERY_ARG_LIMIT, fetched)
             }
         }
-        // The page's key joins the app's selection; its values are numbers the cursor held, written as literals, so
-        // the app's selection arguments keep their places.
-        if (after != null) {
-            val keys = listOf(MediaStore.Images.Media.DATE_TAKEN, MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media._ID)
-            val ours = olderThan(keys.zip(after))
+        // The subtype filter and the page's key join the app's selection; the key's values are numbers the cursor
+        // held, written as literals, so the app's selection arguments keep their places.
+        val keys = listOf(MediaStore.Images.Media.DATE_TAKEN, MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media._ID)
+        val ours = listOfNotNull(subtypeSelection(args), after?.let { olderThan(keys.zip(it)) })
+        if (ours.isNotEmpty()) {
             val theirs = query.getString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION)
-            query.putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, if (theirs.isNullOrBlank()) ours else "($theirs) AND ($ours)")
+            val joined = (listOfNotNull(theirs?.ifBlank { null }) + ours).joinToString(" AND ") { "($it)" }
+            query.putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, joined)
         }
         val out = JSONArray()
         var last: List<Long?>? = null
@@ -239,6 +240,18 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
         val cursor = last?.takeIf { more }?.let { PageCursor.text("mediastore", it.map { v -> v?.toString() }) }
         return JSONObject().put("assets", out).put("cursor", cursor ?: JSONObject.NULL)
     }
+
+    /** `subtypes`' selection (LLP 1133.019.000 D4), null for every image: `screenshot` is a row whose `RELATIVE_PATH`'s
+     * last nonempty segment is the screenshots directory (`Pictures/Screenshots/`, `DCIM/Screenshots/`), in any case,
+     * as SQLite's `LIKE` compares. */
+    private fun subtypeSelection(args: JSONObject): String? {
+        if (!screenshots(args)) return null
+        val (path, dir) = "rtrim(${MediaStore.Images.Media.RELATIVE_PATH}, '/')" to android.os.Environment.DIRECTORY_SCREENSHOTS
+        return "$path LIKE '$dir' OR $path LIKE '%/$dir'"
+    }
+
+    private fun screenshots(args: JSONObject): Boolean =
+        args.optJSONArray("subtypes")?.let { a -> (0 until a.length()).any { a.optString(it) == "screenshot" } } == true
 
     /** What sorts after [key] under a sort of its columns, each descending with a null last; the last is never null. */
     private fun olderThan(key: List<Pair<String, Long?>>): String {
@@ -412,7 +425,7 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
     private fun agentAssets(args: JSONObject): JSONObject {
         val after = try { PageCursor.key("agent", args.opt("cursor"), 2) } catch (e: IllegalArgumentException) { return PageCursor.refused() }
         val created = after?.get(0)?.toDoubleOrNull()
-        val (page, more) = library.page(args.optInt("limit", 60).coerceIn(1, 500), after?.let { (created ?: Double.NEGATIVE_INFINITY) to it[1]!! })
+        val (page, more) = library.page(args.optInt("limit", 60).coerceIn(1, 500), after?.let { (created ?: Double.NEGATIVE_INFINITY) to it[1]!! }, screenshots(args))
         val cursor = page.lastOrNull()?.takeIf { more }?.let { PageCursor.text("agent", listOf(it.created.toString(), it.id)) }
         return JSONObject().put("assets", JSONArray(page.map(::agentAsset))).put("cursor", cursor ?: JSONObject.NULL)
     }
@@ -420,7 +433,8 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
     private fun agentAsset(a: AgentLibrary.Asset) = JSONObject()
         .put("id", a.id).put("mediaType", "image").put("width", a.width).put("height", a.height).put("creationDate", a.created)
         .put("favorite", false).put("picture", "photos:${a.id}").put("apple", JSONObject.NULL)
-        .put("android", JSONObject().put("relativePath", JSONObject.NULL).put("bucketDisplayName", JSONObject.NULL)
+        .put("android", JSONObject().put("relativePath", if (a.screenshot) "Pictures/Screenshots/" else JSONObject.NULL)
+            .put("bucketDisplayName", if (a.screenshot) "Screenshots" else JSONObject.NULL)
             .put("ownerPackageName", if (a.own) app.packageName else JSONObject.NULL))
 
     private fun agentPicture(id: String, width: Int, height: Int, fit: String, owned: Boolean, reply: (Bitmap?, String?) -> Unit) {

@@ -2,9 +2,9 @@
 // adds to under the agent, where it asks PhotoKit for nothing. Its photos
 // are this checkout's `fixture/agent-1.jpg` to `agent-6.jpg` (a drive runs
 // on this Mac or its simulators), with fixed creation dates, agent-1 the
-// newest; agent-3 is stored turned (EXIF orientation 6) and agent-5 is in
-// Display P3. An add joins it, its file kept under the session's
-// `app:/tmp/photos-library/`.
+// newest; agent-3 is stored turned (EXIF orientation 6), agent-5 is in
+// Display P3, and agent-2 is marked a screenshot (LLP 1133.019.000 D4). An
+// add joins it, its file kept under the session's `app:/tmp/photos-library/`.
 // What the app may see of it is the access the runner's status gives
 // (`full`, `limited`, `none`) and, under `limited`, the selection (the
 // agent's `selection`, else `agent-1` to `agent-3`) with the app's own adds.
@@ -24,6 +24,7 @@ final class AgentLibrary {
         /// Added by the app in this session.
         let own: Bool
         let type: String
+        var screenshot = false
     }
 
     /// The fixtures, beside this file's directory in the checkout.
@@ -44,7 +45,7 @@ final class AgentLibrary {
             parts.timeZone = TimeZone(identifier: "UTC")
             let created = (Calendar(identifier: .gregorian).date(from: parts)?.timeIntervalSince1970 ?? 0) * 1000
             if let (w, h, type) = Self.size(file) {
-                assets.append(Asset(id: "agent-\(n)", file: file, width: w, height: h, created: created, own: false, type: type))
+                assets.append(Asset(id: "agent-\(n)", file: file, width: w, height: h, created: created, own: false, type: type, screenshot: n == 2))
             }
         }
     }
@@ -60,11 +61,12 @@ final class AgentLibrary {
 
     func asset(_ id: String) -> Asset? { visible.contains(id) ? assets.first { $0.id == id } : nil }
 
-    /// Of what the app may read, newest first with the id ordering one
-    /// date, at most `limit` that sort after `after`, and whether more do.
-    func page(_ limit: Int, after: PageCursor.Key?) -> (assets: [Asset], more: Bool) {
+    /// Of what the app may read, the screenshots alone when `screenshots`,
+    /// newest first with the id ordering one date, at most `limit` that sort
+    /// after `after`, and whether more do.
+    func page(_ limit: Int, after: PageCursor.Key?, screenshots: Bool = false) -> (assets: [Asset], more: Bool) {
         let seen = visible
-        var rest = assets.filter { seen.contains($0.id) }.sorted { ($0.created, $0.id) > ($1.created, $1.id) }
+        var rest = assets.filter { seen.contains($0.id) && (!screenshots || $0.screenshot) }.sorted { ($0.created, $0.id) > ($1.created, $1.id) }
         if let after { rest = rest.filter { ($0.created, $0.id) < (after.date ?? -.infinity, after.id) } }
         return (Array(rest.prefix(limit)), rest.count > limit)
     }

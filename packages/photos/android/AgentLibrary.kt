@@ -2,7 +2,8 @@
 // reads and adds to under the agent, where it asks MediaStore for nothing. Its photos are `fixture/agent-1.jpg` to
 // `agent-6.jpg`, which an APK carries as the app's assets under `photos-fixture/` (the fixture app's `assets/`; the
 // reader puts an app's assets at `app/assets/` in the APK), with fixed creation dates, agent-1 the newest; agent-3
-// is stored turned (EXIF orientation 6) and agent-5 is in Display P3. An add joins it, its file kept under the
+// is stored turned (EXIF orientation 6), agent-5 is in Display P3, and agent-2 is marked a screenshot (LLP
+// 1133.019.000 D4), listed under `Pictures/Screenshots/`. An add joins it, its file kept under the
 // session's `app:/tmp/photos-library/`.
 // What the app may see of it is the access the runner's status gives (`full`, `limited`, `none`) and, under
 // `limited`, the selection (the agent's `selection`, else `agent-1` to `agent-3`), with the app's own adds, which
@@ -36,6 +37,7 @@ internal class AgentLibrary(assets: AssetManager) {
         val own: Boolean,
         val type: String,
         val name: String,
+        val screenshot: Boolean = false,
     )
 
     companion object {
@@ -75,7 +77,7 @@ internal class AgentLibrary(assets: AssetManager) {
             }
             val created = ZonedDateTime.of(2026, 7 - n, 10 + n, 10, 7 * n, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli().toDouble()
             val (w, h, type) = size(bytes) ?: continue
-            this.assets += Asset("agent-$n", bytes, w, h, created, false, type, "agent-$n.jpg")
+            this.assets += Asset("agent-$n", bytes, w, h, created, false, type, "agent-$n.jpg", screenshot = n == 2)
         }
     }
 
@@ -89,12 +91,12 @@ internal class AgentLibrary(assets: AssetManager) {
 
     fun asset(id: String): Asset? = if (id in visible) assets.firstOrNull { it.id == id } else null
 
-    /** Of what the app may read, newest first with the id ordering one date, at most [limit] that sort after the key
-     * [after] (a creation date and an id), and whether more do. */
-    fun page(limit: Int, after: Pair<Double, String>?): Pair<List<Asset>, Boolean> {
+    /** Of what the app may read, the screenshots alone when [screenshots], newest first with the id ordering one date,
+     * at most [limit] that sort after the key [after] (a creation date and an id), and whether more do. */
+    fun page(limit: Int, after: Pair<Double, String>?, screenshots: Boolean = false): Pair<List<Asset>, Boolean> {
         val seen = visible
         val order = compareByDescending<Asset> { it.created }.thenByDescending { it.id }
-        var rest = assets.filter { it.id in seen }.sortedWith(order)
+        var rest = assets.filter { it.id in seen && (!screenshots || it.screenshot) }.sortedWith(order)
         if (after != null) rest = rest.filter { it.created < after.first || (it.created == after.first && it.id < after.second) }
         return rest.take(limit) to (rest.size > limit)
     }

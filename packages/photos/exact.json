@@ -129,7 +129,8 @@
           "max": 500,
           "default": 60
         },
-        "cursor": "option<string>"
+        "cursor": "option<string>",
+        "subtypes": "option<enum<screenshot>[]>"
       },
       "answers": "PhotoAssetList",
       "substitute": {

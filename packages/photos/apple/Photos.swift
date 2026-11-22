@@ -131,11 +131,12 @@ public final class PhotosModule: ExactPackage {
         let limit = min(500, max(1, (args["limit"] as? NSNumber)?.intValue ?? 60))
         let after: PageCursor.Key?
         do { after = try PageCursor.key("agent", args["cursor"]) } catch { return PageCursor.refused }
-        let (page, more) = library.page(limit, after: after)
+        let screenshots = (args["subtypes"] as? [String])?.contains("screenshot") == true
+        let (page, more) = library.page(limit, after: after, screenshots: screenshots)
         let assets = page.map { a -> [String: Any] in
             ["id": a.id, "mediaType": "image", "width": a.width, "height": a.height, "creationDate": a.created,
              "favorite": false, "picture": "photos:\(a.id)",
-             "apple": ["mediaSubtypes": [String](), "burstIdentifier": NSNull(), "hasAdjustments": false], "android": NSNull()]
+             "apple": ["mediaSubtypes": a.screenshot ? ["photoScreenshot"] : [String](), "burstIdentifier": NSNull(), "hasAdjustments": false], "android": NSNull()]
         }
         let cursor = more ? page.last.map { PageCursor.text("agent", .init(date: $0.created, id: $0.id)) } : nil
         return ["assets": assets, "cursor": cursor ?? NSNull()]

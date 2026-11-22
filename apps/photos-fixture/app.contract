@@ -4,7 +4,8 @@
 // permission while `prompt`, so the dialog is the launch's), each photo drawn
 // by its picture and copied when pressed; the last copy can be added back to
 // the library or made the image call's source. Show more reads again with a
-// larger limit; Older reads the next page, after the cursor the last answered.
+// larger limit; Older reads the next page, after the cursor the last answered;
+// Screenshots reads the screenshots alone (LLP 1133.019.000 D4) from the first page.
 use photoLibraryStatus, photoAssets, copyPhotoAsset, addToPhotoLibrary, managePhotoSelection, PhotoLibraryStatus, PhotoAssetList, PhotoCopy, PhotoAdded from "@exact/photos"
 
 // The image call's record, or its failure, as JSON text.
@@ -16,7 +17,8 @@ component Fixture
   state limit = 12
   state cursor = ""
   state page = 1
-  resource recent = photoAssets(limit=limit, cursor=cursor) as shape PhotoAssetList else empty()
+  state screenshots = false
+  resource recent = photoAssets(limit=limit, cursor=cursor, subtypes=(screenshots ? ["screenshot"] : [])) as shape PhotoAssetList else empty()
   mutation copied as shape PhotoCopy
   mutation added as shape PhotoAdded
   mutation managed as shape PhotoLibraryStatus
@@ -28,6 +30,10 @@ component Fixture
   action older(next: string)
     cursor = next
     page = page + 1
+  action toggleScreenshots
+    screenshots = !screenshots
+    cursor = ""
+    page = 1
   action copy(id: string)
     send copied = copyPhotoAsset(asset=id)
   action addBack(path: string)
@@ -49,8 +55,11 @@ component Fixture
         for a, i in recent.assets key=a.id
           button press=copy(a.id) testId=`photo-${i + 1}` aria-label=`Photo ${i + 1}` padding=0
             image a.picture width=96 height=96 object-fit="cover" alt=`Photo ${i + 1}`
-      button press=more testId="more"
-        text "Show more"
+      row gap=8
+        button press=more testId="more"
+          text "Show more"
+        button press=toggleScreenshots testId="screenshots" aria-pressed=screenshots
+          text "Screenshots"
       text `Page ${page}` testId="page"
       match recent.cursor
         case some(next)

@@ -189,6 +189,7 @@ final class PhotoKitLibrary: NSObject, PHPhotoLibraryChangeObserver {
             options.fetchLimit = limit + 1
             options.predicate = images
             var predicates = [images]
+            if let only = Self.subtypePredicate(args) { predicates.append(only) }
             // The app adds predicates (D9); the module keeps its own.
             if let hatch = PhotosModule.fetchOptions {
                 hatch(options)
@@ -215,6 +216,13 @@ final class PhotoKitLibrary: NSObject, PHPhotoLibraryChangeObserver {
                 DispatchQueue.main.async { reply(["assets": out, "cursor": cursor ?? NSNull()]) }
             }
         }
+    }
+
+    /// `subtypes`' predicate (LLP 1133.019.000 D4), nil for every image:
+    /// `screenshot` is the `photoScreenshot` bit.
+    static func subtypePredicate(_ args: [String: Any]) -> NSPredicate? {
+        guard (args["subtypes"] as? [String])?.contains("screenshot") == true else { return nil }
+        return NSPredicate(format: "(mediaSubtypes & %ld) != 0", Int(PHAssetMediaSubtype.photoScreenshot.rawValue))
     }
 
     /// The page after `after` in the list's order: newest first, the
