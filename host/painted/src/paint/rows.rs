@@ -365,7 +365,9 @@ impl Painter {
     /// Invalidate the rows reached by the host's changes.
     pub(crate) fn rows_dirty(&mut self, kernel: &Kernel, dirty: Dirty) {
         if dirty.destroyed {
-            self.canvases.retain(|view, _| kernel.node(*view).is_some());
+            self.canvases
+                .readbacks
+                .retain(|view, _| kernel.node(*view).is_some());
         }
         self.numerals.committed = dirty.committed;
         self.invalidate_rows(kernel, dirty);

@@ -616,6 +616,8 @@ impl<D: DataSource> Presenter<D> {
         if let Some(note) = executor.note() {
             host.log(note.to_string());
         }
+        let mut brush = Painter::new(text.clone(), scale, backend);
+        brush.canvases.drawings = host.canvas_snapshots().clone();
         let mut p = Presenter {
             last_wheel: None,
             wheel_free: BTreeMap::new(),
@@ -630,7 +632,7 @@ impl<D: DataSource> Presenter<D> {
             transform_geometry: Default::default(),
             arrange: None,
             group: None,
-            brush: Painter::new(text.clone(), scale, backend),
+            brush,
             text,
             make_text,
             ahead: None,

@@ -410,8 +410,8 @@ pub struct Painter {
     pub(crate) placements: BTreeMap<ViewId, crate::placement::Placement>,
     /// The canvases whose children their surfaces composite, and their pictures.
     pub(crate) composites: composite::Composites,
-    /// Each 2D canvas's latest bitmap (LLP 1056).
-    pub(crate) canvases: BTreeMap<ViewId, crate::canvas2d::CanvasPaint>,
+    /// Canvas 2D snapshots and GPU readbacks.
+    pub(crate) canvases: crate::canvas2d::CanvasPictures,
     /// Each hatched node's overlay as last published (LLP 1075.003.000.001 §2.2.1).
     pub(crate) overlays: BTreeMap<ViewId, Arc<Pixmap>>,
     pub(crate) top_surface: Option<TopSurface>,
@@ -562,7 +562,7 @@ impl Painter {
             decoration_warning: false,
             placements: BTreeMap::new(),
             composites: Default::default(),
-            canvases: BTreeMap::new(),
+            canvases: Default::default(),
             overlays: BTreeMap::new(),
             top_surface: None,
             scrollbars: Default::default(),
