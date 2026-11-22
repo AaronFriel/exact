@@ -748,29 +748,11 @@ fn a_key_runs_capture_outermost_first_then_bubbles_until_a_stop() {
     }
 }
 
-/// Work due at the keydown fires first, as it does before any input, so a
-/// change task the boot armed does not hold the key back.
 #[test]
-fn a_key_waits_for_no_change_task_due_before_it() {
-    let source = r#"component App
-  state closed = false
-  state seen = 0
-  action bump
-    seen = seen + 1
-  action keys(key: string)
-    if key == "Escape"
-      closed = true
-  task watch when not closed key=closed
-    change(bump)
-  view
-    column key=keys testId="window"
-      text `${seen}` testId="seen"
-
-test "Escape closes the window"
-  type "window" key "Escape"
-  expect state closed == true
-"#;
-    let s = script::scripted("due", source, None).unwrap().remove(0);
-    assert!(s.delivery.stopped.is_none(), "{:?}", s.delivery.stopped);
-    crate::expectations(&s).unwrap();
+fn input_runs_after_every_change_due_at_its_arrival() {
+    let source = include_str!("../../corpus/timers/input-order.contract");
+    for s in script::scripted("input order", source, None).unwrap() {
+        assert!(s.delivery.stopped.is_none(), "{:?}", s.delivery.stopped);
+        crate::expectations(&s).unwrap_or_else(|e| panic!("{}: {e}", s.case.name));
+    }
 }

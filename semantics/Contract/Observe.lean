@@ -131,6 +131,10 @@ def advanceTrace (p : Program) (o : Oracle) (c : Config) (t : F64)
   let pick (c : Config) : Option Clock := clockPick p c t ((due c).map (·.1.next))
   let finish (c : Config) : (Config × Outcome) × List Ran :=
     (({ c with now := if t > c.now then t else c.now }, .ok), [])
+  let refused (c : Config) (e : Err) (kind action : String)
+      (resume : Config → (Config × Outcome) × List Ran) :=
+    let ((c, out), ran) := if applyChanges then resume c else ((c, .ok), [])
+    ((c, out.afterRefusal e), ⟨kind, action, .refused e⟩ :: ran)
   -- At most `timerFireLimit` fires per advance (the runner's
   -- `TIMER_FIRE_LIMIT`), `then`s and queued sends counted; one more due is
   -- a refusal.
@@ -148,21 +152,24 @@ def advanceTrace (p : Program) (o : Oracle) (c : Config) (t : F64)
         | (c, .ok) =>
           let (result, ran) := go n c
           (result, ⟨"queue", m, .ok⟩ :: ran)
-        | (c, out) => ((c, out), [⟨"queue", m, out⟩])
+        | (c, .refused e) => refused c e "queue" m (go n)
+        | (c, out@(.poisoned _)) => ((c, out), [⟨"queue", m, out⟩])
       | .some (.andThen m w a) =>
         let c := { c with armed := c.armed.filter (·.1 != m), now := if c.now < w then w else c.now }
         match thenCommit p o c a (thenArgsOf p m) [] [] with
         | (c, .ok) =>
           let (result, ran) := go n c
           (result, ⟨"then", a, .ok⟩ :: ran)
-        | (c, out) => ((c.armNexts p, out), [⟨"then", a, out⟩])
+        | (c, .refused e) => refused (c.armNexts p) e "then" a (go n)
+        | (c, out@(.poisoned _)) => ((c.armNexts p, out), [⟨"then", a, out⟩])
       | .some (.owned i w a) =>
         let c := { c with sendRows := disarm c.sendRows i, now := if c.now < w then w else c.now }
         match ownedThen p o c i a with
         | (c, .ok) =>
           let (result, ran) := go n c
           (result, ⟨"then", a, .ok⟩ :: ran)
-        | (c, out) => ((c.armNexts p, out), [⟨"then", a, out⟩])
+        | (c, .refused e) => refused (c.armNexts p) e "then" a (go n)
+        | (c, out@(.poisoned _)) => ((c.armNexts p, out), [⟨"then", a, out⟩])
       | .none =>
       match due c with
       | .none => finish c
@@ -174,7 +181,8 @@ def advanceTrace (p : Program) (o : Oracle) (c : Config) (t : F64)
         | (c, .ok) =>
           let (result, ran) := if tm.change && !applyChanges then ((c, .ok), []) else go n c
           (result, ⟨"task", tm.action, .ok⟩ :: ran)
-        | (c, out) => ((c, out), [⟨"task", tm.action, out⟩])
+        | (c, .refused e) => refused c e "task" tm.action (go n)
+        | (c, out@(.poisoned _)) => ((c, out), [⟨"task", tm.action, out⟩])
   if t < c.now then ((c, .ok), []) else go timerFireLimit c
 
 /-- Land the armed `then`s and queued sends at the current clock, without timers. -/
@@ -292,7 +300,7 @@ def dispatchAt (p : Program) (o : Oracle) (c : Config) (target event : String)
   | .none => dispatch p o c target event payload
   | .some n =>
     if (n.handlers.find? (·.1 == event)).isNone then dispatch p o c target event payload else
-    match advance p o c c.now with
+    match advance p o c c.now true with
     | (c₁, .poisoned e) => (c₁, .poisoned e)
     | (c₁, o₁) =>
       match dispatch p o c₁ target event payload with
@@ -319,7 +327,7 @@ def dispatchAtTrace (p : Program) (o : Oracle) (c : Config) (target event : Stri
   | .none => dispatchTrace p o c target event payload
   | .some n =>
     if (n.handlers.find? (·.1 == event)).isNone then dispatchTrace p o c target event payload else
-    match advanceTrace p o c c.now with
+    match advanceTrace p o c c.now true with
     | ((c₁, .poisoned e), ran) => ((c₁, .poisoned e), ran)
     | ((c₁, o₁), due) =>
       let ((c₂, o₂), handler) := dispatchTrace p o c₁ target event payload
