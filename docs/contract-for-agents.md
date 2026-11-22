@@ -126,6 +126,12 @@ component Frame
     Inspector(title="Card")
 ```
 
+Run `bun exact.mjs web` from the app directory and open
+`/__dev/frames/card/` on the dev server. Each `frames/<name>.contract` has
+its own URL. Editing a frame refreshes the pages whose compiled content
+changes. An error appears in the affected frame, which keeps its last good
+view while you edit.
+
 From the Exact checkout, build the frame with
 `bun host/web-js/build.mjs /path/to/app --frame frames/card.contract --out /path/to/app/target/card`
 and serve the output directory. The app supplies the design, theme and declared

@@ -38,7 +38,7 @@ import { namesStream } from './stream-names.mjs';
 import { bundleHostModule, localImports, stageHostGlue, writeFalse } from './glue.mjs';
 import { gateAgent } from './agent-gate.mjs';
 import { contentName, contentNames } from './content-names.mjs';
-import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, undeclaredRustData, fresh, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp, sizeWarning, entrySizeReport } from './module.mjs';
+import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, undeclaredRustData, fresh, frameURL, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp, sizeWarning, entrySizeReport } from './module.mjs';
 import { appDigest, developmentStore } from '../../scripts/agent-launch.mjs';
 import { settingLines } from '../../js/bake/src/__exact_env.mjs';
 import { colorSchemeMeta, interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from '../web/look.mjs';
@@ -60,7 +60,9 @@ const appDir = process.env.EXACT_APP_DIR ? resolve(process.env.EXACT_APP_DIR) : 
 // Before anything reads a package: the dev loop runs this build directly, not through resolveApp (#115).
 try { installedFileDependencies(appDir); } catch (error) { console.error(`error: ${error.message}`); process.exit(1); }
 const manifest = readManifest(appDir, app);
-const siteBase = manifest.host?.web?.base ?? "/";
+const framePath = opt('--frame');
+const frame = framePath && !framePath.startsWith('--') && resolve(appDir, framePath);
+const siteBase = frame && args.includes('--serve-frame') ? frameURL(basename(frame, '.contract')) + '/' : manifest.host?.web?.base ?? "/";
 if (siteBase !== "/" && opt("--plan")) throw new Error("host.web.base: native update bakes require /; build the standalone JS site without --plan");
 // Bun's runtime transpiler cache keys a module by its text and keeps the
 // imports this build's mount resolver gives it (below), so the same file at
@@ -82,8 +84,6 @@ if (process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH !== '0') {
 // With no bake (an app that names no native platform, LLP 1153 D3.6), it
 // builds the app's own Contract, links its web manifest, and has no envelope.
 const production = args.includes('--production');
-const framePath = opt('--frame');
-const frame = framePath && !framePath.startsWith('--') && resolve(appDir, framePath);
 if (args.includes('--frame') && (!frame || production || opt('--plan') || opt('--contract') || opt('--data'))) {
   console.error('--frame takes one app-owned Contract file for a development build'); process.exit(2);
 }

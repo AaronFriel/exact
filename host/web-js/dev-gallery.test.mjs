@@ -14,6 +14,7 @@ import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rm
 import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { suiteBrowser } from '../../scripts/agent-launch.mjs';
 import { galleryCache } from './dev-gallery.mjs';
 import { FRAME_ANCESTORS } from '../../scripts/forma-server.mjs';
 import { fileURLToPath } from 'node:url';
@@ -249,3 +250,75 @@ test("an inspect table asked with no page of the gallery open is a process of th
   rmSync(loop.cache, { recursive: true, force: true });
   rmSync(s.dir, { recursive: true, force: true });
 }, 120_000);
+
+test('each frame URL reloads its own document and recovers from its own errors', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-frame-pages-'));
+  mkdirSync(join(dir, 'frames'));
+  writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Canvas', app: { name: 'Canvas', id: 'test.frame-pages' } }));
+  const app = `routes nav
+  home "/"
+component App
+  view
+    Card(title="Full app")
+component Card
+  props
+    title: string
+  state count = 0
+  action add
+    count = count + 1
+  view
+    column
+      text title
+      button press=add
+        text count.toString()
+`;
+  const source = title => `use Card from "../app.contract"
+component Frame
+  view
+    Card(title=${JSON.stringify(title)})
+`;
+  const put = (name, content) => writeFileSync(join(dir, 'frames', name + '.contract'), content);
+  writeFileSync(join(dir, 'app.contract'), app);
+  put('card', source('Card A'));
+  put('other', source('Card B'));
+  let loop, browser;
+  try {
+    loop = await devLoop(dir);
+    browser = await suiteBrowser('chromium');
+    const context = await browser.newContext();
+    const [a, b, full] = await Promise.all([context.newPage(), context.newPage(), context.newPage()]);
+    const open = async (page, path, title) => {
+      await page.goto(loop.base + path);
+      await page.getByText(title, { exact: true }).waitFor({ timeout: 120_000 });
+    };
+    await Promise.all([open(a, '/__dev/frames/card/', 'Card A'), open(b, '/__dev/frames/other/', 'Card B'), open(full, '/', 'Full app')]);
+    const count = b.getByRole('button');
+    await count.click();
+    await b.getByRole('button', { name: '1' }).waitFor();
+    await b.evaluate(() => { window.frameDocument = 'kept'; });
+    await full.evaluate(() => { window.appDocument = 'kept'; });
+    put('card', source('Card A edited'));
+    await a.getByText('Card A edited', { exact: true }).waitFor({ timeout: 60_000 });
+    expect(await b.evaluate(() => window.frameDocument)).toBe('kept');
+    expect(await full.evaluate(() => window.appDocument)).toBe('kept');
+    expect(await count.textContent()).toBe('1');
+
+    put('other', source('Card B').replace('"Card B"', 'unknownTitle'));
+    const error = b.locator('pre').filter({ hasText: 'unknownTitle' });
+    await error.waitFor({ timeout: 60_000 });
+    expect(await error.textContent()).toContain('other.contract:');
+    expect(await a.locator('pre').filter({ hasText: 'unknownTitle' }).count()).toBe(0);
+    put('other', source('Card B'));
+    await error.waitFor({ state: 'detached', timeout: 60_000 });
+    expect(await b.evaluate(() => window.frameDocument)).toBe('kept');
+    expect(await count.textContent()).toBe('1');
+
+    writeFileSync(join(dir, 'app.contract'), app.replace('      text title', '      text "Shared edit"\n      text title'));
+    await Promise.all([a, b, full].map(page => page.getByText('Shared edit', { exact: true }).waitFor({ timeout: 60_000 })));
+    expect((await fetch(loop.base + '/__dev/frames/absent/')).status).toBe(404);
+  } finally {
+    await browser?.close();
+    await loop?.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 300_000);

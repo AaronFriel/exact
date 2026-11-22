@@ -1048,9 +1048,9 @@ test.each([posix.sep, win32.sep])('the JS watcher skips build outputs and keeps 
     const context = {
       app, OUTPUT, INPUT_TREE, shaderWatchRoots, within, existsSync, dirname, sep, besidePattern,
       fsWatch: (_path, _options, listener) => { notify = listener; },
-      stopping: false, compilerInput: path => path === join(dir, 'node_modules/used/source.contract'),
+      stopping: false, skipCargoTarget: () => false, compilerInput: path => ['node_modules/used/source.contract', 'frames/shared.contract'].some(name => path === join(dir, name)),
       backendOf: () => 'current', backendSeen: 'previous',
-      temporaryOfDesign: () => false, movedSince: () => true, since: Date.now() + 1000,
+      temporaryOfSource: () => false, movedSince: () => true, since: Date.now() + 1000,
       resolve, statSync, timer: null, saved: 0, edited: new Set(), residentChild: null,
       starting: { failure: null }, inputs: 0, movedSinceBuild: new Set(), appeared: new Set(),
       stopYoungBuild() {}, clearTimeout() {}, setTimeout: callback => { pending = callback; return 1; },
@@ -1058,7 +1058,7 @@ test.each([posix.sep, win32.sep])('the JS watcher skips build outputs and keeps 
     };
     runInNewContext(rules + source.slice(begin, end) + '\nwatch(app.dir, { recursive: true }, changed(app.dir));', context);
     for (const name of ['target/web-js-dev-stage/hash/manifest.json', 'app.contract.d.ts', 'macos.out', 'macos.err',
-      'other.OUT', '.exact/evidence.err', 'node_modules/unused/source.contract', 'nested/.cache/file.js']) {
+      'other.OUT', '.exact/evidence.err', 'node_modules/unused/source.contract', 'nested/.cache/file.js', 'frames/preview.contract']) {
       notify('change', name.replaceAll('/', sep));
       expect(context.edited.has(join(dir, name)), name).toBe(false);
       expect(pending, name).toBeNull();
@@ -1066,7 +1066,7 @@ test.each([posix.sep, win32.sep])('the JS watcher skips build outputs and keeps 
     expect(rebuilds).toBe(0);
     const inputs = ['app.contract', 'app.forma', 'app.ts', 'unused.ts', 'helper.js', 'local-crate/src/messages.err',
       'local-crate/src/captured.out', 'assets/logo.png', 'shader-gen/captured.out', 'declared.out', 'tools/declared.err',
-      '.env.local', '.exact/backend-origin', 'node_modules/used/source.contract'];
+      '.env.local', '.exact/backend-origin', 'node_modules/used/source.contract', 'frames/shared.contract'];
     if (sep === '/') inputs.push('nested\\target\\literal.ts');
     for (const [index, name] of inputs.entries()) {
       notify('change', name.replaceAll('/', sep));

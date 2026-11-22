@@ -23,6 +23,9 @@ import { proofInputs } from '../../game/inputs.mjs';
 import { keptProducts } from '../../scripts/kept.mjs';
 import { RustMissing, fromSet, fromSets, fetchedTool, launch, rustMissing, freshCompiler } from '../../scripts/tools.mjs';
 import { EXE } from '../../scripts/paths.mjs';
+/** The development URL for frames/<name>.contract. */
+export const frameURL = name => '/__dev/frames/' + encodeURIComponent(name).replaceAll("'", '%27');
+
 export { EXE };
 import { buildScriptDir, crateDir, depInfoOf, fresh as cargoFresh, refreshCargoRustBindings } from '../../scripts/cargo-dep-info.mjs';
 export { buildScriptDir, crateDir, depInfoOf, freshCompiler };

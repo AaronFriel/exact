@@ -39,7 +39,7 @@ import { hostModuleSources } from './glue.mjs';
 import { engagement } from '../web/engagement.js';
 import { schemeHead } from '../web/look.mjs';
 import { INSPECT_EVENTS } from './inspect-dev.js';
-import { galleryLoop } from './dev-gallery.mjs';
+import { frameLoops, galleryLoop } from './dev-gallery.mjs';
 import { inlineWhy as inlineWhyOf } from './dev-inline.mjs';
 import { DEV_STATUS_TYPE, FAILED, PHASE, gist } from '../web/dev-phase.mjs';
 import { startupBuilds, stopBuildTree } from '../web/dev-startup.mjs';
@@ -560,11 +560,15 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   let backendSeen = backendOf();
   const pending = new Map(); // seq -> the save it answers
   // The variant gallery (dev-gallery.mjs), started by its first page: told of each publication after it is out.
-  const gallery = galleryLoop({ app, root, appDist: dist, channel: () => forma?.channel, design: () => design?.digest ?? null, idleMs: Number(process.env.EXACT_DEV_GALLERY_IDLE_MS) || undefined,
+  const previewOptions = { app, root, appDist: dist, channel: () => forma?.channel, design: () => design?.digest ?? null, idleMs: Number(process.env.EXACT_DEV_GALLERY_IDLE_MS) || undefined,
     // (The reader's binary while it is fresh, asked without building it or the reader again; else no table yet.)
     tableTool: () => (tool.ready && tool.path && toolCurrent() ? launch(tool.path) : null),
     compiler: () => { const copy = compilerCopy(app); return freshCompiler(copy) ? copy : null; },
-    client: (n) => client(n, null, { base: '/__dev/gallery', stream: '/__dev/gallery/stream', page: 'gallery' }) });
+  };
+  const gallery = galleryLoop({ ...previewOptions,
+    client: n => client(n, null, { base: '/__dev/gallery', stream: '/__dev/gallery/stream', page: 'gallery' }) });
+  const frames = frameLoops({ app, root, compiler: previewOptions.compiler, tableTool: previewOptions.tableTool,
+    client: (n, base) => client(n, null, { base, stream: base + '/stream' }) });
   const rebuild = async () => {
     // A burst a build already took (its timer still armed) is no edit.
     if (stopping || !edited.size) return;
@@ -592,6 +596,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     }
     // Kept until a build lands: a failed one's edits are the next build's too.
     const pendingEdits = [...edited], pendingAppeared = [...appeared];
+    if (pendingEdits.some(path => !path.endsWith('.contract'))) frames.changed();
     edited.clear(); appeared.clear();
     // Whatever waited for the reader is this pass's now (a build that fails keeps it for the next edit, as any).
     readerWait = false;
@@ -743,15 +748,15 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     }
     if (again) { again = false; rebuild(); }
   };
-  // An editor's temporary name for a `.forma` file beside it: the file's
+  // An editor's temporary name for a design or preview source beside it: the file's
   // name with `.tmp` (and a hex or numeric suffix, a pid or a hash), `.swp`,
   // `.swx`, `~`, JetBrains' or Emacs's marks; anchored, so no other file
   // named after it (`app.forma.tmp.png`) is one.
-  const TEMPORARY = /^(?:\.?(.+\.forma)(?:\.tmp(?:[.-][0-9a-f]+)?|\.sw[px]|~|___jb_(?:tmp|old)___)|#(.+\.forma)#|\.#(.+\.forma))$/;
-  const temporaryOfDesign = (path) => {
+  const TEMPORARY = /^(?:\.?(.+\.(?:forma|contract))(?:\.tmp(?:[.-][0-9a-f]+)?|\.sw[px]|~|___jb_(?:tmp|old)___)|#(.+\.(?:forma|contract))#|\.#(.+\.(?:forma|contract)))$/;
+  const temporaryOfSource = (path) => {
     const m = TEMPORARY.exec(basename(path));
-    const design = m && (m[1] ?? m[2] ?? m[3]);
-    return !!design && existsSync(resolve(dirname(path), design));
+    const source = m && (m[1] ?? m[2] ?? m[3]);
+    return !!source && (source.endsWith('.forma') || within(resolve(app.dir, 'frames'), path)) && existsSync(resolve(dirname(path), source));
   };
   const outputIsInput = (name) => {
     const path = resolve(app.dir, name);
@@ -784,12 +789,14 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     // An editor's temporary for a design beside it (an atomic save writes
     // `app.forma.tmp` and renames it over `app.forma`; its event can come
     // before or after the rename): never an input, whenever it comes.
-    if (name && temporaryOfDesign(path)) return;
+    if (name && temporaryOfSource(path)) return;
     // Crates can include any extension; declared inputs and input trees also keep their output-looking files.
     if (base === app.dir && OUTPUT.test(name) && !outputIsInput(name)) return;
     // A package's events are all edits: a link replaced by one to an older
     // file is newer than nothing, and its target's time says nothing of it.
     if (fresh && name && !backendMoved && !movedSince(path, since)) return;
+    // Frame Contract files have their own dependency watches. An app may also import one.
+    if (base === app.dir && (name === 'frames' || (name?.startsWith('frames/') && path.endsWith('.contract'))) && !compilerInput(path)) return;
     if (!timer) saved = Date.now();
     edited.add(path);
     // A resident start that failed is tried again at the next request after
@@ -1143,7 +1150,7 @@ for(;;){
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
       return res.end(req.method === 'HEAD' ? undefined : readFileSync(resolve(root, 'host/web-js/inspect-dev.js')));
     }
-    if (await gallery.handle(req, res, url)) return; // the variant gallery's page, files and stream (dev-gallery.mjs)
+    if (await frames.handle(req, res, url) || await gallery.handle(req, res, url)) return;
     if (url.pathname === '/__dev/report' && req.method === 'POST') {
       if (!forma) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
       await serveReport(forma.channel, req, res);
@@ -1331,7 +1338,7 @@ for(;;){
     for (const entry of packageEntries.values()) entry.watch.close();
     for (const w of watchers) w.close(); residentChild?.kill('SIGTERM'); server.close(); server.closeAllConnections?.();
     // The design server lets go of its lock before this exits.
-    await Promise.all([buildExit, forma?.close(), doors?.close(), gallery.stop()]);
+    await Promise.all([buildExit, forma?.close(), doors?.close(), gallery.stop(), frames.stop()]);
     // A local iOS build in flight is stopped and waited for, as the resident loop does.
     const install = installer.child;
     if (install && install.exitCode === null && install.signalCode === null) { const exit = new Promise((ok) => install.once('exit', ok)); install.kill('SIGTERM'); await exit; }
