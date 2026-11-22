@@ -2746,6 +2746,13 @@ lists any literal colour, font size or weight an app's `.contract` files still w
 | a route with `navigationPresentation="modal"` | a sheet |
 | a route pushed while a sheet is on top, with no `navigationPresentation` of its own | pushed inside the sheet, with the system Back; the sheet's swipe down, or a tap behind a `closedby="any"` one, closes the sheet with every route pushed inside it |
 
+On iOS, a system dialog sheet can use the same resting heights as a modal route.
+For a form that opens tall and can be dragged down to half height, write
+`navigationDetent="medium large" navigationInitialDetent="large"` on the
+`dialog`. A sheet with several heights shows a grabber by default.
+`navigationGrabber="visible"` or `"hidden"` chooses its visibility.
+A dialog that omits `navigationDetent` fits its content.
+
 A native `select` fits its widest option by default, as on the web
 (LLP 1069.001 D3). Write `field-sizing="content"` to fit the shown value, as a
 UIKit pop-up button does, on either Apple host or the web. These are intrinsic sizes; authored widths and

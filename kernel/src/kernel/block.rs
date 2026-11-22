@@ -477,10 +477,13 @@ pub(crate) fn publication_start(arena: &mut NodeArena, root: u32) -> (bool, bool
 /// A block in a box a host replaced whole (a tab not yet built, LLP
 /// 1075.003 §9.12) is `display: none` as that box is: none of its subtree
 /// is measured, and it is published hidden until the box is given back.
-pub(crate) fn apply(arena: &NodeArena, slot: u32, s: &mut taffy::style::Style) {
-    let Some(block) = arena.blocks.get(slot) else {
-        return;
-    };
+pub(crate) fn apply(
+    arena: &NodeArena,
+    slot: u32,
+    block: Option<HostBlock>,
+    s: &mut taffy::style::Style,
+) {
+    let Some(block) = block else { return };
     if replaced_above(arena, slot) {
         s.display = taffy::style::Display::None;
         return;

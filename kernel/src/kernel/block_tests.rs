@@ -700,4 +700,24 @@ fn a_blocks_root_fits_its_content_at_the_blocks_width() {
     k.set_host_block(3, is(300.0, 50.0)).unwrap();
     k.compute_layout(1, OFFER).unwrap();
     assert_eq!(fit(&mut k), wide, "nor its own measure");
+    let sheet = HostBlock {
+        width: BlockAxis::Is(300.0),
+        height: BlockAxis::Fit(20.0),
+        tactic: Default::default(),
+    };
+    k.set_host_block(3, Some(sheet)).unwrap();
+    k.compute_layout(1, OFFER).unwrap();
+    assert_eq!(
+        fit(&mut k),
+        wide,
+        "a dialog can grow beyond its current detent"
+    );
+    k.apply(
+        0,
+        k.epoch() + 1,
+        &[style(3, &[(StyleId::MaxHeight, n(30.0))])],
+    )
+    .unwrap();
+    k.compute_layout(1, OFFER).unwrap();
+    assert_eq!(fit(&mut k), 30.0, "the author's maximum still applies");
 }
