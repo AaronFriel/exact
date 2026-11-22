@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
-import { basename, dirname, relative, resolve, sep } from 'node:path';
+import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { takeLock } from '../host/web/build-lock.mjs';
 
 // LLP 1172.010 E11: a frontend owns its publication; checks own one per invocation.
@@ -153,6 +153,80 @@ export function contractReadReceipt(directory) {
 export function changedContractReads(reads) {
   return Object.entries(reads).filter(([path, expected]) => {
     try { return createHash('sha256').update(readFileSync(path)).digest('hex') !== expected; }
-    catch (error) { if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return true; throw error; }
+    catch (error) { if (['ENOENT', 'ENOTDIR', 'EISDIR', 'ELOOP'].includes(error.code)) return true; throw error; }
   }).map(([path]) => path);
+}
+
+const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+
+function linkedReceipt(app, out) {
+  const destination = resolve(realpathSync(dirname(out)), basename(out));
+  return resolve(app, '.exact', 'web-builds', digest(destination) + '.json');
+}
+
+function lookup(path, sources, since = Infinity) {
+  let target;
+  try {
+    target = realpathSync(path);
+  } catch (error) {
+    if (!['ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code)) throw error;
+  }
+  // A replaced link can lead to an old file. When the lookup failed, the
+  // nearest surviving parent records the removal of a name during the build.
+  if (since !== Infinity) {
+    let missing = !target;
+    for (let part = path; ; part = dirname(part)) {
+      try {
+        const stat = lstatSync(part);
+        if ((missing || stat.isSymbolicLink()) && stat.ctimeMs >= since) return 'changed during build';
+        missing = false;
+      } catch (error) {
+        if (!['ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code)) throw error;
+      }
+      if (part === dirname(part)) break;
+    }
+  }
+  if (!target) return null;
+  try {
+    const stat = statSync(target);
+    if (stat.ctimeMs >= since) return 'changed during build';
+    return [target, stat.isFile() ? sources[target] ?? digest(readFileSync(target)) : 'directory'];
+  } catch (error) {
+    if (['ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code)) return null;
+    throw error;
+  }
+}
+
+/** Keep the compiler's package inputs with the checkout. Only their combined digest goes into a distributable site. */
+export function recordLinkedSources(app, out, generated, began) {
+  if (!existsSync(resolve(generated, 'app.plan.map.json'))) return null;
+  const root = realpathSync(app);
+  const outside = path => {
+    const fromApp = relative(root, path);
+    const parts = fromApp.split(sep);
+    return isAbsolute(fromApp) || parts[0] === '..' || parts.includes('node_modules');
+  };
+  const sources = Object.fromEntries(Object.entries(contractReadReceipt(generated)).filter(([path]) => outside(path)));
+  const file = resolve(generated, 'contract-lookups.json');
+  const names = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : [];
+  const lookups = Object.fromEntries([...new Set(names)].filter(outside).sort().map(path => [path, lookup(path, sources, began)]));
+  if (!Object.keys(sources).length && !Object.keys(lookups).length) return null;
+  const path = linkedReceipt(app, out), bytes = JSON.stringify({ sources, lookups });
+  mkdirSync(dirname(path), { recursive: true });
+  const pending = path + '.' + process.pid + '.tmp';
+  writeFileSync(pending, bytes);
+  renameSync(pending, path);
+  return digest(bytes);
+}
+
+/** A copied site can recover its local inputs by rebuilding once beside its source checkout. */
+export function linkedSourcesChanged(app, out, expected) {
+  if (!expected) return false;
+  const path = linkedReceipt(app, out);
+  let bytes;
+  try { bytes = readFileSync(path); } catch (error) { if (error.code === 'ENOENT') return true; throw error; }
+  if (digest(bytes) !== expected) return true;
+  const { sources, lookups } = JSON.parse(bytes);
+  return changedContractReads(sources).length > 0 ||
+    Object.entries(lookups).some(([file, was]) => JSON.stringify(lookup(file, sources)) !== JSON.stringify(was));
 }

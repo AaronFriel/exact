@@ -14,6 +14,7 @@ import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from '
 import { fileURLToPath } from 'node:url';
 import { filesystem, filesystemRead, filesystemTree } from '../../scripts/filesystem.mjs';
 import { withLock } from './build-lock.mjs';
+import { linkedSourcesChanged } from '../../scripts/web-build.mjs';
 import { canonicalBytes, readAssetIndex } from '../../scripts/deploy-signing.mjs';
 import { copyShaders, developmentURLScheme, resolveApp, webDist, webHostFiles } from '../../scripts/app.mjs';
 import { settingChanges } from '../../js/bake/src/__exact_env.mjs';
@@ -1405,12 +1406,16 @@ export function rebuildOnChange(dist, build = null) {
   // wrote, which tells a receipt another build wrote apart.
   let covered = receipt(), ours = null, checked = 0, running = null;
   const newer = (sources) => sources.newest > (receipt() === ours ? covered : Math.max(covered, receipt()));
+  const readMarker = () => {
+    try { return JSON.parse(readFileSync(resolve(out, '.exact-build.json'), 'utf8')); } catch { return null; }
+  };
+  const linkedChanged = card => !card || linkedSourcesChanged(app, out, card.linkedSources);
   const again = async () => {
     for (;;) {
       const basis = appSources(app, out).newest, { code, said } = await build();
       if (code !== 0) { console.error(said.trimEnd()); return said; }
       covered = basis; ours = receipt();
-      if (!newer(appSources(app, out))) return null;
+      if (!newer(appSources(app, out)) && !linkedChanged(readMarker())) return null;
       console.log(`${app}: a source changed while it built: building it again`);
     }
   };
@@ -1418,10 +1423,11 @@ export function rebuildOnChange(dist, build = null) {
     if (running) return running;
     if (Date.now() - checked < 300) return null;
     checked = Date.now();
-    let settings = [], built = null;
-    try { const now = JSON.parse(readFileSync(resolve(dist, '.exact-build.json'), 'utf8')); settings = settingChanges(now.env ?? {}, env, app); built = now.sources; } catch { /* being replaced */ }
+    const card = readMarker(), settings = settingChanges(card?.env ?? {}, env, app);
     const sources = appSources(app, out);
-    if (!settings.length && !newer(sources) && sources.digest === built) return null;
+    // Older local release receipts did not record their package imports.
+    const legacy = card?.release && card.target === 'js' && !('linkedSources' in card);
+    if (!legacy && !settings.length && !newer(sources) && sources.digest === card?.sources && !linkedChanged(card)) return null;
     console.log(`${app}: ${settings.length ? `the build has other settings than this server (${settings.map((c) => c.name).join(', ')})` : 'a source changed since the build'}: building it again`);
     running = again().finally(() => { running = null; });
     return running;

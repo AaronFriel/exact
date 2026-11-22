@@ -613,6 +613,16 @@ fn main() -> ExitCode {
                 let map_path = dir.join("app.plan.map.json");
                 let _ = std::fs::remove_file(&map_path);
                 if let Some(map) = &map {
+                    let lookups = dir.join("contract-lookups.json");
+                    let paths: Vec<_> = map
+                        .resolution_paths()
+                        .iter()
+                        .map(|p| p.display().to_string())
+                        .collect();
+                    if let Err(e) = std::fs::write(&lookups, serde_json::json!(paths).to_string()) {
+                        eprintln!("{}: {e}", lookups.display());
+                        return ExitCode::from(1);
+                    }
                     if let Err(e) = std::fs::write(&map_path, map.json(&bytes)) {
                         eprintln!("app.plan.map.json: {e}");
                         return ExitCode::from(1);
