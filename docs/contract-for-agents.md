@@ -2609,8 +2609,8 @@ naming a popover to naming something else still opens that popover, and one
 changing it the other way leaves the popover nested.
 
 On macOS, iOS and the web, an action can call `showModal(id)` or `close(id)`
-for a `dialog`. macOS and the web follow the invoker's modal focus path; iOS
-presents the dialog as an alert. Bare `close()` still closes the window.
+for a `dialog`. macOS and the web follow the invoker's modal focus path. On
+iOS a confirmation opens as an alert. Bare `close()` closes the window.
 
 On the Mac a `dialog` that is not a confirmation is a sheet on its window, as
 iOS's is a sheet (LLP 1115.002 D7.2): AppKit centres it, dims the window under
@@ -2625,10 +2625,13 @@ on the side its `position-area` names (`top …` above, `right …` beside, else
 below): `popover="auto"` closes on Escape, a click elsewhere or another window,
 `popover="manual"` only by its own buttons. Write no surface for either: the
 sheet and the popover are the platform's. A popover of a dialog's is written
-inside it, as in HTML (outside it, it is inert while the dialog is open). Under
-the agent both paint in the page as before; `--chrome platform` on `macos`
-shows them, `tap`, `type` and `tree` reach what is in them, and `screenshot
-"file" window` draws them over the window.
+inside it, as in HTML (outside it, it is inert while the dialog is open). The Mac
+driver paints both in the page by default. Launch with `--chrome platform`
+to show the AppKit sheet or popover. In an open dialog, `state dialog`
+reports `presentation` as `sheet` or `painted`. Use `screenshot sheet.png
+window` to include the sheet and the dimmed parent window. The screenshot
+reply lists the windows it drew in `attached`. Both presentations support
+`tap`, `type` and `tree`.
 
 `popover` alone also accepts an optional string. For example,
 `popover=(expanded ? some("manual") : none)` keeps the same mounted box:
