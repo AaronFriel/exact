@@ -75,7 +75,7 @@ test('attach asks for a PID among several, and says why a running build cannot b
   } finally { m.done(); }
   const release = machine({ processes: { 50: notes }, plists: { '/Apps/Notes.app/Contents/Info.plist': { CFBundleIdentifier: 'com.example.notes', ExactBuildKind: 'release' } } });
   try {
-    expect(() => find(release)).toThrow('attach: Notes pid 50 is a release build, which carries no agent attach: open a development build (bun host/apple/build.mjs notes --run');
+    expect(() => find(release)).toThrow('attach: Notes pid 50 is a release build, which carries no agent attach: open a development build (`bun exact.mjs mac --run` in the app, or `bun host/apple/build.mjs notes --run` in exact2');
     expect(() => find(release, { pid: 51 })).toThrow('attach: pid 51 is not a running Notes (com.example.notes) on this Mac');
   } finally { release.done(); }
   const none = machine();

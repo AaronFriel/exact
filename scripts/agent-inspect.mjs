@@ -936,7 +936,7 @@ export function attachTarget({ id, name, app, pid = null, run = spawnSync, dir =
     const plist = (key) => p && run('plutil', ['-extract', key, 'raw', resolve(exe, 'Contents/Info.plist')], { encoding: 'utf8' }).stdout?.trim();
     return p && plist('CFBundleIdentifier') === id && (pid == null || Number(p) === pid) ? [{ pid: Number(p), purpose: plist('ExactBuildPurpose'), kind: plist('ExactBuildKind') || 'unstamped' }] : [];
   });
-  const open = `open a development build (bun host/apple/build.mjs ${app} --run, or open the .app it made), then choose Develop ▸ Enable Agent Attach in its window`;
+  const open = `open a development build (\`bun exact.mjs mac --run\` in the app, or \`bun host/apple/build.mjs ${app} --run\` in exact2, or the .app either made), then choose Develop ▸ Enable Agent Attach in its window`;
   if (!running.length) throw new Error(pid != null ? `attach: pid ${pid} is not a running ${name} (${id}) on this Mac` : `attach: no ${name} (${id}) is running on this Mac: ${open}`);
   throw new Error('attach: ' + running.map((r) => r.purpose === 'local-development'
     ? `${name} pid ${r.pid} has not turned Agent Attach on: choose Develop ▸ Enable Agent Attach in its window`
