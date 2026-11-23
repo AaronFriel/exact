@@ -2658,6 +2658,21 @@ mounted host geometry. Each read is labelled passive. The frame ring ends before
 these observations, and their wall-clock bounds, clock mode, scheduling and substitutions
 are recorded. This path never seeks or settles the app.
 
+`bun scripts/agent.mjs macos --app <app> --attach [pid] tree state logs layout "screenshot now.png"`
+reads the development Mac app a person already has open, with its own window, store and wall
+clock (LLP 1012.000). Nothing is built or launched. The person chooses **Develop ▸ Enable Agent
+Attach** in the app, then **Allow** in the sheet the driver's first connection raises; the window
+shows **Agent Attached** while the driver is connected. **Detach Agent** ends the connection and
+closes the listener until it is enabled again; quitting the app or closing the window ends it too.
+Each new connection asks again. One driver attaches at a time, to one window: `--session <label>` names
+the window when several are open, and a PID chooses among several running copies.
+The connection only reads: `tree`, `state` (masked, as the tree shows a password field), `logs`,
+`layout`, `perf` and `screenshot` (the window server's picture of the window, which is not brought
+forward). The app refuses `clock` with `live-clock` and input with `input-not-granted`, and the
+driver refuses launch flags such as `--storage`, `--live` and `--url`. Only a Mac app that
+`host/apple/build.mjs` builds to run carries the listener; a release, archive or embedded build has
+none of it.
+
 ### Inspect work and native presentation
 
 `perf <target> during "<operation>"`
