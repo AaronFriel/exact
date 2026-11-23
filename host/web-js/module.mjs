@@ -14,7 +14,7 @@ import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 // Also for its PATH: the pinned binaryen (and Cargo) as every web build has
 // them, so a prebuild optimizes and keeps what an app's build would.
-import { awaitBuildOutput, WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, injectedProfiles, resolveApp, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
+import { awaitBuildOutput, cargoCheckout, WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, injectedProfiles, resolveApp, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
 import { rustDataOf, undeclaredDataCrate } from '../../scripts/app-shells.mjs';
 import { appCrates, linkedCrate } from '../../scripts/cargo-check.mjs';
 import { SETUP_FETCHES, withHostDeployment } from '../../scripts/filesystem.mjs';
@@ -272,9 +272,9 @@ export const dirKey = (dir) => createHash('sha256').update(realpathSync(dir)).di
 // backslashes (`C:\Users`) are not read as escapes.
 const tomlString = (path) => JSON.stringify(path);
 
-// The workspace's `[patch.crates-io]` table, its vendor paths made absolute for a crate outside the workspace.
-const workspacePatch = (ws) => ws.slice(ws.indexOf('[patch.crates-io]')).split('\n[')[0]
-  .replace(/path = "(vendor[^"]*)"/g, (_, path) => `path = ${tomlString(resolve(root, path))}`);
+// The workspace's `[patch.crates-io]` table, its vendor paths made absolute, under `checkout`, for a crate outside the workspace.
+const workspacePatch = (ws, checkout = root) => ws.slice(ws.indexOf('[patch.crates-io]')).split('\n[')[0]
+  .replace(/path = "(vendor[^"]*)"/g, (_, path) => `path = ${tomlString(resolve(checkout, path))}`);
 
 /** Cargo's module at `wasm`, optimized to `<out>/app.module.wasm`. */
 function module(manifest, name, out, label, writeInputs, dev = false) {
@@ -349,9 +349,11 @@ export function buildModule(app, out, draw = false, dir = resolve(root, 'apps', 
   // own package name keeps Cargo from reusing a stage-local wrapper's artifact.
   const crate = dev ? resolve(MODULES, 'wrappers', packageName) : resolve(out, 'crate');
   mkdirSync(resolve(crate, 'src'), { recursive: true });
+  // The data crate's workspace was authored, so the wrapper names the checkout as it does (scripts/paths.mjs).
+  const checkout = cargoCheckout(resolved.dir, false);
   const writeInputs = () => {
     const ws = readFileSync(resolve(root, 'Cargo.toml'), 'utf8');
-    const patch = workspacePatch(ws);
+    const patch = workspacePatch(ws, checkout);
     keep(resolve(crate, 'Cargo.toml'), `[package]
 name = "${packageName}"
 version = "0.1.0"
@@ -361,7 +363,7 @@ publish = false
 crate-type = ["cdylib"]
 [dependencies]
 ${data.krate} = { path = ${tomlString(dataCrate)} }
-exact-logic-abi = { path = ${tomlString(resolve(root, 'logic/abi'))} }
+exact-logic-abi = { path = ${tomlString(resolve(checkout, 'logic/abi'))} }
 [profile.release]
 opt-level = "z"
 lto = "fat"
