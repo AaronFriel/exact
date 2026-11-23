@@ -103,6 +103,7 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("snapback-tests"),
     recipe!("socket-ticket"),
     recipe!("store-update"),
+    recipe!("supabase"),
     recipe!("suspending-feed"),
     recipe!("symbols"),
     recipe!("tabs"),

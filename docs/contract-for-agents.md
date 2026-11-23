@@ -2182,6 +2182,227 @@ signIn: async (_a, store) => {
   the signing identities and association files. Native Google approval and
   token rotation still need a check against the app's real Convex deployment.
 
+### Supabase
+
+The `supabase` recipe wires the session and a table; this is the rest. It was
+tried against a loopback stand-in for Supabase's APIs, not a live project.
+
+#### Supabase session
+
+Copy `supabase.ts` whole, this section's code and the next one's. The origin and the publishable key are settings:
+`"env": ["SUPABASE_URL", "SUPABASE_KEY"]` in app.json, their values in
+`.env.local`. Each Auth call keeps its reply under the `secret.keep` name; a
+change to the session holds that name's lease (`store.exclusive`, LLP 1146 D5),
+whose work must not throw after a request, or the secret is forgotten.
+
+```ts
+import { PostgrestClient } from '@supabase/postgrest-js';
+import { StorageClient } from '@supabase/storage-js';
+import { FunctionsClient } from '@supabase/functions-js';
+import type { Store } from './app.contract.d.ts';
+
+// The project's URL and publishable key, settings in app.json's `env`: neither is a secret.
+export const PROJECT = import.meta.env.SUPABASE_URL ?? 'http://127.0.0.1:54321';
+const KEY = import.meta.env.SUPABASE_KEY ?? 'anon-key';
+export const SESSION = 'supabase.session';
+
+type Session = { project: string; access_token: string; refresh_token: string; expires_in: number; expires_at: number; user: { id: string; is_anonymous: boolean } };
+export class AuthError extends Error {
+  readonly reason: string; // what a failed resource or mutation shows as its code
+  constructor(readonly status: number, readonly code: string, message: string) { super(message); this.reason = code; }
+}
+// Auth's answers to a refresh token it will never take again.
+const ENDED = ['refresh_token_not_found', 'refresh_token_already_used', 'session_not_found', 'session_expired'];
+
+// The session's changes, one at a time: a refresh, a sign-in and a sign-out each
+// read what is kept inside the lease, so none writes over another's result. A
+// lease whose work throws after a POST forgets the secret (LLP 1146 D5), so the
+// work's error is carried out of the lease and thrown there.
+async function exclusive<T>(store: Store, work: () => Promise<T>): Promise<T> {
+  type Done = { value: T } | { error: unknown };
+  const leased = store as Store & { exclusive(name: string, work: () => Promise<Done>): Promise<Done> };
+  const done = await leased.exclusive(SESSION, () => work().then((value) => ({ value }), (error: unknown) => ({ error })));
+  if ('error' in done) throw done.error;
+  return done.value;
+}
+// A session kept for another project's URL is not this one's.
+const kept = (store: Store): Session | null => {
+  const s: Session | null = JSON.parse(store.get(SESSION) ?? 'null');
+  return s?.project === PROJECT ? s : null;
+};
+
+// One Auth (GoTrue) call that answers a session, kept with its expiry on the app's clock.
+async function auth(store: Store, now: number, path: string, body: object, jwt = KEY): Promise<Session> {
+  const res = await fetch(`${PROJECT}/auth/v1/${path}`, { method: 'POST', body: JSON.stringify(body),
+    headers: { apikey: KEY, Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' } });
+  const out = await res.json();
+  if (!res.ok) throw new AuthError(res.status, typeof out.error_code === 'string' ? out.error_code : '', out.msg ?? out.message ?? `Auth answered ${res.status}`);
+  if (typeof out.access_token !== 'string' || typeof out.refresh_token !== 'string' || typeof out.user?.id !== 'string' || !(out.expires_in > 0))
+    throw new AuthError(res.status, 'bad_session', 'Auth answered no session');
+  const s = { ...out, project: PROJECT, expires_at: Math.floor(now / 1000) + out.expires_in };
+  store.set(SESSION, JSON.stringify(s));
+  return s;
+}
+
+/** A new anonymous user, unless a session is kept. */
+export const signInAnonymously = (store: Store, now: number) =>
+  exclusive(store, async () => kept(store) ?? auth(store, now, 'signup', { data: {} }));
+
+// Due for a refresh at `now` (`time.epochAtZero + performanceNow()`): a quarter of its life left, at most five
+// minutes, so the minute tick reaches a five-minute token in time.
+const due = (s: Session | null, now?: number): s is Session => s !== null && now !== undefined
+  && s.expires_at * 1000 - now <= Math.min(300_000, s.expires_in * 250);
+// The refreshed session, or `null` when Auth has ended it. A reply lost on the way is
+// asked for again at once, inside Auth's reuse interval, which answers it as before.
+async function refresh(store: Store, s: Session, now: number): Promise<Session | null> {
+  const ask = () => auth(store, now, 'token?grant_type=refresh_token', { refresh_token: s.refresh_token });
+  try {
+    return await ask().catch((e: unknown) => { if (e instanceof AuthError) throw e; return ask(); });
+  } catch (e) {
+    if (!(e instanceof AuthError && ENDED.includes(e.code))) throw e;
+    store.forget(SESSION);
+    return null;
+  }
+}
+
+/** The kept session, or `null` when signed out; given `now`, refreshed first when due. */
+export async function session(store: Store, now?: number): Promise<Session | null> {
+  if (!due(kept(store), now)) return kept(store);
+  return exclusive(store, async () => {
+    const s = kept(store);
+    return due(s, now) ? refresh(store, s, now!) : s;
+  });
+}
+
+/** Supabase's own clients, sending the session's access token; given `user`, only that user's. */
+export async function supabase(store: Store, now?: number, user?: string) {
+  const s = await session(store, now);
+  if (s === null || (user !== undefined && s.user.id !== user)) throw new AuthError(401, 'signed_out', 'Signed out');
+  const headers = { apikey: KEY, Authorization: `Bearer ${s.access_token}` };
+  return {
+    user: s.user, headers,
+    db: new PostgrestClient(`${PROJECT}/rest/v1`, { headers }),
+    storage: new StorageClient(`${PROJECT}/storage/v1`, headers),
+    functions: new FunctionsClient(`${PROJECT}/functions/v1`, { headers }),
+  };
+}
+```
+
+#### Supabase sign-out and Apple sign-in
+
+The rest of `supabase.ts`:
+
+```ts
+/** Signs this device out. Revoking its refresh token is best effort: offline, the token stays valid on the server. */
+export const signOut = (store: Store, now: number) => exclusive(store, async () => {
+  let s = kept(store);
+  if (due(s, now)) s = await refresh(store, s, now).catch(() => s);
+  store.forget(SESSION);
+  if (s !== null) await fetch(`${PROJECT}/auth/v1/logout?scope=local`, { method: 'POST',
+    headers: { apikey: KEY, Authorization: `Bearer ${s.access_token}` } }).catch(() => undefined);
+});
+
+/** Sign in with Apple's ID token, linked to `user`, the anonymous user the sheet
+ * opened for. An Apple ID that already has an account throws `identity_already_exists`
+ * and keeps the anonymous session: switching leaves its data behind, so it is the
+ * app's choice (`true`). */
+export const signInWithApple = (store: Store, idToken: string, nonce: string, now: number, user: string, switching = false) =>
+  exclusive(store, async () => {
+    let s = kept(store);
+    if (s?.user.id !== user) throw new AuthError(401, 'signed_out', 'Signed out');
+    if (due(s, now)) s = await refresh(store, s, now);
+    if (s === null) throw new AuthError(401, 'signed_out', 'Signed out');
+    const body = { provider: 'apple', id_token: idToken, nonce };
+    if (!s.user.is_anonymous || switching) return auth(store, now, 'token?grant_type=id_token', body);
+    return auth(store, now, 'token?grant_type=id_token', { ...body, link_identity: true }, s.access_token);
+  });
+
+// Auth checks that an ID token's nonce is the hex SHA-256 of the nonce it is given: ask Apple for this.
+export async function sha256(text: string) {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+```
+
+#### Supabase accounts
+
+- **The project:** enable anonymous sign-ins; give each table a `user_id uuid
+  default auth.uid()` column and row-level security policies on it for the
+  `authenticated` role (an anonymous user has it too), and the bucket policies
+  on the first folder of an object's name, which is the user's id here. Row
+  security that refuses a read answers an empty list, not an error.
+- **Sign out** from a mutation that refreshes `session`, passing the press's
+  time: `signOut: async ([now], store) => { await signOut(store, now); return {
+  ok: true, error: '' }; }`. The recipe's `anonymous` task then signs in a new
+  anonymous user. Until a read of the new user lands, and while a `when` is
+  false, a resource shows its last answer: put the user in the answer and show
+  rows only when it is `session.userId`, as [your own REST
+  server](recipes/rest-backend.md) does with `owner`.
+- **A refused refresh** (`refresh_token_not_found` and the other ended
+  sessions) forgets the session, and `session` answers `null`; a 429, a 5xx or
+  no network keeps it for the next tick, and a reply lost on the way is asked
+  for again at once. Auth takes a refresh token again within its reuse interval (10 s
+  by default), or when it is the active token's parent, and revokes the session
+  for any other reuse ([Supabase
+  sessions](https://supabase.com/docs/guides/auth/sessions)); the lease keeps
+  two answers from spending one token. A session kept for another
+  `SUPABASE_URL` is ignored, and its token never sent there.
+- **Sign in with Apple** links the Apple ID to the anonymous user. The project
+  enables manual linking, and its Apple provider lists the app's bundle ID.
+  `@exact/sign-in` passes `params.nonce` to Apple unchanged, and Auth compares
+  the token's nonce with the hex SHA-256 of the nonce it is given: before the
+  press, draw `raw = crypto.randomUUID()` and ask Apple for `await sha256(raw)`,
+  then call `signInWithApple(store, credential.token.authorization.id_token,
+  raw, now, user)`, `user` being the `session.userId` the sheet opened for. That
+  is the native credential. On the web the ID token stays with the app's server
+  ([sign-in recipe](recipes/sign-in.md)), whose token's audience is the
+  Services ID, which the Apple provider then lists too; that server makes the
+  exchange, with the anonymous session to link, and hands back the session.
+  An Apple ID with an account of its own throws `identity_already_exists`
+  (`failure(x).code`, from `AuthError`'s `reason`) and keeps the anonymous
+  user; switching (`signInWithApple(…, true)`) leaves that user's rows behind.
+- **The tokens:** on the web `secret.keep` is the page's `localStorage`, where
+  supabase-js keeps them in a browser, readable by any script on the origin;
+  on Linux an unencrypted file. A web refresh token out of scripts' reach needs
+  the exchange behind your server and an HttpOnly cookie ([web
+  sessions](recipes/web-sessions.md)).
+
+#### Supabase Storage and Functions
+
+From a test app's sources, after `const { db, storage, functions, user,
+headers } = await supabase(store, now, owner)` and `images =
+storage.from('images')`, `owner` being the `session.userId` the file was chosen
+under, so a write queued across a sign-out is refused:
+
+```ts
+ok(await images.upload(`${user.id}/a.png`, new Uint8Array([137, 80, 78, 71]), { contentType: 'image/png', upsert: true }));
+(ok(await storage.from('images').list(user.id)) ?? []).map(f => f.name)
+ok(await images.remove([`${user.id}/a.png`]));
+ok(await functions.invoke<{ greeting: string }>('hello', { body: { name: 'Ada' } }))?.greeting ?? ''
+```
+
+A native request holds at most 4 MiB, so a photo goes up from its file
+(`fs.read` of its folder) with `fetch`, which streams it from disk:
+
+```ts
+const res = await fetch(`${PROJECT}/storage/v1/object/images/${user.id}/photo.jpg`, { method: 'POST', exactBodyFrom: 'app:/tmp/photo.jpg',
+  headers: { ...headers, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' } });
+if (!res.ok) throw new Error((await res.json()).message);
+```
+
+#### Supabase limits
+
+- **`@supabase/auth-js`, and so `@supabase/supabase-js`.** The build refuses
+  both for their uses of the DOM's and Node's globals: the Auth client reads
+  `window`, `location`, `localStorage` and `navigator.locks` on browser-only
+  paths, and Realtime's socket factory reads `process`. With that refusal
+  lifted, Auth still fails: each session call reads `Date.now()`, which every
+  executor refuses (LLP 1027.000). The umbrella client with `accessToken`
+  would serve tables, Storage and Functions, at 403 KB of web JavaScript to
+  these three packages' 92 KB.
+- **Realtime.** Its socket outlives an answer; `QUEUE.md`, "A stream that can
+  send: Supabase Realtime without polling".
+
 ### Child processes (`@exact/child-process`)
 
 A desktop app's data code starts a program with Node's names (LLP 1133.007).
