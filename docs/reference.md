@@ -2296,6 +2296,9 @@ deploy policy, never the web root or the association files, which list the app a
 `uninstall`, `release` and `appstore`, `share`, and the Windows build take no variant. URL schemes, the
 sign-in callback and the app's own document types are shared by both installs.
 
+A brand that ships as its own store app is another app, not a variant: one directory and manifest per brand,
+sharing its screens and data code through workspace packages ([one app under several brands](recipes/white-label.md)).
+
 ## Controls (Control Center, the Lock Screen, the Action button)
 
 A control is a button the system draws outside the app; a press runs one of
@@ -5983,7 +5986,9 @@ A namespace import reads the same constant: `import * as session` and
 The imported bindings follow the same literal grammar. Calls other than the
 array's `.join`, computed arrays, package bindings (including re-exports
 from packages), and dependencies on launch-marked settings are refused with a
-source location. Imports resolve through Rolldown, to the file the bundle runs.
+source location. An `app.ts` that is `export * from` a package exports its
+own `grants`, which the star does not override. Imports resolve through
+Rolldown, to the file the bundle runs.
 Re-exports follow ECMAScript export resolution: a loop through star exports
 keeps searching, ambiguous bindings are refused, and a star never exports
 `default`. A cycle through constant initializers is refused. `app.ts` declares
