@@ -142,7 +142,7 @@ extension NodeView {
         var at: NSView? = self
         while let view = at {
             if let node = view as? NodeView, !node.disabled, node.handlers.contains("pointerdown") { return true }
-            at = presenter?.pointerParent(of: view)
+            at = presenter?.eventParent(of: view)
         }
         return false
     }

@@ -58,21 +58,6 @@ fn steps_json(steps: &[Step], s: &mut String) {
     s.push(']');
 }
 
-/// A drag leg's `during` ops, when it names any.
-fn during_json(during: &[String], s: &mut String) {
-    if during.is_empty() {
-        return;
-    }
-    s.push_str(",\"during\":[");
-    for (i, op) in during.iter().enumerate() {
-        if i > 0 {
-            s.push(',');
-        }
-        q(op, s);
-    }
-    s.push(']');
-}
-
 /// One step as JSON: `{"op":…,…,"line":n}`.
 fn step_json(step: &Step, s: &mut String) {
     let line = step.span().line;
@@ -135,8 +120,6 @@ fn step_json(step: &Step, s: &mut String) {
             over,
             hold,
             during,
-            modifiers,
-            path,
             ..
         } => {
             s.push_str("{\"op\":\"drag\",\"target\":");
@@ -167,25 +150,13 @@ fn step_json(step: &Step, s: &mut String) {
                     s.push_str(&format!(",\"{name}\":{ms}"));
                 }
             }
-            during_json(during, s);
-            if !modifiers.is_empty() {
-                s.push_str(",\"modifiers\":");
-                q(modifiers, s);
-            }
-            if !path.is_empty() {
-                s.push_str(",\"path\":[");
-                for (i, leg) in path.iter().enumerate() {
+            if !during.is_empty() {
+                s.push_str(",\"during\":[");
+                for (i, op) in during.iter().enumerate() {
                     if i > 0 {
                         s.push(',');
                     }
-                    s.push_str(&format!("{{\"dx\":{},\"dy\":{}", leg.dx, leg.dy));
-                    for (name, ms) in [("over", leg.over), ("hold", leg.hold)] {
-                        if let Some(ms) = ms {
-                            s.push_str(&format!(",\"{name}\":{ms}"));
-                        }
-                    }
-                    during_json(&leg.during, s);
-                    s.push('}');
+                    q(op, s);
                 }
                 s.push(']');
             }
