@@ -1088,6 +1088,13 @@ if (scopedBuild) {
   }
   for (const file of [resolve(out, 'app.js'), ...lazy]) writeFileSync(file, keepScope(readFileSync(file, 'utf8')));
 }
+// `--scoped --factory`: the runtime once, as runtime.js, and a small per-view app.js that calls it (scoped-factory.mjs).
+if (scopedBuild && args.includes('--factory')) {
+  const { buildFactory } = await import('./scoped-factory.mjs');
+  const names = opt('--factory-names') ? JSON.parse(readFileSync(resolve(opt('--factory-names')), 'utf8')) : {};
+  const built = await buildFactory({ names, gen, out, here, rolldown, bundleOptions, versionDefines, plugins: scopedPlugins, onLog, tsconfig: ts ? resolve(tsStage, '__exact_tsconfig.json') : undefined });
+  writeFileSync(resolve(out, 'runtime.json'), JSON.stringify(built) + '\n');
+}
 // The plan beside the pages: a render server (either renderer) reads it.
 cpSync(opt('--plan') ? resolve(opt('--plan')) : resolve(gen, 'app.plan'), resolve(out, 'app.plan'));
 writeFileSync(resolve(out, 'app.version.json'), JSON.stringify(version) + '\n');
