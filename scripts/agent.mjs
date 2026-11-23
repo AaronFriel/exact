@@ -11,8 +11,9 @@
 //     hold] [at <x> <y>] [modifiers <Control…>] | wheel 0 0 release | drop <path…> | dragenter <path…> | dragleave |
 //     into <key> [block <v>] [inline <v>] | hover | hold-state active|hover|focus-visible|none | history <n> |
 //     {"history":n} | mouse | dblclick [touch] | contextmenu | auxclick | clicks <1-3> (each [at <x> <y>] [modifiers
-//     <Shift+Meta…>]) | modifiers <Shift+Meta…> | pinch <scale> [at <x> <y>] | mediasession <action> [seconds] |
-//     pictureinpicture minimize|back|close|hover (Exact's picture-in-picture window, macOS) | drag <dx> <dy> [from <x>
+//     <Shift+Meta…>]) | modifiers <Shift+Meta…> | fingers <2-5> [at <x> <y>] |
+//     pinch <scale> [at <x> <y>] | mediasession <action> [seconds] | pictureinpicture minimize|back|close|hover
+//     (Exact's picture-in-picture window, macOS) | drag <dx> <dy> [from <x>
 //     <y>] [mouse] [modifiers <M>] [press <ms>] [over <ms>] [hold <ms>] [into keyboard] [during "<op>" …, inside the hold under --touch
 //     platform] [then <dx> <dy> over <ms> hold <ms> during "<op>" …: another leg, same iOS touch] | drag to <target>
 //     [at <x> <y>] […]] | type <target> <text…> (the navigation root: a path or a deep link) | type <target> key <Name>
@@ -310,6 +311,7 @@ export async function main(argv, injected = {}) {
             'auxclick (the middle button)',
             'clicks <1-3> (each [at <x> <y>: from its top left] [modifiers <Shift+Meta…>])',
             'modifiers <Shift+Meta…>',
+            'fingers <2-5> [at <x> <y>] (fingers tapped together; iOS --touch platform: four open the dev menu)',
             'pinch <scale> [at <x> <y>]',
             'mediasession <action> [seconds]',
             "pictureinpicture minimize|back|close|hover (Exact's picture-in-picture window, macOS)",
