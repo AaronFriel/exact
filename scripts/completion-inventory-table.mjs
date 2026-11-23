@@ -1344,7 +1344,7 @@ export const classifications = [
   group("inspection", ["one-shot"], "synchronous session inspection or diagnostics; no delivered completion", "UI-owned",
     "The named public runner-crate source is the inspection API or its value/admission helper. The declaration reads or reports the current session. It does not establish a durable operation.", [
     ["runner:runner/src/agent.rs", "base64 frames handle holds logs logs_request node node_request picker shown_value state state_at state_with tags tree tree_request unbase64"],
-    ["runner:runner/src/json.rs", "error field_bool field_num field_str num quote typed_json untyped_json"],
+    ["runner:runner/src/json.rs", "error field_bool field_num field_str num quote surface_args typed_json untyped_json untyped_signed_json"],
     ["runner:runner/src/agent/row.rs", "row_json"],
     ["runner:runner/src/agent/tree.rs", "tagged"],
     ["runner:runner/src/runner/carry.rs", "Runner::generation Runner::set_replacement_pending"],

@@ -345,25 +345,7 @@ impl Ids {
 /// A value as the JSON a surface's arguments cross in: numbers shortest,
 /// records and lists as arrays, `none` as `null`.
 pub fn value_json(value: &Value, out: &mut String) {
-    match value {
-        Value::Number(n) if n.is_finite() => {
-            exact_num::push_text!(out, "{}", exact_num::Shortest(*n))
-        }
-        Value::Number(_) | Value::Unit | Value::Option(None) => out.push_str("null"),
-        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-        v @ exact_plan::str_value!() => crate::json::quote(v.text(), out),
-        Value::Option(Some(v)) => value_json(v, out),
-        Value::List(items) | Value::Record(items) => {
-            out.push('[');
-            for (i, value) in items.iter().enumerate() {
-                if i != 0 {
-                    out.push(',');
-                }
-                value_json(value, out);
-            }
-            out.push(']');
-        }
-    }
+    crate::json::untyped_signed_json(value, out);
 }
 
 /// A canvas node's surface inputs, evaluated against state: the runner's
@@ -381,6 +363,8 @@ pub struct SurfaceUpdate {
     pub names: Vec<String>,
     /// Its arguments, evaluated.
     pub values: Vec<Value>,
+    /// Each argument's declared type, where it has one (LLP 1056 D1).
+    pub types: Vec<Option<exact_plan::TypesId>>,
 }
 
 impl SurfaceUpdate {
@@ -1166,6 +1150,7 @@ impl NodeInst {
                         .map(str::to_owned)
                         .collect(),
                     values: values.clone(),
+                    types: s.args.iter().map(|a| plan.surface_arg(a).ty).collect(),
                 });
                 self.rare().last_surface = Some(values);
             }

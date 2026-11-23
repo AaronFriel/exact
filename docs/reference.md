@@ -5107,6 +5107,37 @@ number of arguments, and `draw(surface, args, ctx, frame)`, which draws on `ctx`
 with `CanvasRenderingContext2D`'s names and returns `true` to be asked for
 another frame (LLP 1056).
 
+`args` holds the call's values in order, or an object by the argument names
+when the call names them (`surface=pin(at=spot, label=title)`). On every host
+each value is what `answer` receives for its type: a record is an object by
+field name, a list an array, an `option` `null` or its value, an enum its
+string. Type `draw` as `Draw` from `app.contract.d.ts`, with all four
+parameters, and checking `surface` narrows `args` to that surface's types:
+
+```contract
+shape Node
+  x: number
+  y: number
+
+component Board
+  state nodes = [Node(x=8, y=8)]
+  view
+    canvas surface=board(nodes) width=200 height=120
+```
+
+```ts
+import type { Draw } from './app.contract.d.ts';
+export const surfaces = { board: 1 };
+export const draw: Draw = (surface, args, ctx, frame) => {
+  ctx.clearRect(0, 0, frame.width, frame.height);
+  if (surface === 'board') for (const n of args[0]) ctx.fillRect(n.x, n.y, 8, 8);
+  return false;
+};
+```
+
+Treat `args` as read-only. The web freezes it and keeps it between draws until
+a value changes; elsewhere each draw gets a fresh copy.
+
 The context's space is the content box in CSS px, at the device's scale.
 `bitmap-width` and `bitmap-height` give the canvas a fixed bitmap instead, as
 HTML's `width` and `height` attributes do: `frame.width` × `frame.height`
