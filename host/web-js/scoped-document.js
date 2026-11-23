@@ -55,7 +55,8 @@ const scopedLocation = !shadow ? win.location : new Proxy(win.location, {
 
 // Globals the instance defines stay its own; everything else reads through to the page.
 // `globals` are what the mounting page hands this instance (host/web/scoped-mount.mjs `globals`), e.g. the function its `app.ts` calls.
-const own = new Map(Object.entries(entry?.globals ?? {}));
+// Kept on the registry entry, not module-local: the app and each lazy module (storage, documents, pickers) bundle their own copy of this shim, and all copies of a scope must share one set of globals.
+const own = entry ? (entry.own ??= new Map(Object.entries(entry.globals ?? {}))) : new Map();
 const scopedWindow = !shadow ? win : new Proxy(win, {
   get(real, k) {
     if (own.has(k)) return own.get(k);

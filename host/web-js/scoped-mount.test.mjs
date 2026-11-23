@@ -2,7 +2,7 @@
 // `--scoped` build. Needs Chromium (CHROME or /usr/bin/chromium-browser) and a built target/debug/exact-web-js.
 import { test, expect, afterAll } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { chromium } from 'playwright-core';
 
@@ -167,4 +167,19 @@ test('lazy modules a scoped build loads later (storage, documents) are bound to 
   expect(app).not.toMatch(/new\s+URL\(\s*[`'"]\.\/[\w-]+\.js[`'"]\s*,\s*import\.meta\.url\s*\)/);
   // and each lazy module reads its page through the shim, never the page's own globals
   for (const name of lazy) expect(readFileSync(resolve(out, name), 'utf8'), name).toContain('__exactScopes');
+});
+
+test('a lazy module (its own copy of the shim) sees and sets the globals of the instance it is bound to', async () => {
+  // Each bundle carries its own copy of scoped-document.js; a second copy under another query stands for the documents module.
+  cpSync(resolve(root, 'host/web-js/scoped-document.js'), resolve(scratch, 'alpha', 'out', 'shim-copy.js'));
+  const p = await page();
+  const out = await p.evaluate(async origin => {
+    const { sw } = await import(`${origin}/v/alpha/shim-copy.js?scope=alpha&copy=documents`);
+    const seen = typeof sw.exact;                 // set by the app's own copy
+    sw.exact.documents = { lazy: true };          // what documents-glue does
+    const other = await import(`${origin}/v/alpha/shim-copy.js?scope=alpha&copy=storage`);
+    return [seen, other.sw.exact.documents?.lazy, typeof globalThis.exact];
+  }, `http://127.0.0.1:${server.port}`);
+  expect(out).toEqual(['object', true, 'undefined']);
+  await p.close();
 });
