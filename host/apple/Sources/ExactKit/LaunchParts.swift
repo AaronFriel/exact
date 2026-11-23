@@ -301,9 +301,6 @@ extension ExactLaunch {
     }
 
     static let launchBudget = 0.0005
-
-    /// An input's event timestamp, from which the next navigation is timed.
-    public func input(at timestamp: TimeInterval) { NavigationMarks.shared.input(at: timestamp) }
 }
 
 /// App-reported events, errors and attributes, journaled for a module such as
