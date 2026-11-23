@@ -298,6 +298,8 @@ extension ExactLaunch {
             ExactJournal.shared.record("launchBudget", ["ms": total * 1000])
             fputs("exact: launch parts took \(String(format: "%.2f", total * 1000)) ms, over the \(Self.launchBudget * 1000) ms budget\n", stderr)
         }
+        // On iOS the time from here to `didFinishLaunching` is UIKit's.
+        ExactEnv.stamp("launch parts")
     }
 
     static let launchBudget = 0.0005
