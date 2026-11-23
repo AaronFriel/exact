@@ -546,9 +546,16 @@ impl<D: DataSource> Presenter<D> {
         self.handle_modules();
         let native = self.host.runner().native_slot();
         self.requests.packages.slot(native);
+        self.packages_publish_to_images();
         let (real, under) = self.requests.packages.bound();
         let owned = |names: Vec<&str>| names.into_iter().map(str::to_owned).collect();
         self.bind_modules(owned(real), owned(under));
+    }
+
+    /// Packages publish written images to the session's images, again
+    /// whenever those are reset or replaced.
+    pub(super) fn packages_publish_to_images(&mut self) {
+        self.requests.packages.publish_to(&self.images.publisher);
     }
 
     /// The host's target, which a module's per-target words are read by.
