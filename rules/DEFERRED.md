@@ -611,7 +611,7 @@ tool arguments, a control's tool run in the extension, Live Activity
 buttons, discoverable faces that capture or gain background activity
 authority, and the Android add-tile prompt.
 
-**Expanded (Charlie, 2026-11-20, accepting the Android mapping proposed on
+**Expanded (Charlie, 2026-11-22, confirming the Android mapping proposed on
 expo/exact#1057; LLP 1126 D13):** an activity
 on Android is an ongoing notification that asks to be promoted to a Live
 Update. A row's `android` object names state fields for its title, text,
@@ -743,10 +743,8 @@ inline or downloaded source (LLP 1181 §8).
 **Expanded (Charlie, 2026-11-22, #1240; LLP 1181 D8):** a shader canvas may
 write `alphaMode="premultiplied"`, so the page shows through the fragment's
 alpha. Consumer: the reporter's avatar, a soft glowing blob over a ground
-that changes. Take: waived by Charlie on the issue, 2026-11-22: "`alphaMode`
-with `"opaque"` and `"premultiplied"` is the name and the values WebGPU's own
-canvas configuration uses, so the opt-in fits where you put it. I'm applying
-it on main now".
+that changes. Take: none offered; waived by Charlie, 2026-11-22, after it
+landed.
 
 **Expanded (Charlie, 2026-11-17, expo/exact#724; LLP 1133.039):**
 `@exact/model-viewer`, a GPU package showing a binary glTF from the app's
