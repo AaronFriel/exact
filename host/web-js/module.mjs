@@ -14,7 +14,7 @@ import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 // Also for its PATH: the pinned binaryen (and Cargo) as every web build has
 // them, so a prebuild optimizes and keeps what an app's build would.
-import { awaitBuildOutput, cargoCheckout, WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, injectedProfiles, resolveApp, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
+import { awaitBuildOutput, cargoCheckout, refuseStdLockfile, WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, injectedProfiles, resolveApp, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
 import { rustDataOf, undeclaredDataCrate } from '../../scripts/app-shells.mjs';
 import { appCrates, linkedCrate } from '../../scripts/cargo-check.mjs';
 import { SETUP_FETCHES, withHostDeployment } from '../../scripts/filesystem.mjs';
@@ -123,6 +123,13 @@ const WASM_FLAGS = () => (wasmFlags ??= [...WEB_STD, ...wasmRemapFlags(null, WEB
 // cannot link is refused with its install command (scripts/cargo-check.mjs).
 let linkChecked = false;
 const LINK_FLAGS = () => { if (!linkChecked) { webToolchainEnv(process.env, { linksWasm: true }); linkChecked = true; } return WASM_FLAGS(); };
+// Each directory a WEB_STD build runs Cargo in, under each lockfile variable, once Cargo's configuration there names
+// no lockfile (`refuseStdLockfile`).
+const stdChecked = new Set();
+const checkStd = (cwd, what) => {
+  const key = `${cwd}\0${process.env.CARGO_RESOLVER_LOCKFILE_PATH ?? ''}`;
+  if (!stdChecked.has(key)) { refuseStdLockfile(process.env, cwd, what); stdChecked.add(key); }
+};
 // What those flags say apart from this checkout's path, for a kept module's group.
 const WASM_FLAGS_KEY = () => WASM_FLAGS().map(f => f.replaceAll(root, '.'));
 // Under this checkout's own target/ (AGENTS.md: never another checkout's):
@@ -235,14 +242,6 @@ function lockFrom(crate) {
 
 const LOCKFILE_KEY = 'resolver.lockfile-path';
 
-// Let Cargo apply configuration includes and environment overrides.
-function usesDefaultLock(env) {
-  const result = spawnSync('cargo', [`+${WEB}`, '-Z', 'unstable-options', 'config', 'get', LOCKFILE_KEY, '--color=never'], { env, encoding: 'utf8' });
-  if (result.status === 0) return false;
-  if (result.stderr?.trimEnd().endsWith(`error: config value \`${LOCKFILE_KEY}\` is not set`)) return true;
-  throw new Error(`module Cargo config: ${result.stderr || result.error?.message}`);
-}
-
 // Cargo prunes unused pins. Start each resolution with Exact's full lockfile
 // and preserve the build lockfile's mtime when the result is identical.
 function resolveDevLock(lock, readMetadata) {
@@ -265,9 +264,7 @@ export function moduleMetadata(manifest, env, dev = false) {
     if (result.status !== 0) throw new Error(`module metadata: ${result.stderr || result.error?.message}`);
     return JSON.parse(result.stdout);
   };
-  const locked = dev && usesDefaultLock(env);
-  const metadata = locked ? resolveDevLock(resolve(dirname(manifest), 'Cargo.lock'), readMetadata) : readMetadata();
-  return { metadata, locked };
+  return { metadata: dev ? resolveDevLock(resolve(dirname(manifest), 'Cargo.lock'), readMetadata) : readMetadata(), locked: dev };
 }
 
 /** A built `app.js` past this is an order of magnitude over what the apps here build, and near what a host refuses
@@ -328,6 +325,7 @@ function prepareModule(wasm, done, { manifest, targetDir, profile, wrapper = fal
 }
 
 export function buildModule(app, out, draw = false, dir = resolve(root, 'apps', app), { dev = false } = {}) {
+  checkStd(process.cwd(), app);
   const key = dirKey(dir);
   out ??= resolve(MODULES, `${app}-${key}`);
   const manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
@@ -523,6 +521,7 @@ export async function buildFlow({ out = resolve(MODULES, 'flow'), keepFresh = fa
   const leaf = own ? null : taken('textflow.wasm', at);
   if (leaf?.path) { replace(wasm, (temp) => cpSync(leaf.path, temp)); held.set('textflow.wasm', leaf.kept); return wasm; }
   const started = Date.now();
+  checkStd(root, 'textflow.wasm');
   const r = await run('cargo', [`+${WEB}`, 'build', '--profile', 'web', '--target', 'wasm32-unknown-unknown', '-p', 'exact-textflow', '--bin', 'textflow-web', ...LINK_FLAGS()],
     { cwd: root, env: { ...process.env, CARGO_TARGET_DIR: target } });
   if (r.status !== 0) throw new Error('textflow.wasm did not build');
@@ -621,6 +620,7 @@ ${patch}`;
   const leaf = own ? null : taken(`${name}.wasm`, at);
   if (leaf?.path) { replace(wasm, (temp) => cpSync(leaf.path, temp)); held.set(`${name}.wasm`, leaf.kept); return wasm; }
   const started = Date.now();
+  checkStd(process.cwd(), `${name}.wasm`);
   const r = await run('cargo', cargoWasmArgs(resolve(crate, 'Cargo.toml')), { env: { ...process.env, CARGO_TARGET_DIR: target } });
   if (r.status !== 0) throw new Error(`${name}.wasm did not build`);
   const optimizedLeaf = await replace(wasm, async (temp) => !unoptimized.has(await optimizeAsync(product, temp, `${name}.wasm`)));

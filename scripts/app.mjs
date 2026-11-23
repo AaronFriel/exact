@@ -48,10 +48,10 @@ import { bakeOutside, buildAndroidBake, compiledBakeDir, linkable, linkedInputs,
 import { filesystem, installedModules, OFFLINE_MISSING, removePrivateTree, withHostDeployment } from './filesystem.mjs';
 import { installedFileDependencies } from './file-dependencies.mjs';
 import { holdAppOutput, startSweep } from './sweep.mjs';
-import { WEB_TOOLCHAIN, WEB_STD, WEB_SIZE, WEB_RUSTFLAGS, webToolchainEnv, cargoEnvironment,
+import { WEB_TOOLCHAIN, WEB_STD, WEB_SIZE, WEB_RUSTFLAGS, webToolchainEnv, refuseStdLockfile, cargoEnvironment,
   appCrates, authoredWorkspace, buildCommand, cargoOnPath, claimTargetCrates, physicalPath, writtenPath,
   wholeProgram, declaredWorkspace, knownWorkspace, refuseLoose, rememberWorkspace, shellsDir, targetRustflags } from './cargo-check.mjs';
-export { WEB_TOOLCHAIN, WEB_STD, WEB_SIZE, webToolchainEnv, cargoEnvironment, cargoOnPath, wholeProgram } from './cargo-check.mjs';
+export { WEB_TOOLCHAIN, WEB_STD, WEB_SIZE, webToolchainEnv, refuseStdLockfile, cargoEnvironment, cargoOnPath, wholeProgram } from './cargo-check.mjs';
 import { configTarget, nativePackageConfig } from '../js/bake/src/package-config.mjs';
 export { gpuModules } from './app-shells.mjs';
 import { installProblems } from './install-page.mjs';
@@ -1246,7 +1246,7 @@ export function buildBake(app, platform, target, options = {}) {
   let env=withHostDeployment({...process.env,...options.env});env.CARGO_TARGET_DIR=app.target;env.EXACT_BAKE_OUTPUT=options.output??bakeOutput(app,env);
   env.EXACT_RUST_BINDINGS = '1';
   const privacyManifests = apple ? [capturePrivacyManifest(resolve(app.dir, 'PrivacyInfo.xcprivacy'))] : [], watch = target.includes('apple-watchos');
-  if(platform==='web'||watch)env=webToolchainEnv(env,{linksWasm:target==='wasm32-unknown-unknown'&&!options.check});
+  if(platform==='web'||watch){env=webToolchainEnv(env,{linksWasm:target==='wasm32-unknown-unknown'&&!options.check});refuseStdLockfile(env,app.dir,app.name);}
   if(options.analysis && env.EXACT_UPDATE_TRUST==='production')env.EXACT_BAKE_ANALYSIS='1';else delete env.EXACT_BAKE_ANALYSIS;
   mkdirSync(env.EXACT_BAKE_OUTPUT,{recursive:true});
   if(platform!=='web')prepareLibrary(app.dir,target); // a package's library, fetched and checked before Cargo links it (LLP 1154 D3)
