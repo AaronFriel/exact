@@ -529,9 +529,7 @@ fn face(button: Visit<'_>) -> Option<&'static str> {
     }
     let (mut symbols, mut texts) = (0, 0);
     for k in &kids {
-        let Some((tag, _, attrs)) = k.element() else {
-            return None;
-        };
+        let (tag, _, attrs) = k.element()?;
         match tag {
             "image" if symbol(*k) => {
                 symbols += 1;
@@ -567,9 +565,7 @@ fn face(button: Visit<'_>) -> Option<&'static str> {
 /// and layout. It draws text in its size, weight and colour, a symbol in
 /// its colour, and a picture in its fit.
 fn badge(boxed: Visit<'_>) -> Option<&'static str> {
-    let Some((_, _, attrs)) = boxed.element() else {
-        return None;
-    };
+    let (_, _, attrs) = boxed.element()?;
     let paint = |a: &&Attr| sits(&a.name) || BADGE_ROWS.contains(&a.name.as_str());
     if !attrs.iter().all(|a| paint(&a)) {
         return Some("is a badge whose box writes more than its fill, corners, size and layout");
@@ -580,9 +576,7 @@ fn badge(boxed: Visit<'_>) -> Option<&'static str> {
         .collect();
     match parts[..] {
         [only] if matches!(only.element(), Some(("text" | "image", _, _))) => {
-            let Some((tag, positional, attrs)) = only.element() else {
-                return None;
-            };
+            let (tag, positional, attrs) = only.element()?;
             let rows: &[&str] = match (tag, positional.first()) {
                 ("text", _) => &["color", "font-size", "font-weight"],
                 (_, Some(Expr::Str(_, _))) if symbol(only) => &["color"],
