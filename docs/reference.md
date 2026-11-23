@@ -2289,6 +2289,82 @@ deploy policy, never the web root or the association files, which list the app a
 `uninstall`, `release` and `appstore`, `share`, and the Windows build take no variant. URL schemes, the
 sign-in callback and the app's own document types are shared by both installs.
 
+## Controls (Control Center, the Lock Screen, the Action button)
+
+A control is a button the system draws outside the app; a press runs one of
+the app's tools or opens one of its locations (LLP 1126.004). No host draws
+one yet: the build checks the rows and records what each binary would offer,
+and a native host's press entry runs a control's tool, but no Apple, Android,
+Mac or watch build contains the control itself.
+
+Declare each in `app.json`:
+
+```json
+"controls": [
+  { "kind": "refresh", "title": "Refresh", "symbol": "arrow.clockwise", "tool": "refresh" },
+  { "kind": "inbox", "title": "Inbox", "symbol": "tray", "url": "/inbox" }
+]
+```
+
+- `kind` matches `[A-Za-z][A-Za-z0-9_-]*` and is unique among the app's
+  controls regardless of case. It is the control's identity: a placed
+  control is found again by it.
+- `title` and `symbol` (an SF Symbol name) are required; `description` is
+  optional.
+- Exactly one of `tool` and `url`. A `tool` names a `tool` line
+  (`control-tool`) and needs no `intents.tools` face. It may not `destroys`
+  (`control-destroys`) or take a required parameter (`control-arguments`);
+  a press passes `none` for each optional one. A `url` is one app path
+  (`/inbox`, not `//inbox`), and needs the navigation root and a declared
+  route that matches it; a `notfound` route does not count (`control-url`).
+- `authentication`, on a tool control only: `required` (the default) runs
+  it only for the authenticated person, `local` only on an unlocked device,
+  `always` on a locked one too (LLP 1133.023 D10).
+
+The compiler walks the tool's action, the actions it calls, both arms of
+every branch and the `then` of every mutation it sends, and records what it
+can reach: Live Activity starts, updates and ends, microphone, camera and
+screen capture, a recorder, and a capture restart. A tool that can reach any
+capture may not have an `intents.tools` face (`intents-capture-face`).
+
+Each native binary's bake decides every control's placement, in this order,
+and puts it in `compat.inputs.controls` and the compatibility id, so any
+change to a row, its tool's signature or its effects is a new binary. The
+web has no binary and its id does not move.
+
+1. A host other than iOS and iPadOS (the Mac, Android, the watch, tvOS,
+   visionOS, Linux, Windows): omitted, `control-host`.
+2. A `url`: offered from iOS 18.
+3. A tool that is known to start camera or screen capture: omitted,
+   `control-capture`.
+4. A tool that may record audio (the microphone, or a recorder): its tool
+   must start a Live Activity that `live_activities` declares
+   (`control-recording-activity`) and the app must grant
+   `device.microphone-background` (`grant-needs`), or the bake fails; then
+   omitted, `control-recording-unqualified`, until a locked iPhone has
+   recorded through it.
+5. A tool whose reach starts, updates or ends a Live Activity: offered from
+   iOS 18, as a `LiveActivityIntent`.
+6. Any other tool: omitted, `control-process`.
+
+A press enters only through a host's native entry, `Runner::press_control`,
+with the compiled control's kind and digest; on Apple, the tool door's
+`exact_tool` export takes it as op `press`. It is for tool controls (a host
+opens a URL control itself). The runner runs the tool as the person's action
+(origin `action`), refused `unavailable` when the installed control's
+digest is not the plan's, and `busy` while the same control's press waits or
+runs. Its authority ends when its caller cancels it, when it ends, or 10
+seconds after it starts running; work it started runs on without it. The
+agent's `call` cannot press: it enters as `tool` whatever `--door` names.
+
+`state.controls` lists each control with its `tool` or `url`, its `digest`
+and this host's `placement`, which is `absent` on every host until its build
+places the control:
+
+```
+bun scripts/agent.mjs web --app <app> "state controls"
+```
+
 ## Apple bundle metadata
 
 Exact writes Info.plist keys and entitlements from grants, named manifest fields,
