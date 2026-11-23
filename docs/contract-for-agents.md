@@ -890,6 +890,55 @@ caller's nodes in its view. The fill keeps its caller's variables and providers,
 not the receiving component's provider override. Do not invent named slots or
 render-function props.
 
+### One element shown in another place: `portal`
+
+An `if` arm creates and destroys, and a key keeps a row only within its own
+list, so declaring a playing video again in a detail screen restarts it. Write
+it once, outside the screens, and name where it shows with `portal` (LLP
+1013.002). The same element moves; its state, handlers and lifetime stay its
+declaration's.
+
+```contract
+component App
+  state open = false
+  state alive = true
+  action toggle
+    open = not open
+  view
+    column
+      button press=toggle
+        text (open ? "Close" : "Open")
+      box id="card-player" width=168 height=148
+      box id="detail-player" width="100%" height=320
+      if alive
+        column portal=(open ? "detail-player" : "card-player")
+          video "assets/motion.mp4" autoplay=true muted=true playsinline=true loop=true
+```
+
+- The destination is the first element with that `id` in declaration order in
+  the app root. It must be a plain box (`box`, `column`, `row`, `main`,
+  `section`, `article`, `aside`, `nav` or `footer` with no `role`,
+  `navigationKey` or `popover`) that its parent lays out. A list's row, a
+  table's part, a route's header item, a button's face, a dialog or a route
+  can't receive content or move; the compiler refuses what it can prove.
+- The element goes after the destination's own children. An empty value
+  leaves it where it is written.
+- With no destination (a missing id, its own descendant, a cycle, a box inside
+  hidden content) it is alive but not shown: no space, no input, not in
+  `tree`, journaled once. A video there keeps its position; Chrome pauses it
+  and resumes it on return, Firefox keeps it playing.
+- Events from it bubble through where it is written, not where it is shown.
+  Colours, `color-scheme` and modes come from where it is shown (on the web;
+  native hosts still resolve design-token modes at the declaration).
+- Removing the declaration removes it; a new one starts fresh.
+- Hosts: the web moves the same DOM element with `moveBefore()`, or
+  `insertBefore` where the browser lacks it (WebKit), which keeps a playing
+  video playing but reloads an iframe; a page rendered ahead leaves it out
+  and builds afresh. The runner places it for the native hosts, whose
+  presentation is not finished: macOS does not yet draw an element that was
+  hidden at launch. `apps/shared-elements`' Player and Flight screens show
+  both forms.
+
 Imports resolve local `.contract` declarations, with cycle and app-boundary
 checks. Paths begin with `./` and cannot contain `..` segments. They do not load app logic or expand the available built-in function
 roster. Compiler-owned router names exist only with a `routes` declaration.
