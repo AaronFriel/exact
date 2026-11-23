@@ -583,7 +583,7 @@ export const classifications = [
       "Java_dev_exact_canvas_Native_imageBuffer Java_dev_exact_canvas_Native_pendingPictures"],
     ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_picture Java_dev_exact_canvas_Native_pictureChanged"],
     ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::picture_answer CanvasHost::picture_changed"],
-    ["painted:host/painted/src/presenter/images.rs", "Presenter::deliver_image_loads Presenter::finish_boot_images Presenter::pictures_need_paint Presenter::poll_images Presenter::wait_images"],
+    ["painted:host/painted/src/presenter/images.rs", "Presenter::deliver_image_loads Presenter::finish_boot_images Presenter::pictures_need_paint Presenter::poll_images Presenter::settle_pictures Presenter::wait_images"],
     ["painted:host/painted/src/presenter/pictures.rs", "Presenter::bind_pictures Presenter::picture_answered Presenter::picture_changed"],
   ]),
   group("presence", ["one-shot"], "outstanding presence call and secret generation", "UI-owned",
