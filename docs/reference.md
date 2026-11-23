@@ -87,11 +87,10 @@ Windows shell with `deploy.store.windows` set to `"0"` omits the downloader when
 all image, media, poster and frame sources in its plan are local literals or
 the plan has none. Computed sources, development shells and signed updates
 keep the downloader.
-A hand-written shell uses the same selection with
-`exact_windows::run_with_services::<AppData, ADMIT_AGENT>(name, window, PLAN, COMPAT, composed, SERVICES)`.
-The TypeScript bake supplies both constants. For Rust, the build reads
-`compat.admits_agent()` and composes `compat.windows_image_services(&baked)`
-with `compat.windows_data_executor()`. The heavy-list app shows the
+A hand-written shell gets the same selection by writing
+`compat.windows_shell(&baked, &manifest)` from its build script and calling
+`exact_windows::run_baked::<AppData, ADMIT_AGENT>(name, window(), PLAN, COMPAT, composed, SERVICES)`.
+The TypeScript bake writes the same constants. The heavy-list app shows the
 [build step](../bench/heavy-list/exact-heavylist/windows/build.rs) and the
 [entry point](../bench/heavy-list/exact-heavylist/windows/src/main.rs).
 A Windows login item started with `--login hidden` paints its offscreen launch

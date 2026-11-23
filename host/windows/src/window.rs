@@ -244,7 +244,7 @@ pub(super) fn run<D: DataSource + Default + 'static, const DEVELOPMENT: bool>(
     {
         std::thread::sleep(Duration::from_millis(200));
     }
-    let mut config = Config::from_bake_with_services::<DEVELOPMENT>(plan, compat, services);
+    let mut config = Config::from_bake::<DEVELOPMENT>(plan, compat, services);
     config.preferences = Some(exact_runner::Preferences {
         screen_reader: if config.agent {
             exact_runner::ScreenReader::Unknown
