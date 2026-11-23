@@ -2841,9 +2841,9 @@ export const answer: TypeScriptAnswer = (source, args, store, storage, native) =
 The app's `build_mixed_with` bake derives these types from its `rust_sources`
 argument; no ownership list goes in `app.json` or TypeScript. Every remaining
 provider is required. Run `bun exact.mjs contract build app.contract` to obtain
-the narrowed declaration beside `app.ts`: its TypeScript check runs the app's
-Cargo bake, which writes the declaration before checking `app.ts`, even if
-the check fails. Native bakes use it too, and a development producer keeps
+the narrowed declaration beside `app.ts`: its TypeScript check builds the app's
+Rust module, which carries `RUST_SOURCES`, and writes the declaration before
+checking `app.ts`, even if the check fails. Native bakes use it too, and a development producer keeps
 the roster from the previous bake's `rustSources` receipt. Rebuild after
 changing Rust ownership. `Sources`, `Source`, `Args` and `Result` still
 describe every app-owned source, including Rust's.
@@ -6664,7 +6664,9 @@ An app outside this checkout names its data crate in app.json (LLP 1153.003 D2):
 `source`, optional, is what every host and the web's module run: the type itself, its `::default()` (the
 default) or its `::new(…)` with literal arguments (`"field_log_data::FieldLog::new(true)"`). A source
 built from anything else (a local, a path read at build time) is exported by a crate of the app's own,
-named in app.json's `rust.module.package` (Update Lab's `logic/`), which supplies the module instead.
+named in app.json's `rust.module.package` (Update Lab's `logic/`), which supplies the module instead. Beside
+`app.ts`, that crate also carries the data crate's `RUST_SOURCES`, which the web reads from the module:
+`exact_logic_abi::export_sources!(field_log_data::RUST_SOURCES);` beside its `export!`.
 
 The crate sits beside app.json and joins the workspace exact2 generates: its `Cargo.toml` sets
 `package.workspace = "../.exact/shells"` and takes exact2's crates as workspace dependencies

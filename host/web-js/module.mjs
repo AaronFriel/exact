@@ -336,8 +336,9 @@ export function buildModule(app, out, draw = false, dir = resolve(root, 'apps', 
   // the data crate.
   const data = rustDataOf(manifest);
   if (!data) return ownModule(app, out, dir, dev);
-  // Canvas 2D draws only for a plan that has a 2D surface (logic/abi/src/draw.rs).
-  const lib = `exact_logic_abi::export!(${data.ty}, ${data.source});\n${draw ? `exact_logic_abi::export_draw!(${data.ty});\n` : ''}`;
+  // Canvas 2D draws only for a plan that has a 2D surface (logic/abi/src/draw.rs). Beside app.ts, the module carries
+  // the sources Rust answers (logic/abi/src/sources.rs).
+  const lib = `exact_logic_abi::export!(${data.ty}, ${data.source});\n${draw ? `exact_logic_abi::export_draw!(${data.ty});\n` : ''}${existsSync(resolve(dir, 'app.ts')) ? `exact_logic_abi::export_sources!(${data.lib}::RUST_SOURCES);\n` : ''}`;
   const resolved = resolveApp(dir);
   // An app whose host crates exact2 generates has the module as a member of that workspace (`.exact/shells/module`),
   // built --locked against the app's resolution, so a data crate's dependencies resolve once.
@@ -448,6 +449,16 @@ export async function moduleGrants(path, { production = false } = {}) {
   return str();
 }
 
+/** The sources a module beside app.ts answers, as its `exact_logic_abi::export_sources!` carries them, or null for a
+ * module that carries none. */
+export async function moduleSources(path) {
+  const [section] = WebAssembly.Module.customSections(await WebAssembly.compile(readFileSync(path)), 'exact.rust_sources');
+  if (!section) return null;
+  // Each once, as every host's composition requires (`exact_data::Mixed::new`).
+  const names = JSON.parse(new TextDecoder().decode(section)), bad = names.find((name, i) => !name || names.indexOf(name) !== i);
+  if (bad !== undefined) throw new Error(`RUST_SOURCES names ${bad ? `\`${bad}\` twice` : 'an empty source'}: name each source once`);
+  return names;
+}
 
 /** Markdown pieces (LLP 1045 D3) as a loaded capability for the runtime:
  * the web host's own `exact_web_capabilities::markdown::pieces`, exported
