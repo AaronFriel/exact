@@ -428,33 +428,44 @@ function ownModule(app, out, dir, dev) {
   return module(manifest, pkg.replaceAll('-', '_'), out, `${app}: ${pkg}`, undefined, dev);
 }
 
-/** A logic module's grants (the seam's first call, `meta`): what its storage
- * requests may name, which decides whether the page ships the storage
- * adapters. A `production` build refuses a dev loop's module. */
-export async function moduleGrants(path, { production = false } = {}) {
-  const { module, instance } = await WebAssembly.instantiate(readFileSync(path), {}), e = instance.exports;
-  if (production && WebAssembly.Module.customSections(module, DEV_MARK).length) throw new Error(`this production build was given a dev loop's Rust module (built at ${DEV_PROFILE}, not optimized): give --data or --plan a build made without --dev`);
-  const abi = e.exact_logic_abi();
+/** A logic module's `meta`, the seam's first call: the app id its data names and its grants, or null if it fails. */
+function moduleMeta(instance, path) {
+  const e = instance.exports, abi = e.exact_logic_abi();
   if (abi !== 12) throw new Error(`${path}: Rust module ABI ${abi} is not 12; rebuild it with this checkout`);
   const session = e.exact_logic_create(), request = new Uint8Array(5), p = e.exact_logic_alloc(request.length);
   new DataView(request.buffer).setUint32(0, abi, true);
   new Uint8Array(e.memory.buffer, p, request.length).set(request);
-  if (e.exact_logic_call(session, p, request.length) !== 0) return '';
+  if (e.exact_logic_call(session, p, request.length) !== 0) return null;
   const out = new Uint8Array(e.memory.buffer, e.exact_logic_output(session), e.exact_logic_output_len(session)).slice(), d = new DataView(out.buffer);
+  // The reply's header: the ABI, then the kind of reply, 0 for `meta` (logic/abi/src/lib.rs `dispatch`).
+  if (out.length < 5 || d.getUint32(0, true) !== abi || out[4] !== 0) return null;
   let at = 5;
-  const str = () => { const n = d.getUint32(at, true), t = new TextDecoder().decode(out.subarray(at + 4, at + 4 + n)); at += 4 + n; return t; };
-  str();
-  return str();
+  // The id exactly as Rust wrote it, a leading U+FEFF included, since the composition compares it byte for byte.
+  const str = (ignoreBOM = false) => { const n = d.getUint32(at, true), t = new TextDecoder('utf-8', { ignoreBOM }).decode(out.subarray(at + 4, at + 4 + n)); at += 4 + n; return t; };
+  return { appId: str(true), grants: str() };
+}
+
+/** A logic module's grants: what its storage requests may name, which decides whether the page ships the storage
+ * adapters. A `production` build refuses a dev loop's module. */
+export async function moduleGrants(path, { production = false } = {}) {
+  const { module, instance } = await WebAssembly.instantiate(readFileSync(path), {});
+  if (production && WebAssembly.Module.customSections(module, DEV_MARK).length) throw new Error(`this production build was given a dev loop's Rust module (built at ${DEV_PROFILE}, not optimized): give --data or --plan a build made without --dev`);
+  return moduleMeta(instance, path)?.grants ?? '';
 }
 
 /** The sources a module beside app.ts answers, as its `exact_logic_abi::export_sources!` carries them, or null for a
- * module that carries none. */
-export async function moduleSources(path) {
-  const [section] = WebAssembly.Module.customSections(await WebAssembly.compile(readFileSync(path)), 'exact.rust_sources');
+ * module that carries none. The module is refused what a native host's composition refuses (`exact_data::Mixed::new`
+ * over `Placed::named`): a source named twice or empty, and data whose app id is neither empty nor app.ts's, which is
+ * `manifest.app.id` (the selected variant's) as the page runs it. */
+export async function moduleSources(path, manifest) {
+  const { module, instance } = await WebAssembly.instantiate(readFileSync(path), {});
+  const [section] = WebAssembly.Module.customSections(module, 'exact.rust_sources');
   if (!section) return null;
-  // Each once, as every host's composition requires (`exact_data::Mixed::new`).
   const names = JSON.parse(new TextDecoder().decode(section)), bad = names.find((name, i) => !name || names.indexOf(name) !== i);
   if (bad !== undefined) throw new Error(`RUST_SOURCES names ${bad ? `\`${bad}\` twice` : 'an empty source'}: name each source once`);
+  const meta = moduleMeta(instance, path), id = manifest.app.id;
+  if (!meta) throw new Error('its Rust module did not answer `meta`, the seam\'s first call');
+  if (meta.appId && meta.appId !== id) throw new Error(`its Rust data's app_id is ${JSON.stringify(meta.appId)}, but app.ts's is ${JSON.stringify(id)}${manifest.variant ? ` (variant ${manifest.variant.name})` : ''}: the two halves of a mixed app declare one identity, so return the same id or an empty one`);
   return names;
 }
 

@@ -326,3 +326,41 @@ printf '\\000asm\\001\\000\\000\\000' > "$artifact"
     ]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 300_000);
+
+// A mixed app's module, read as a native host composes it (`exact_data::Mixed::new` over `Placed::named`): its data's
+// app id is app.ts's, the selected variant's under one, or none. The module is real, carrying the sources section; its
+// `meta` answer is stood in for.
+test('a mixed app’s Rust module is refused an app id other than app.ts’s', async () => {
+  const { moduleSources } = await import('../host/web-js/module.mjs');
+  const dir = moduleFixture('sources'), path = resolve(dir, 'app.module.wasm');
+  const name = new TextEncoder().encode('exact.rust_sources'), names = new TextEncoder().encode('["note"]');
+  const section = [name.length, ...name, ...names];
+  writeFileSync(path, new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 0, section.length, ...section]));
+  const memory = new WebAssembly.Memory({ initial: 1 }), out = 1024;
+  const meta = (appId, kind = 0) => {
+    const bytes = [], u32 = n => bytes.push(n & 255, n >>> 8 & 255, n >>> 16 & 255, n >>> 24 & 255);
+    const string = s => { const b = new TextEncoder().encode(s); u32(b.length); bytes.push(...b); };
+    u32(12); bytes.push(kind); string(appId ?? ''); string('');
+    new Uint8Array(memory.buffer, out, bytes.length).set(bytes);
+    return { memory, exact_logic_abi: () => 12, exact_logic_create: () => 1, exact_logic_alloc: () => 0, exact_logic_call: () => appId === null ? 1 : 0, exact_logic_output: () => out, exact_logic_output_len: () => bytes.length };
+  };
+  const instantiate = WebAssembly.instantiate;
+  const sources = (appId, manifest, kind) => {
+    WebAssembly.instantiate = async bytes => ({ module: new WebAssembly.Module(bytes), instance: { exports: meta(appId, kind) } });
+    return moduleSources(path, manifest).then(list => list, error => error.message);
+  };
+  try {
+    const app = { app: { id: 'test.mixed' } }, variant = { app: { id: 'test.mixed.beta' }, variant: { name: 'beta', base: 'test.mixed' } };
+    expect(await sources('', app)).toEqual(['note']);
+    expect(await sources('test.mixed', app)).toEqual(['note']);
+    expect(await sources('', variant)).toEqual(['note']);
+    expect(await sources('test.mixed.beta', variant)).toEqual(['note']);
+    expect(await sources('test.other', app)).toBe('its Rust data\'s app_id is "test.other", but app.ts\'s is "test.mixed": the two halves of a mixed app declare one identity, so return the same id or an empty one');
+    expect(await sources('test.mixed', variant)).toStartWith('its Rust data\'s app_id is "test.mixed", but app.ts\'s is "test.mixed.beta" (variant beta)');
+    expect(await sources('\ufefftest.mixed', app)).toStartWith('its Rust data\'s app_id is "\ufefftest.mixed"');
+    for (const [appId, kind] of [[null, 0], ['', 1]]) expect(await sources(appId, app, kind)).toBe('its Rust module did not answer `meta`, the seam\'s first call');
+  } finally {
+    WebAssembly.instantiate = instantiate;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

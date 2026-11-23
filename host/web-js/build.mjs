@@ -291,7 +291,7 @@ let rustModule; const builtModule = () => rustModule ??= (() => {
 let rustSources = null;
 if (mixed) {
   resolveApp(appDir).rust(); // the workspace an app's own module crate may join, written and its lock checked
-  try { rustSources = await moduleSources(builtModule()); } catch (error) { console.error(`${app}: ${error.message}`); process.exit(1); }
+  try { rustSources = await moduleSources(builtModule(), readManifest(appDir, app)); } catch (error) { console.error(`${app}: ${error.message}`); process.exit(1); }
   if (!rustSources) { console.error(`${app}: its Rust module beside app.ts does not say which sources it answers: add \`exact_logic_abi::export_sources!(<data crate>::RUST_SOURCES);\` to the crate rust.module.package names`); process.exit(1); }
   const r = spawnSync(compiler.cmd, [...compiler.pre, 'declarations', input.endsWith('.plan') ? input : resolve(gen, 'app.plan'), '-o', gen, '--app', appDir, '--rust-sources', JSON.stringify(rustSources), ...(appTypes ? ['--app-types'] : [])], { cwd: root, stdio: ['ignore', 'inherit', 'inherit'], env: compiler.env });
   if (r.status !== 0) process.exit(r.status ?? 1);
