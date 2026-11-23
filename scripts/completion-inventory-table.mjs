@@ -538,7 +538,7 @@ export const classifications = [
     ["runner:runner/src/runner/module_seam/forward.rs", "Runner::report_views Runner::view_origin"],
     ["runner:runner/src/runner/processes.rs", "Runner::set_work_clock"],
     ["runner:runner/src/runner/provenance.rs", "Runner::act_from Runner::call_origin"],
-    ["runner:runner/src/runner/seams.rs", "Runner::call_agent Runner::call_tool Runner::intents_state"],
+    ["runner:runner/src/runner/seams.rs", "Runner::call_agent Runner::call_tool Runner::intents_state Runner::place_controls Runner::press_control"],
     ["web:host/web/src/abi.rs", "exact_data_ready"],
   ]),
   group("native callbacks", ["one-shot", "subscription"], "module instance and granted handle or anchored invocation", "UI-owned",
