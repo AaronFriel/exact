@@ -1,4 +1,5 @@
 # Queue
+- **The Android heavy-list bench's ANR snapshot** (2026-11-23, Astra in review of #1354; `bench/heavy-list/android/measure.mjs`). On Android 12–14, `dumpsys window -a` prints the last ANR's display snapshot before the current display, and `defaultDisplay()` takes the first `mDisplayId=0` block, so after an ANR in another app the bench refuses a valid launch. Read focus and rotation from the final `WINDOW MANAGER DISPLAY CONTENTS` section.
 - **Android heavy-list focus history** (expo/exact#1354). The logcat events buffer can wrap before the final focus query.
 - **Android heavy-list cold launches** (expo/exact#1354). Record sleep and wake around `am start -W`.
 - The bench's refusals have not been run on a device.
