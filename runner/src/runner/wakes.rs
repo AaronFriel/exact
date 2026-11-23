@@ -502,7 +502,7 @@ impl<D: DataSource> Runner<D> {
             page.hidden = !self.wakes.shown;
         }
         page.background = page.background.map(|_| hidden);
-        self.set_page(page)
+        self.set_page_as(page)
     }
 
     /// Run invocation `i` of the current wake: its event's action, under

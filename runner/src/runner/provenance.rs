@@ -10,8 +10,9 @@
 //! scheduling it and installs it when the work runs ([`Runner::as_cause`]);
 //! there is no default. A commit with none installed is refused what the
 //! least privileged origin is refused and holds no grant: it never reads as
-//! the app's. Only boot and the host's delivery of the person's act in the
-//! app's own UI start an `app` cause ([`Cause::person`]).
+//! the app's. Boot, the host's delivery of the person's act in the app's own
+//! UI and its report of what the person sees while the page shows start an
+//! `app` cause ([`Cause::person`]).
 //!
 //! **Provenance is permanent; grants end with the invocation** (D7a). Work
 //! keeps its origin's restrictions for its whole life. An invocation's

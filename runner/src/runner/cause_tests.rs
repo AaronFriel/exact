@@ -1,6 +1,6 @@
-//! LLP 1133.023 D7a: what the host observes of the page is the device's,
-//! a drag handle's release is the person's, and a world's message under a
-//! tool's mark keeps D4a's command rules.
+//! LLP 1133.023 D7a: what the host observes of the page and a drag handle's
+//! release are the app's, and a world's message under a tool's mark keeps
+//! D4a's command rules.
 
 use crate::request::Request;
 use crate::{Answer, CallOrigin, DataError, DataSource, Event, Outcome, Runner, Store, Value};
@@ -50,17 +50,18 @@ fn boot_with(source: &str, test_id: &str) -> (Runner<Later>, exact_kernel::ViewI
     (r, id)
 }
 
+/// A camera preview's `load` may start the camera.
 #[test]
-fn a_load_the_host_observes_is_the_devices() {
+fn a_load_the_host_observes_is_the_apps() {
     let (mut r, frame) = boot();
     r.take_requests();
     r.dispatch(frame, Event::Load).unwrap();
     let sent = r.take_requests();
-    assert_eq!(sent[0].request.reach.origin, CallOrigin::Device);
+    assert_eq!(sent[0].request.reach.origin, CallOrigin::App);
 }
 
-/// A sheet's or a photo's drag handle reports the geometry it reads, which
-/// is the device's, and the release of the person's drag, which is theirs.
+/// A sheet's or a photo's drag handle reports the geometry it reads and the
+/// release of the person's drag.
 #[test]
 fn a_drag_handles_release_is_the_persons() {
     const HANDLES: &str = "component App\n  mutation m as shape number\n  action geometry(bw: number, bh: number, pw: number, ph: number)\n    send m = save(1)\n  action release(x: number, y: number, scale: number, vx: number, vy: number, vs: number)\n    send m = save(2)\n  action snap(height: number, velocity: number)\n    send m = save(3)\n  view\n    column\n      column id=\"sheet\" height=360 box-sizing=\"border-box\"\n        column testId=\"sheet-handle\" heightDragFor=\"sheet\" heightrelease=snap\n      column overflow=\"hidden\"\n        column id=\"photo\" width=\"100%\" height=\"100%\" box-sizing=\"border-box\"\n          column testId=\"photo-handle\" transformDragFor=\"photo\" transformgeometry=geometry transformrelease=release\n";
@@ -90,7 +91,7 @@ fn a_drag_handles_release_is_the_persons() {
         port_width: 100.,
         port_height: 100.,
     };
-    assert_eq!(origin("photo-handle", geometry), CallOrigin::Device);
+    assert_eq!(origin("photo-handle", geometry), CallOrigin::App);
 }
 
 #[test]
@@ -109,4 +110,53 @@ fn a_worlds_message_under_a_tools_mark_keeps_the_calls_command_rules() {
     r.dispatch(frame, Event::Message("hi".into())).unwrap();
     let skipped = r.journal().filter(|l| l.contains("focus: skipped")).count();
     assert_eq!(skipped, 1);
+}
+
+/// expo/exact#1424: a `keepRunning` window the person shows again by
+/// launching the app reaches the app only as its page becoming visible, and
+/// what that starts is the person's, as at a cold launch.
+#[test]
+fn a_page_shown_again_starts_work_as_the_apps() {
+    const SHOWN: &str = "shape Page\n  visibilityState: string\n  persisted: bool\n\ncomponent App\n  resource page = exactPage() as shape Page\n  mutation frozen as shape number\n  task arrive when page.visibilityState == \"visible\" and not page.persisted\n    after(1, begin)\n  action begin\n    send frozen = save(1)\n  view\n    text \"x\" testId=\"x\"\n";
+    let (mut r, _) = boot_with(SHOWN, "x");
+    r.advance(1.0).unwrap();
+    assert_eq!(r.take_requests().len(), 1, "the cold launch's capture");
+    let away = crate::Page {
+        hidden: true,
+        persisted: true,
+        ..r.page()
+    };
+    r.set_page(away).unwrap();
+    let shown = crate::Page {
+        hidden: false,
+        persisted: false,
+        restores: 1,
+        ..r.page()
+    };
+    r.set_page(shown).unwrap();
+    r.advance(10.0).unwrap();
+    let sent = r.take_requests();
+    assert_eq!(sent.len(), 1, "the warm launch's capture");
+    assert_eq!(sent[0].request.reach.origin, CallOrigin::App);
+}
+
+/// A page the host hides (a wake's headless boot, a closed window) is not the
+/// person's act, and a load it renders hidden is not either.
+#[test]
+fn what_a_hidden_page_arms_or_loads_is_no_ones() {
+    const AWAY: &str = "shape Page\n  visibilityState: string\n\ncomponent App\n  resource page = exactPage() as shape Page\n  mutation m as shape number\n  task away when page.visibilityState == \"hidden\"\n    after(1, gone)\n  action gone\n    send m = save(1)\n  action loaded\n    send m = save(2)\n  view\n    iframe \"/deck/index.html\" load=loaded testId=\"deck\"\n";
+    let (mut r, deck) = boot_with(AWAY, "deck");
+    r.take_requests();
+    let hidden = crate::Page {
+        hidden: true,
+        ..r.page()
+    };
+    r.set_page(hidden).unwrap();
+    r.advance(1.0).unwrap();
+    r.dispatch(deck, Event::Load).unwrap();
+    let sent = r.take_requests();
+    assert_eq!(sent.len(), 2);
+    for s in sent {
+        assert_eq!(s.request.reach.origin, CallOrigin::Device);
+    }
 }
