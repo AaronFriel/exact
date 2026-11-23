@@ -1824,6 +1824,13 @@ the JavaScript dependencies and browser. `--check` uses the local cache. Setup c
 from a tools origin when the checkout pins its producer key. Native builds, games, Rust data or
 GPU crates, custom web build scripts and Rust page renderers require Rust.
 
+The tools origin is a public bucket that `bun scripts/tools.mjs publish --watch` keeps from
+the producer's Mac, which holds the signing key. A checkout reads it at the public https URL
+that `scripts/tools.mjs` pins with the producer's public key; `EXACT_TOOLS_ORIGIN` names a
+mirror of it. Until both are pinned, nothing is downloaded, and a machine without Rust uses a
+set `bun scripts/tools.mjs keep` built. The origin keeps each commit's lookup for 90 days; an
+older checkout finds a set only among the newest, and only if its inputs are that set's.
+
 For a source build, the scoped setup installs the pinned stable and nightly Rust, the nightly's `rust-src`,
 `llvm-tools`, clippy and `wasm32-unknown-unknown` target, its standard-library dependencies,
 wasm-bindgen, Binaryen, Exact's `node_modules`, Playwright's Chromium and headless shell,

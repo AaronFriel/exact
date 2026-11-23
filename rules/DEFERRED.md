@@ -2161,6 +2161,10 @@ highlight is (a shrink is feedback, not motion).
 **Tooling** — no Design Mode, no Guide system, no devtools UI, no blog/CMS. (The
 TUI host came off on 2026-10-06: §Surfaces.)
 
+Prebuilt tool sets (LLP 1174 §5) are published for macOS and Linux x86-64 only:
+sets for Windows and Linux arm64 are out until something runs them, and every
+native build needs Rust.
+
 **Admitted (Charlie, 2026-10-14; LLP 1122 §9 Q2 and LLP 1121 §9 Q3), development
 builds only:** the Forma protocol server (`forma/1`, LLP 1121 D13) and the design tool
 (LLP 1122). The tool is a web JS-target app, and every client edits through the protocol.
