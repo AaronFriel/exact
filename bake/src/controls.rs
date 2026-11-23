@@ -39,6 +39,13 @@ pub(crate) fn derive(
         && !["tvos", "watchos", "xros", "visionos"]
             .iter()
             .any(|t| target.contains(t));
+    // The Apple build names the extensions it packages (host/apple/build.mjs),
+    // and a publisher replays that choice from the build's receipt.
+    let packaged = std::env::var("EXACT_APPLE_EXTENSIONS")
+        .map_or(true, |kinds| kinds.split(',').any(|k| k == "controls"));
+    if std::env::var_os("OUT_DIR").is_some() {
+        println!("cargo:rerun-if-env-changed=EXACT_APPLE_EXTENSIONS");
+    }
     let declared: Vec<String> = manifest
         .live_activities()?
         .into_iter()
@@ -90,6 +97,7 @@ pub(crate) fn derive(
         }
         let placement = match () {
             _ if !iphone => omitted("control-host", "this host offers no controls in this build"),
+            _ if !packaged => omitted("control-metadata", "this build packages no control extension: the portable Apple builder cannot extract a control's App Intents metadata, or `--extensions` left `controls` out"),
             _ => match &control.action {
                 ControlAction::Url(_) => json!({ "offered": [{ "from": FIRST_IOS, "intent": "open" }] }),
                 ControlAction::Tool(_) if unsupported => {
