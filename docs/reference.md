@@ -6401,6 +6401,29 @@ installed binary must supply the required runtime and admit the module's app
 identity and grants. An app with both TypeScript and Rust modules sets every
 `deploy.store` entry to `"0"`: delivery of both together is not implemented. See LLP 1027 for the design record.
 
+## Package configuration
+
+A package's interface declares the values it takes from the app in its
+`exact.json`, per target (`web`, `android`, `ios`, `macos`, `tvos`):
+`"config": {"<target>": {"<key>": {"type": "string" | "number" | "boolean" | "env",
+"required": true | "release", "missing": "<code>"}}}`. An `android` key may add
+`"metadata": "<name>"` to also fill a vendor SDK's `<meta-data>`, if the name is
+on `CONFIG_METADATA` in `scripts/android-manifest.mjs`.
+
+The app gives them in `app.json` as `"packages": {"<interface>": {"<target>":
+{"<key>": <value>}}}`. An `env` key's value is `{"env": "<VARIABLE>"}`, which
+the build reads from its environment. The package's code reads the values as
+`context.config` in Kotlin and Swift, and as `config` on the web. A build
+refuses a value of another type (`bake-config-type`), an undeclared key
+(`bake-config-unknown`) and a required key with no value (the declared
+`missing` code). It refuses a `"required": "release"` key only in a release
+build.
+
+`env` keeps a value out of the repository, not out of the app: everything in
+`config` ships in the APK, the IPA or the page. A changed native value needs
+a new binary. See
+[A package's configuration](contract-for-agents.md#a-packages-configuration).
+
 ## Access hatches
 
 An access hatch hands the app's native code the platform object Exact built for

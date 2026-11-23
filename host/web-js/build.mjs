@@ -1,5 +1,6 @@
 import { grantWords, trimGrant, knownFolderPath } from '../web/grant-admission.js';
-import { asyncContext, bundleOptions, developmentLocalNetwork, lowered, packageConfig, webImplementations } from '../../js/bake/src/typescript.mjs';
+import { asyncContext, bundleOptions, developmentLocalNetwork, lowered, webImplementations } from '../../js/bake/src/typescript.mjs';
+import { packageConfig } from '../../js/bake/src/package-config.mjs';
 import { buildPageFiles, renderEntryPages, writeCrawlerFiles } from '../web/crawl.mjs';
 import { bakeWatchEnv, hatchWords, injectedProfiles, moduleDirectory, readManifest, resolveApp, webAppManifest, webToolchainEnv } from '../../scripts/app.mjs';
 import { authoredWebBake, webRendererHost, rustDataOf } from '../../scripts/app-shells.mjs';
@@ -384,9 +385,10 @@ const time = Object.hasOwn(sources, 'exactTime');
 const moduleFlag = existsSync(resolve(gen, 'modules.flag')) ? JSON.parse(readFileSync(resolve(gen, 'modules.flag'), 'utf8')) : { extensions: {}, sources: [] };
 if (Object.keys(moduleFlag.extensions).length) {
   const bound = webImplementations(appDir, moduleFlag.extensions);
-  // `app.json`'s package configuration (LLP 1133.021 §9 item 7): refused here when a required key is absent.
+  // `app.json`'s package configuration (LLP 1133.021 §9 item 7), refused here as package-config.mjs says; a production
+  // build is a release.
   let configs;
-  try { configs = packageConfig(appDir, 'web', { extensions: moduleFlag.extensions }); } catch (e) { console.error(`${app}: ${e.message}`); process.exit(1); }
+  try { configs = packageConfig(appDir, 'web', { extensions: moduleFlag.extensions, release: production, warn: (m) => console.warn(`${app}: ${m}`) }); } catch (e) { console.error(`${app}: ${e.message}`); process.exit(1); }
   for (const extension of Object.keys(moduleFlag.extensions)) {
     const at = bound.get(extension);
     // `roster`: the views it serves (views.js), where it exports one.
