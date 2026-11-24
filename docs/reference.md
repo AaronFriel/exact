@@ -2659,7 +2659,10 @@ answers and route statuses, and are not shared between requests. Production buil
 ignore these inputs. `--fail-fetch` with `--test` arms every test.
 A Mac agent drive never takes the focus: the app is an accessory, never activated (a `type` makes its window key
 without activating it), so AppKit draws its controls as in an inactive app. On the agent's clock its window, and a picture-in-picture
-panel it opens, sit one level below every other app's windows, so they never show over them; `--timing platform` orders them in front. `EXACT_AGENT_ACTIVATE=1`, which only
+panel it opens, sit one level below every other app's windows, so they never show over them; `--timing platform` and `--live` order them in front,
+since a covered window presents no frames and its page reads as hidden. `--display <name|index>` (`EXACT_AGENT_DISPLAY`, beside `EXACT_AGENT=live`, for a launch by hand) opens
+the window centred on one display, named as `NSScreen.localizedName` or by its index in `NSScreen.screens`; on a Mac someone is working at,
+name a display they are not using. A name no display has, or two have, is refused with the list. `EXACT_AGENT_ACTIVATE=1`, which only
 `scripts/measure-controls.mjs` sets (never a default), activates that one run, and the app that was in front is put
 back when it exits, however it exits (LLP 1121 stage 9 F2).
 A data module's `crypto.getRandomValues()` and `crypto.randomUUID()` draw from the seed too, so every drive with the same seed
@@ -2782,6 +2785,7 @@ and dropped records. An ordinary launch on the wall clock is available on macOS 
 (use `ios --live` on a simulator or `ios --device --live` on a phone). The driver launches and closes this process and keeps input
 available. `--live` uses normal scheduling and the wall clock: `performanceNow()` and
 timers advance in real time between operations, and `perf frames` records real frames.
+On macOS the window opens in front without taking the focus; `--display` puts it on a display other than the one being worked at.
 On iOS, `--touch platform` sends the gesture through XCTest so UIKit delivers the scroll callbacks.
 For example, `bun exact.mjs agent ios --device --live --touch platform "tap s drag 0 -300 over 100" "perf frames health scroll"`
 drags the scroll view named `s` on a phone. Unlock the paired phone, enable Developer Mode and UI Automation,
