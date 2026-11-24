@@ -87,7 +87,7 @@
             "actions": "actions"
           },
           "show": {
-            "targets": ["ios", "macos", "web"],
+            "targets": ["ios", "macos", "web", "android"],
             "event": "notificationshow",
             "args": [
               "tag",

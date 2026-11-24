@@ -4078,7 +4078,9 @@ grant beside this one: see [Push](#push).
 - `notificationshow` on the root hears a local post presented while the page is visible.
   Its handler takes the same arguments as a click, the tag and an optional
   `NotificationEvent` carrying `tag`, `title`, `body` and `data`. The handler runs
-  with the device’s origin. iOS, macOS and the web raise the event. Android does not report it.
+  with the device’s origin. iOS, macOS and the web report presentation. Android reports the handoff
+  to the notification manager for an enabled channel while the activity is visible.
+  The system can still suppress the notification.
   The agent emits it when its clock reaches `showTrigger`, or immediately for a post due now.
   Push arrivals and posts delivered while hidden raise no event.
 - A plain click with `navigate=` opens that route location: one `navigate`
