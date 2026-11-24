@@ -1,5 +1,6 @@
 // The web JS target's store, with its persistence (store.js), as a page with a data module links it. Run alone, `bun test ./host/web-js/store.test.js`: reorder.test.js mocks rt.js for its process.
 import { test, expect, mock } from "bun:test";
+import { runtimeSource } from '../web/tests/stand-ins.mjs';
 
 // The build copies navigation.js and prompt-glue.js in from host/web and writes names.js.
 mock.module("./navigation.js", () => import("../web/navigation.js"));
@@ -337,7 +338,7 @@ test("a lease's request with effects arms its recovery, and a safe one does not"
   const { pathToFileURL } = await import('node:url');
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-lease-fetch-'));
   try {
-    cpSync(resolve(import.meta.dir, 'ts-fetch.js'), resolve(dir, 'ts-fetch.js'));
+    writeFileSync(resolve(dir, 'ts-fetch.js'), runtimeSource('ts-fetch.js'));
     writeFileSync(resolve(dir, 'admission.js'), `export { ownWithout, redirectOf, socketProtocols } from ${JSON.stringify(pathToFileURL(resolve(import.meta.dir, 'admission.js')).href)};
 export class FetchError extends Error {} export const overlaying = { on: false }; export const inOverlay = what => new Error(what);
 export const signalDeadline = { arm: null }; export const fetchWith = async () => new Response('sent');\n`);
