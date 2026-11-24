@@ -8,8 +8,8 @@ import { spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { boundedHttpBody, request, streamed } from './http-body.js';
 import { deferredFulfill, refusal } from './navigation/requests.js';
-import { admittingGrant, admitsNetwork, coversPath, createGrantSet, grantError, grantWords, sameGrantDeclaration, scopedGrantSet } from './grant-admission.js';
-import { createRequestExecutor, createSecretFacade, fetchWith, redirectOf } from '../web-js/admission.js';
+import { bundledAsset, admittingGrant, admitsNetwork, coversPath, createGrantSet, grantError, grantWords, sameGrantDeclaration, scopedGrantSet } from './grant-admission.js';
+import { createRequestExecutor, createSecretFacade, fetchTarget, fetchWith, redirectOf } from '../web-js/admission.js';
 import { cdpBrowser, chromium } from '../../scripts/agent-launch.mjs';
 import { need } from '../../scripts/coverage.mjs';
 import { builtFile } from '../web-js/content-names.mjs';
@@ -19,7 +19,7 @@ const { unavailable } = chromium(), chromeTest = need('chrome', unavailable);
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 // The real `redirectOf` and `ownWithout`, for a stub `admission.js` written beside a module under test
-const realHelpers = `export { ownWithout, redirectOf, signalDeadline, socketProtocols, within } from ${JSON.stringify(pathToFileURL(resolve(ROOT, 'host/web-js/admission.js')).href)}; `;
+const realHelpers = `export { fetchTarget, ownWithout, redirectOf, signalDeadline, socketProtocols, within } from ${JSON.stringify(pathToFileURL(resolve(ROOT, 'host/web-js/admission.js')).href)}; `;
 const sets = new Map();
 const normalizers = new Map();
 function builtNormalizer(target, run = spawnSync) {
@@ -294,10 +294,18 @@ test('TypeScript fetch exposes FetchError kinds while a late host module keeps b
   Object.defineProperty(globalThis, 'Headers', { configurable: true, writable: true, value: class extends NativeHeaders {
     constructor(value) { if (value && Object.keys(value).some(name => name.includes(' '))) throw new TypeError('Invalid header name'); super(value); }
   } });
+  const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { baseURI: new URL('/mount/', origin.url).href } });
   try {
+    expect(fetchTarget('/assets/feed.json', {exactStream: () => {}, exactLongPoll: {cursor: 'since', from: 'seq'}})).toBe(origin.url.origin + '/assets/feed.json');
+    expect((await fetchWith(set, 'data.json')).url).toBe(new URL('/mount/data.json', origin.url).href);
+    expect((await request({ op: 'request', method: 'GET', url: 'data.json', headers: {} }, { grantSet: set, controllers: new Set() })).kind).toBe(0);
+    globalThis.document.baseURI = 'https://ungranted.test/path/';
+    await expect(fetchWith(set, '/data.json')).rejects.toMatchObject({ kind: 'Refused' });
+    globalThis.document.baseURI = origin.url.href;
     await expect(fetchWith(set, 'https://outside.test/')).rejects.toMatchObject({ name: 'FetchError', kind: 'Refused', message: "outside the app's grants (net.fetch)" });
     await expect(fetchWith(set, 'http://[')).rejects.toMatchObject({ name: 'FetchError', kind: 'Network' });
-    await expect(fetchWith(set, '/relative')).rejects.toMatchObject({ name: 'FetchError', kind: 'Network' });
+    expect((await fetchWith(set, '/relative')).url).toBe(new URL('/relative', origin.url).href);
     await expect(fetchWith(set, origin.url, { headers: { 'Bad Name': 'x' } })).rejects.toMatchObject({ name: 'FetchError', kind: 'Network' });
     await expect(fetchWith(set, '/assets/runtime.wasm', { headers: { 'Bad Name': 'x' } })).rejects.toMatchObject({ name: 'FetchError', kind: 'Network' });
     expect(await (await fetchWith(set, origin.url)).text()).toBe('ok');
@@ -312,6 +320,7 @@ test('TypeScript fetch exposes FetchError kinds while a late host module keeps b
   } finally {
     origin.stop(true);
     if (locationDescriptor) Object.defineProperty(globalThis, 'location', locationDescriptor); else delete globalThis.location;
+    if (documentDescriptor) Object.defineProperty(globalThis, 'document', documentDescriptor); else delete globalThis.document;
     if (headersDescriptor) Object.defineProperty(globalThis, 'Headers', headersDescriptor); else delete globalThis.Headers;
   }
 });
@@ -321,9 +330,12 @@ test('a bodyless same-origin assets GET is host I/O on the JS target', async () 
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
   Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: origin.url.href, origin: origin.url.origin } });
   try {
+    const asset = '/assets/runtime.wasm', initial = origin.url.origin + '/mount' + asset;
+    expect(bundledAsset(asset, initial, origin.url.origin + '/mount/assets/next.wasm')).toBe(true);
+    expect(bundledAsset(asset, initial, origin.url.origin + '/mount/next')).toBe(false);
     expect(await (await fetchWith(normalized(''), '/assets/runtime.wasm')).text()).toBe('/assets/runtime.wasm');
     expect(await (await fetchWith(normalized(''), '/assets/runtime.wasm', null)).text()).toBe('/assets/runtime.wasm');
-    await expect(fetchWith(normalized(''), '/assets/runtime.wasm', { method: 'POST' })).rejects.toMatchObject({ kind: 'Network' });
+    await expect(fetchWith(normalized(''), '/assets/runtime.wasm', { method: 'POST' })).rejects.toMatchObject({ kind: 'Refused' });
   } finally {
     origin.stop(true);
     if (descriptor) Object.defineProperty(globalThis, 'location', descriptor); else delete globalThis.location;

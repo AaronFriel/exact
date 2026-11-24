@@ -13,7 +13,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 async function load() {
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-later-fetch-'));
   writeFileSync(resolve(dir, 'ts-fetch.js'), runtimeSource('ts-fetch.js'));
-  writeFileSync(resolve(dir, 'admission.js'), `export { ownWithout, redirectOf, socketProtocols } from ${JSON.stringify(pathToFileURL(resolve(ROOT, 'host/web-js/admission.js')).href)};
+  writeFileSync(resolve(dir, 'admission.js'), `export { fetchTarget, ownWithout, redirectOf, socketProtocols } from ${JSON.stringify(pathToFileURL(resolve(ROOT, 'host/web-js/admission.js')).href)};
 export class FetchError extends Error { constructor(kind, message) { super(message); this.kind = kind; } }
 export const overlaying = { on: false }; export const inOverlay = what => new Error(what); export const signalDeadline = { arm: () => undefined };
 export const fetchWith = (grants, input, init) => {

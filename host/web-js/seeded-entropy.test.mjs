@@ -85,7 +85,7 @@ test('a crypto draw requires a pending turn and refuses before consuming entropy
   writeFileSync(resolve(dir, 'admission.js'), `export const overlaying = { on: false };
 export const inOverlay = api => new Error(api + ' in an overlay');
 export class FetchError extends Error {}
-export const socketProtocols = null, fetchWith = null, ownWithout = null, redirectOf = null, signalDeadline = {};
+export const fetchTarget = x => x, socketProtocols = null, fetchWith = null, ownWithout = null, redirectOf = null, signalDeadline = {};
 `);
   const values = spyOn(globalThis.crypto, 'getRandomValues'), uuid = spyOn(globalThis.crypto, 'randomUUID');
   const ordinary = Object.getOwnPropertyDescriptor(globalThis, '__exact_ordinary');
