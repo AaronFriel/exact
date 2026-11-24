@@ -95,6 +95,17 @@ impl<D: DataSource + Default> CanvasHost<D> {
         self.force |= self.p.reader_frame_loaded(id, key, session);
     }
 
+    /// The reader's iframe took the platform's focus or lost it.
+    pub fn frame_focused(
+        &mut self,
+        id: u32,
+        key: exact_kernel::NodeKey,
+        session: u64,
+        focused: bool,
+    ) {
+        self.p.reader_frame_focused(id, key, session, focused);
+    }
+
     /// The reader's iframe's `FrameNavigation` record (LLP 1020.002 D2).
     pub fn frame_event(
         &mut self,

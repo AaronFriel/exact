@@ -156,6 +156,8 @@ object Native {
     /** A module event, checked against the session and allocation carried by its painted view. */
     @JvmStatic external fun moduleEvent(id: Int, slot: Int, generation: Int, session: Long, kind: String, payload: String)
     @JvmStatic external fun frameLoaded(id: Int, slot: Int, generation: Int, session: Long)
+    /** An iframe's view took the window's focus (a field in its page did) or lost it; checked as [frameLoaded] is. */
+    @JvmStatic external fun frameFocused(id: Int, slot: Int, generation: Int, session: Long, focused: Boolean)
     /** An iframe's `FrameNavigation` record (LLP 1020.002 D2): [event] by its name, [record] its JSON; checked as
      * [frameLoaded] is. */
     @JvmStatic external fun frameEvent(id: Int, slot: Int, generation: Int, session: Long, event: String, record: String)

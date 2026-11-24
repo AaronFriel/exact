@@ -852,7 +852,10 @@ ends that watch for the rest of the contact; the moves that come while the reade
 `parent.requestDisallowInterceptTouchEvent(true)` before the crossing move, as in any
 [Android ViewGroup](https://developer.android.com/develop/ui/views/touch-and-input/gestures/viewgroup).
 The request lasts until up or cancel, or until the child passes `false`. The maps package requests this on down
-to reserve its pan. A drag on an axis the enclosing page cannot scroll stays with the hosted view; a second
+to reserve its pan. An `iframe`'s WebView never asks, so the reader asks it instead, once a contact, as a
+`ViewPager` asks a child: a drag its page can scroll the way the finger went past the slop stays the frame's
+(`canScrollVertically`, `canScrollHorizontally`), and one at the page's edge is the scroller's around it
+(LLP 1020.002 §11). A drag on an axis the enclosing page cannot scroll stays with the hosted view; a second
 pointer before interception gives it the pinch and the rest of that sequence. A down stops a running fling and
 reaches the hosted view.
 Declining the down leaves the scroller's drag and velocity tracking intact, including when the down stopped a fling.

@@ -485,7 +485,14 @@ class Natives(
                 c.drawBitmap(bmp, src, dst, bitmapPaint)
             }
         } else if (e.view is SurfaceView && e.presentation.ready) c.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
-        else if (!e.stale) e.view.draw(c)
+        else if (!e.stale) {
+            // What a parent's drawing does (`View.updateDisplayListIfDirty`): a WebView's fling and a scroller's move
+            // on in computeScroll, and ask to be drawn again while they last; the view's scroll offset (a WebView keeps
+            // its page's there) is taken off the canvas before it draws.
+            e.view.computeScroll()
+            c.translate(-e.view.scrollX.toFloat(), -e.view.scrollY.toFloat())
+            e.view.draw(c)
+        }
         e.node.endRecording()
     }
 
@@ -972,6 +979,9 @@ class Natives(
         settings.javaScriptEnabled = true
         // A page's `localStorage` and `sessionStorage`, as a browser gives it; WebView's default has none.
         settings.domStorageEnabled = true
+        // A pinch zooms the page as Chrome and WebKit let it, unless its viewport forbids; with no on-screen buttons.
+        settings.builtInZoomControls = true
+        settings.displayZoomControls = false
         val hasNavigationListener = WebViewFeature.isFeatureSupported(WebViewFeature.NAVIGATION_LISTENER)
         val client = FrameClient(this, hasNavigationListener, frames, partitioned)
         webViewClient = client
@@ -984,6 +994,11 @@ class Natives(
         }
         isVerticalScrollBarEnabled = false; isHorizontalScrollBarEnabled = false
         overScrollMode = View.OVER_SCROLL_NEVER
+        // exact2 keeps the frame above a keyboard its page raises.
+        setOnFocusChangeListener { web, focused ->
+            val e = if (focused) byView[web]?.takeIf { elements[it.id] === it && it.view === web } else focusedFrame
+            if (e != null) frameFocused(e, focused)
+        }
         setBackgroundColor(Color.WHITE)
     }
 
@@ -997,6 +1012,8 @@ class Natives(
         removeView(web)
         val e = byView.remove(web)?.takeIf { elements[it.id] === it && it.view === web }
         webPool.remove(web)
+        retiring?.invoke(web)
+        if (e != null && e === focusedFrame) frameFocused(e, false)
         web.destroy()
         if (e == null) return
         android.util.Log.w("exact", "iframe ${e.id}: the page's renderer ${if (crashed) "crashed" else "was ended by Android"}; ${if (e.browser == null) "loading its src again" else "recovering it"}")
@@ -1139,12 +1156,21 @@ class Natives(
         modules[e.module]?.let { lifecycle.made(e.view, "${e.module}:${e.id}:${e.slot}:${e.generation}", it) }
     }
 
-    /** The module view the engine's hit names, while that allocation of that session is still mounted and enabled
-     * when its reply arrives. */
+    /** The frame whose view holds the window's focus, as exact2 was last told. */
+    private var focusedFrame: Element? = null
+
+    private fun frameFocused(e: Element, focused: Boolean) {
+        if (!focused && focusedFrame !== e) return
+        focusedFrame = e.takeIf { focused }
+        Exact.frameFocused(e.id, e.slot, e.generation, e.session, focused)
+    }
+
+    /** The module view or frame the engine's hit names, while that allocation of that session is still mounted and
+     * enabled when its reply arrives. */
     fun taker(id: Int, slot: Int, generation: Int, session: Long): View? {
         // A media element with a controller takes its gestures as a module's view does (LLP 1042.001 D4).
         val e = elements[id]?.takeIf {
-            (it.kind == 2 || (it.kind == 0 && players[it.view]?.lendable == false)) &&
+            ((it.kind == 1 && it.refusedFor == null) || it.kind == 2 || (it.kind == 0 && players[it.view]?.lendable == false)) &&
                 !it.parked && it.slot == slot && it.generation == generation && it.session == session
         } ?: return null
         return e.view.takeIf { !e.disabled && it.isEnabled }
@@ -1338,7 +1364,8 @@ class Natives(
 
     /** [e]'s view is kept for the next element of its kind, or goes. */
     private fun retire(e: Element, reuse: Boolean = true) {
-        if (e.kind == 2) retiring?.invoke(e.view)
+        if (e.kind == 1 || e.kind == 2) retiring?.invoke(e.view)
+        if (e === focusedFrame) frameFocused(e, false)
         e.eventBinding++
         if (pooled(e)) held--
         val module = e.module?.let { modules[it] }

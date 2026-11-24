@@ -324,6 +324,8 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     internal fun keyboard(state: Int, field: Int) {
         val hosted = fields
         if (state != 0 && field != 0 && hosted != null) { keys?.show(0); hosted.focus(field) }
+        // A field in a frame's page took the focus from exact2's: the keyboard up is the page's.
+        else if (state == 0 && rootView.findFocus() is android.webkit.WebView) { hosted?.blur(false); keys?.show(0, hide = false) }
         else { hosted?.blur(state == 0); keys?.show(state) }
     }
 

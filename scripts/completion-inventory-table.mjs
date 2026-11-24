@@ -846,10 +846,11 @@ export const classifications = [
       "exact_web_set_sandbox exact_web_set_src exact_web_snapshot"],
   ]),
   group("web frames", ["subscription"], "live Android iframe allocation and native session", "UI-owned",
-    "Natives.kt and FrameClient.kt consume each document completion and frame record and drop it when the WebView binding is retired. The painted presenter checks the session and iframe allocation before dispatch.", [
-    ["painted:host/painted/src/canvas/jni_frames.rs", "Java_dev_exact_canvas_Native_frameEvent Java_dev_exact_canvas_Native_frameLoaded"],
-    ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::frame_event CanvasHost::frame_loaded"],
+    "Natives.kt and FrameClient.kt consume each document completion, frame record and focus change and drop it when the WebView binding is retired. The painted presenter checks the session and iframe allocation before dispatch.", [
+    ["painted:host/painted/src/canvas/jni_frames.rs", "Java_dev_exact_canvas_Native_frameEvent Java_dev_exact_canvas_Native_frameFocused Java_dev_exact_canvas_Native_frameLoaded"],
+    ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::frame_event CanvasHost::frame_focused CanvasHost::frame_loaded"],
     ["painted:host/painted/src/presenter/events.rs", "Presenter::reader_frame_event Presenter::reader_frame_loaded"],
+    ["painted:host/painted/src/presenter/window.rs", "Presenter::live_frame Presenter::reader_frame_focused"],
   ]),
   group("storage", ["durable operation"], "committed app store/secret values and write queue", "durable",
     "host/painted/src/store_writer.rs drains already committed writes and reports write warnings; runner/src/store.rs and store/presence.rs revisions version durable store contents, not UI continuations. host/apple/webarm/WebArm.swift exactWebClearSiteData clears the named browser partition and calls its completion context.", [

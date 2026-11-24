@@ -832,6 +832,9 @@ internal object Exact {
     fun frameLoaded(id: Int, slot: Int, generation: Int, session: Long) =
         field { Native.frameLoaded(id, slot, generation, session) }
 
+    fun frameFocused(id: Int, slot: Int, generation: Int, session: Long, focused: Boolean) =
+        field { Native.frameFocused(id, slot, generation, session, focused) }
+
     fun frameEvent(id: Int, slot: Int, generation: Int, session: Long, event: String, record: String) =
         field { Native.frameEvent(id, slot, generation, session, event, record) }
 
