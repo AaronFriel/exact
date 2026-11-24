@@ -302,6 +302,7 @@ object Native {
     /** The answer to request [id] (the share sheet's: `shared` or `dismissed`, or why it could not be shown), or null
      * when it was cancelled. On the host's thread. */
     @JvmStatic external fun answer(id: Int, answer: String?)
+    @JvmStatic external fun refuseModule(id: Int, error: String, message: String?)
     /** A topic an extension announced ([ExtensionContext.changed]): its readers are asked again. On the host's thread. */
     @JvmStatic external fun changed(topic: String)
     /** A person's act on an extension's own platform UI ([Activations]): its event [event] with [args], a JSON array,

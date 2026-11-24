@@ -801,9 +801,9 @@ impl Module {
         // The host's app module, when the app links no native module of its
         // own: present in agent mode too, where it substitutes its input
         // (LLP 1067.000 Q7), so it needs no storage directories.
-        if self.host.native.is_none() && self.native_slot.hosted() {
-            self.host.hosted = true;
-            self.host.later = true;
+        if self.host.native.is_none() {
+            self.host.hosted = self.native_slot.hosted();
+            self.host.later = self.native_slot.handler().is_some();
         }
         // packages live in the host's app module: their synchronous calls reach
         // it even when the app links a native module of its own (the door)

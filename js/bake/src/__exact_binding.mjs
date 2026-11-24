@@ -389,11 +389,19 @@ function binding(name, declaration, implementations, dom=()=>[], members={}, tar
   lines.push(
     `function call(body: { extension: string; owner?: string; source?: string; send?: string; args: unknown }${wired ? ', bytes = false' : ''}): Promise<any> {`,
     ...(wired ? ['  body = { ...body, args: toWire(body.args) };'] : []),
+    '  const name = `${body.extension}.${body.source ?? body.send}`;',
     '  const via = (globalThis as any).__exact_module;',
     `  const answer: Promise<any> = via ? via(body) : fetch("exact-native:", { method: "POST", body: JSON.stringify(body), exactIndependentHttp: { maxResponseBytes: ${extension === 'clipboard' ? '(body.send === "read" || body.send === "readText") ? 8388608 : 1048576' : '1048576'} } } as any)`,
-    '    .then((r: any) => r.text().then((t: string) => { if (r.status === 200) return JSON.parse(t); throw failed(t || "the module did not answer", "UnknownError"); }));',
-    wired ? '  return answer.then((v: any) => { const a = answered(v, `${body.extension}.${body.source ?? body.send}`); return bytes ? fromWire(a) : a; });'
-      : '  return answer.then((v: any) => answered(v, `${body.extension}.${body.source ?? body.send}`));',
+    '    .then((r: any) => r.text().then((t: string) => {',
+    '      if (r.status === 200) return JSON.parse(t);',
+    '      if (r.status === 500 && r.headers?.get("content-type")?.split(";", 1)[0].trim().toLowerCase() === "application/json") {',
+    '        let refusal; try { refusal = JSON.parse(t); } catch {}',
+    '        answered(refusal, name);',
+    '      }',
+    '      throw failed(t || "the module did not answer", "UnknownError");',
+    '    }));',
+    wired ? '  return answer.then((v: any) => { const a = answered(v, name); return bytes ? fromWire(a) : a; });'
+      : '  return answer.then((v: any) => answered(v, name));',
     '}',
     'function callNow(body: { extension: string; owner?: string; sync: string; args: unknown }): any {',
     '  const now = (globalThis as any).__exact_module_sync;',

@@ -525,6 +525,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
     private val replies = OwnerReplies(::call) { h ->
         when (h) {
             is OwnerReplies.Handed.Answer -> Native.answer(h.id, h.value)
+            is OwnerReplies.Handed.Refused -> Native.refuseModule(h.id, h.error, h.message)
             is OwnerReplies.Handed.Changed -> Native.changed(h.topic)
             is OwnerReplies.Handed.Picture -> Native.pictureChanged(h.source, h.revoked)
             is OwnerReplies.Handed.Journal -> Native.journal(h.line)
@@ -542,6 +543,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         return org.json.JSONArray().apply {
             for (h in replies.take()) put(when (h) {
                 is OwnerReplies.Handed.Answer -> org.json.JSONArray().put(h.id).put(h.value ?: org.json.JSONObject.NULL)
+                is OwnerReplies.Handed.Refused -> JSONObject().put("id", h.id).put("error", h.error).put("message", h.message)
                 is OwnerReplies.Handed.Changed -> h.topic
                 is OwnerReplies.Handed.Picture -> org.json.JSONObject().put("picture", h.source).put("revoked", h.revoked)
                 is OwnerReplies.Handed.Journal -> org.json.JSONObject().put("journal", h.line)
@@ -903,6 +905,11 @@ internal object Exact {
     fun answer(id: Int, answer: String?) {
         val o = owner
         if (o != null) o.hand(OwnerReplies.Handed.Answer(id, answer)) else Native.answer(id, answer)
+    }
+
+    fun refuseModule(id: Int, error: String, message: String?) {
+        val o = owner
+        if (o != null) o.hand(OwnerReplies.Handed.Refused(id, error, message)) else Native.refuseModule(id, error, message)
     }
 
     /** A package calls an app handler on the host's thread and publishes what it changed. */

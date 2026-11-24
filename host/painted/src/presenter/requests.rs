@@ -422,13 +422,22 @@ fn encode(id: u32, request: &Request, out: &mut Vec<i32>) {
 pub type AgentTurn = Box<dyn FnMut(f64, Option<Vec<i32>>) -> Vec<Handed>>;
 
 /// What the reader queued for the owner thread while an agent operation held
-/// it, in the order it was queued: on the wire, `[id, answer]`, the topic,
-/// `{"picture", "revoked"}` or `{"journal"}`.
+/// it, in the order it was queued. An answer is a pair and a refusal is a
+/// record with its request ID and error name.
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 #[serde(untagged)]
 pub enum Handed {
     /// The answer to request `id`, or its cancellation.
     Answer(i32, Option<String>),
+    /// A reader's refusal of a module request. Package readers consume the same error record.
+    Refused {
+        /// The request number.
+        id: u32,
+        /// The error name.
+        error: String,
+        /// The reason, when the package supplies one.
+        message: Option<String>,
+    },
     /// A topic an extension announced ([`exact_runner::Native::changed`]).
     Changed(String),
     /// A picture an extension changed or revoked
@@ -487,6 +496,9 @@ impl<D: DataSource> Presenter<D> {
             match h {
                 Handed::Answer(id, answer) => {
                     self.answer_request(id as u32, answer.as_deref());
+                }
+                Handed::Refused { id, error, message } => {
+                    self.refuse_module(id, &error, message.as_deref());
                 }
                 Handed::Changed(topic) => self.host.runner().native_slot().changed(&topic),
                 Handed::Picture { picture, revoked } => self.picture_changed(&picture, revoked),
@@ -603,7 +615,10 @@ impl<D: DataSource> Presenter<D> {
                 .push((body, reply));
             wake();
         });
-        self.host.runner().native_slot().host(Some(handler));
+        self.host
+            .runner()
+            .native_slot()
+            .host_packages(Some(handler));
     }
 
     /// The module calls handed over since the last turn: a composed
@@ -950,6 +965,17 @@ impl<D: DataSource> Presenter<D> {
             encode(id, &request, &mut words);
         }
         Some(words)
+    }
+
+    /// Reject a module request. The package protocol reads the error record and
+    /// `native.later` rejects on the HTTP status, as on Apple.
+    pub(crate) fn refuse_module(&mut self, id: u32, error: &str, message: Option<&str>) {
+        if let Some(reply) = self.requests.modules.remove(&id) {
+            self.requests.tells.remove(&id);
+            reply.send(exact_runner::Outcome::module_refusal(error, message));
+        } else {
+            self.picture_answered(id, Err(error.to_owned()));
+        }
     }
 
     /// The shell's answer to request `id`, or its cancellation (`None`);

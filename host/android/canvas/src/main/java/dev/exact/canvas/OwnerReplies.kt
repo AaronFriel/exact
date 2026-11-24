@@ -8,6 +8,7 @@ internal class OwnerReplies(private val post: (() -> Unit) -> Unit, val deliver:
     sealed interface Handed {
         /** The answer to request [id], or its cancellation (null): [Native.answer]. */
         data class Answer(val id: Int, val value: String?) : Handed
+        data class Refused(val id: Int, val error: String, val message: String?) : Handed
         /** A topic an extension announced: [Native.changed]. */
         data class Changed(val topic: String) : Handed
         /** A picture an extension changed or revoked: [Native.pictureChanged]. */

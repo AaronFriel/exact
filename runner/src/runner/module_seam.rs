@@ -8,7 +8,6 @@
 //! The runner's methods that reach the seam are in `module_seam/forward.rs`.
 
 use super::provenance::{CallOrigin, Cause};
-use super::reply::response;
 use super::{AppState, CommitReceipt, DataError, DataSource, Runner, RunnerError, Target};
 use crate::request::{Answer, Dispatch, Outcome, Request, Work};
 use crate::HoldAnswer;
@@ -31,6 +30,23 @@ pub(in crate::runner) struct ModuleState(pub(in crate::runner) Box<dyn Any>);
 /// The module readers a commit's checkpoint keeps: each bound live
 /// source's readers, by resource, with the arguments each last asked with.
 pub(in crate::runner) type Readers = BTreeMap<String, BTreeMap<usize, String>>;
+
+/// Refuse a data-code request whose package, name or verb has no matching row.
+pub(super) fn unsupported_call() -> Dispatch {
+    Dispatch::Run(Work::Now(Box::new(|| {
+        Outcome::module_refusal("NotSupportedError", None)
+    })))
+}
+
+/// The Android reader uses a nonempty source first, then a send. Admit the
+/// same name before handing the request to a package.
+pub(super) fn declared_call(v: &Json) -> Option<(&str, bool)> {
+    let source = v["source"].as_str().filter(|name| !name.is_empty());
+    let send = v["send"].as_str().filter(|name| !name.is_empty());
+    source
+        .map(|name| (name, false))
+        .or_else(|| send.map(|name| (name, true)))
+}
 
 /// The target this runner is built for, as a substitute's `targets` and a
 /// ceremony's `clientOrigin` name it.
@@ -464,20 +480,14 @@ pub trait Modules<D: DataSource> {
     fn module_call(&self, r: &mut Runner<D>, native: &crate::Request) -> Option<Dispatch> {
         let v: Json = serde_json::from_slice(&native.body).ok()?;
         let extension = v.get("extension")?.as_str()?;
-        let declared = match (v["source"].as_str(), v["send"].as_str()) {
-            (Some(name), None) | (None, Some(name)) => name,
-            _ => return None,
-        };
+        let (declared, _) = declared_call(&v)?;
         let owner = v["owner"]
             .as_str()
             .map(|s| format!("#{s}"))
             .unwrap_or_default();
         let key = format!("{extension}.{declared}{owner}");
         r.log(format!("{key}: not a module this app's plan names"));
-        let answer = json!({ "error": "NotSupportedError" });
-        Some(Dispatch::Run(Work::Now(Box::new(move || {
-            response(&answer)
-        }))))
+        Some(unsupported_call())
     }
 
     /// A typed answer to `ticket`, checked before the hold is spent, so it
@@ -902,6 +912,7 @@ mod tests {
         let Outcome::Response(response) = answer() else {
             panic!("a response");
         };
+        assert_eq!(response.status, 500);
         assert!(String::from_utf8_lossy(&response.body).contains("NotSupportedError"));
         assert!(said(&r, "geo.where: not a module this app's plan names"));
         // Announced topics pass through untouched.

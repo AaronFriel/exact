@@ -154,6 +154,11 @@ impl<D: DataSource + Default> CanvasHost<D> {
         self.p.answer_request(id, answer);
     }
 
+    /// The reader refused a module call.
+    pub fn refuse_module(&mut self, id: u32, error: &str, message: Option<&str>) {
+        self.p.refuse_module(id, error, message);
+    }
+
     /// How a presence check the reader made ended (LLP 1133.010 D13).
     pub fn presence_reply(&mut self, answer: &str) {
         self.p

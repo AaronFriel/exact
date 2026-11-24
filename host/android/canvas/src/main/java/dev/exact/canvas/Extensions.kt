@@ -660,81 +660,104 @@ internal object Extensions {
     fun clock() { for (extension in made.values.toList()) extension.clock() }
 
     fun call(id: Int, body: String) {
-        clock()
-        var answered = false
+        val answered = java.util.concurrent.atomic.AtomicBoolean()
+        fun refuse(error: String = "NotSupportedError", message: String? = null) {
+            if (answered.compareAndSet(false, true)) Exact.refuseModule(id, error, message)
+        }
+        fun failed(e: Exception) {
+            Log.e("exact", "extension call $id: $e")
+            refuse("Error", e.message)
+        }
         // A list answer comes as `{"exact:answer": [...]}`, since a reply is an object (as on Apple).
         val reply = { answer: JSONObject ->
-            if (!answered) {
-                answered = true
+            if (answered.compareAndSet(false, true)) {
                 val listed = answer.length() == 1 && answer.has("exact:answer")
                 Exact.answer(id, if (listed) answer.get("exact:answer").toString() else answer.toString())
             }
         }
+        val request = try { JSONObject(body) } catch (e: org.json.JSONException) { return refuse(message = e.message) }
         try {
-            val request = JSONObject(body)
-            val name = request.getString("extension")
-            val extension = extension(name) ?: return reply(JSONObject().put("error", "NotSupportedError"))
-            val declared = request.optString("source").ifEmpty { request.optString("send") }
-            val released = request.optString("release")
+            clock()
+            val name = request.opt("extension") as? String ?: return refuse()
+            val extension = extension(name) ?: return refuse()
+            val source = request.opt("source").takeUnless { it === JSONObject.NULL }
+            val send = request.opt("send").takeUnless { it === JSONObject.NULL }
+            if ((source != null && source !is String) || (send != null && send !is String)) return refuse()
+            val declared = (source as? String)?.ifEmpty { null } ?: send as? String
+            val released = request.opt("release") as? String
             when {
                 request.has("view") -> {
-                    val (view, cause) = request.getString("view") to Cause.of(request)
-                    if (request.has("displayed")) extension.displayed(extension.context.session, view, request.getBoolean("displayed"), cause)
-                    if (request.has("bound")) extension.bound(extension.context.session, view, request.getString("bound"), request.opt("value"), cause)
+                    val view = request.opt("view") as? String ?: return refuse()
+                    val cause = Cause.of(request)
+                    if (request.has("displayed")) extension.displayed(extension.context.session, view, request.opt("displayed") as? Boolean ?: return refuse(), cause)
+                    if (request.has("bound")) extension.bound(extension.context.session, view, request.opt("bound") as? String ?: return refuse(), request.opt("value"), cause)
                     reply(JSONObject())
                 }
                 request.has("surface") && request.has("displayed") -> {
-                    extension.displayed(request.getString("surface"), request.getBoolean("displayed"), Cause.of(request))
+                    extension.displayed(request.opt("surface") as? String ?: return refuse(), request.opt("displayed") as? Boolean ?: return refuse(), Cause.of(request))
                     reply(JSONObject())
                 }
                 request.has("picture") -> {
-                    val source = request.getString("picture")
-                    val (width, height) = request.getInt("width") to request.getInt("height")
+                    val source = request.opt("picture") as? String ?: return refuse()
+                    fun pixels(key: String): Int? {
+                        val n = request.optDouble(key)
+                        return n.toInt().takeIf { it.toDouble() == n }
+                    }
+                    val width = pixels("width") ?: return refuse()
+                    val height = pixels("height") ?: return refuse()
                     extension.picture(source, width, height, request.optString("fit", "fill"), request.optBoolean("owned")) { bitmap, error ->
-                        if (!answered) {
-                            answered = true
+                        if (answered.compareAndSet(false, true)) {
                             val pixels = bitmap?.let(::software)
                             Exact.picture(id, pixels, if (pixels == null) error ?: "UnknownError" else null)
                         }
                     }
                 }
-                released.isNotEmpty() -> {
+                !released.isNullOrEmpty() -> {
                     val args = request.optJSONObject("args")
                     if (args != null) extension.release(released, args) else extension.release(released)
                     reply(JSONObject())
                 }
-                declared.isNotEmpty() -> {
+                !declared.isNullOrEmpty() -> {
                     val cause = Cause.of(request)
-                    val call = { extension.later(declared, request.optJSONObject("args") ?: JSONObject(), request.opt("preferred"), cause, reply) }
+                    fun call() {
+                        try { extension.later(declared, request.optJSONObject("args") ?: JSONObject(), request.opt("preferred"), cause, reply) }
+                        catch (e: Exception) { failed(e) }
+                    }
                     // A call that would ask and is no person's in-app act (LLP 1133.002 D12): refused while the
                     // implementation's own status could lead to a dialog, as Apple's host refuses it. The status is
                     // read under the call's cause.
                     val admit = request.optJSONObject("admit")
                     if (admit == null) call()
-                    else extension.later(admit.getString("status"), JSONObject(), null, cause) { status ->
-                        // A missing status, `prompt`, and Android's `denied` (which asks again until the person says
-                        // not to) may each lead to a dialog; any other lets the call run.
-                        val state = status.opt(admit.optString("field")) as? String
-                        if (!state.isNullOrEmpty() && state != "prompt" && state != "denied") call()
-                        else reply(JSONObject().put("error", admit.optString("denied").ifEmpty { "NotAllowedError" }).put("message", "person-required"))
+                    else {
+                        val statusName = admit.opt("status") as? String ?: return refuse()
+                        val field = admit.opt("field") as? String ?: return refuse()
+                        extension.later(statusName, JSONObject(), null, cause) { status ->
+                            // A missing status, prompt, or Android's retryable denial may lead to a dialog.
+                            val state = status.opt(field) as? String
+                            if (!state.isNullOrEmpty() && state != "prompt" && state != "denied") call()
+                            else reply(JSONObject().put("error", admit.optString("denied").ifEmpty { "NotAllowedError" }).put("message", "person-required"))
+                        }
                     }
                 }
                 request.has("preferred") -> {
+                    val preferred = request.optJSONObject("preferred") ?: return refuse()
                     request.optJSONObject("permissions")?.let { extension.permissions(it) }
-                    extension.preferred(request.optJSONObject("preferred") ?: JSONObject())
+                    extension.preferred(preferred)
                     reply(JSONObject())
                 }
                 request.has("cancel") -> {
-                    extension.cancel(request.getInt("cancel"))
+                    val number = request.opt("cancel")
+                    if (number !is Int && (number !is Long || number !in 0..0xffff_ffffL)) return refuse()
+                    extension.cancel((number as Number).toInt())
                     reply(JSONObject())
                 }
                 request.has("dispose") -> {
-                    val ids = request.optJSONArray("dispose") ?: JSONArray()
-                    extension.dispose((0 until ids.length()).map { ids.getString(it) })
+                    val ids = request.optJSONArray("dispose") ?: return refuse()
+                    extension.dispose((0 until ids.length()).map { ids.opt(it) as? String ?: return refuse() })
                     reply(JSONObject())
                 }
                 request.has("woke") -> {
-                    val woke = request.getString("woke")
+                    val woke = request.opt("woke") as? String ?: return refuse()
                     // With no activity showing, Android may kill the process once the wake's job is given back: what
                     // the handler committed is on disk first, or the wake did not complete.
                     val outcome = request.optString("outcome", "completed")
@@ -744,16 +767,15 @@ internal object Extensions {
                     reply(JSONObject())
                 }
                 request.has("foreground") -> {
-                    val shown = request.getBoolean("foreground")
+                    val shown = request.opt("foreground") as? Boolean ?: return refuse()
                     extension.context.foreground = shown
                     extension.foreground(shown)
                     reply(JSONObject())
                 }
-                else -> reply(JSONObject().put("error", "NotSupportedError"))
+                else -> refuse()
             }
         } catch (e: Exception) {
-            Log.e("exact", "extension call $id: $e")
-            reply(JSONObject().put("error", "NotSupportedError"))
+            failed(e)
         }
     }
 

@@ -876,6 +876,15 @@
                   .then(function (r) {
                     return r.text().then(function (t) {
                       if (r.status === 200) return JSON.parse(t);
+                      if ((r.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase() === "application/json") {
+                        var refusal;
+                        try { refusal = JSON.parse(t); } catch (_) {}
+                        if (refusal && typeof refusal.error === "string") {
+                          var error = new Error(refusal.message || refusal.error);
+                          error.name = refusal.error;
+                          throw error;
+                        }
+                      }
                       throw new Error(t || "native call failed");
                     });
                   });

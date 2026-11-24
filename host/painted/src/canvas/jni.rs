@@ -298,6 +298,20 @@ macro_rules! canvas_jni {
                 with(|h| h.answer(id as u32, answer.as_deref()));
             }
 
+            /// The reader refused module request `id`.
+            #[no_mangle]
+            pub unsafe extern "system" fn Java_dev_exact_canvas_Native_refuseModule(
+                env: *mut JNIEnv,
+                _class: jclass,
+                id: jint,
+                error: jstring,
+                message: jstring,
+            ) {
+                let error = string(env, error);
+                let message = (!message.is_null()).then(|| string(env, message));
+                with(|h| h.refuse_module(id as u32, &error, message.as_deref()));
+            }
+
             /// What the reader draws around the page, when that is not what
             /// this last returned (else null): where the page is in the
             /// window (x, y, width, height, pixels), the colour behind it

@@ -1025,7 +1025,7 @@ impl<D: DataSource> Runner<D> {
         let handler = self.native_slot().extension_handler();
         Dispatch::Run(Work::Later(Box::new(move |reply| match handler {
             Some(handler) => handler(body, reply),
-            None => reply.send(response(&json!({ "error": "NotSupportedError" }))),
+            None => reply.send(Outcome::module_refusal("NotSupportedError", None)),
         })))
     }
 
@@ -1078,11 +1078,7 @@ impl<D: DataSource> Runner<D> {
         let body = &native.body;
         let v: Json = serde_json::from_slice(body).ok()?;
         let extension = v.get("extension")?.as_str()?;
-        let (declared, send) = match (v["source"].as_str(), v["send"].as_str()) {
-            (Some(name), None) => (name, false),
-            (None, Some(name)) => (name, true),
-            _ => return None,
-        };
+        let (declared, send) = super::module_seam::declared_call(&v)?;
         let owner = v["owner"]
             .as_str()
             .map(|s| format!("#{s}"))
@@ -1097,10 +1093,10 @@ impl<D: DataSource> Runner<D> {
             .cloned()
         else {
             self.log(format!("{key}: not a module this app's plan names"));
-            return Some(now(json!({ "error": "NotSupportedError" })));
+            return Some(super::module_seam::unsupported_call());
         };
         if row.send != send {
-            return Some(now(json!({ "error": "NotSupportedError" })));
+            return Some(super::module_seam::unsupported_call());
         }
         let mut args = v.get("args").cloned().unwrap_or(json!({}));
         self.clamp_bounds(&row, &mut args);
