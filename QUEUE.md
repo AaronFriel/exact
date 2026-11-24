@@ -1,4 +1,6 @@
 # Queue
+- Match the window-opacity diagnostic to its runtime behavior. A literal `setWindowOpacity(2)` fails to build, while an action that reads 2 from state clamps the window to 1.
+- Revisit the page-drawn Mac title bar’s Fill action when AppKit exposes it. With “Fill” selected in System Settings, a double click on the row calls `performZoom` (LLP 1039 D8).
 - Reconcile the current LLP count with its ceiling. On main, `bun scripts/gate.mjs` reports 16 current LLPs against a cap of 15.
 - Check hyphens before digits in authored data attributes against LLP 1075.003 §3.3. Building a text node with `data-v-2="x"` reports `syntax-expected-expression`.
 - Supply the host clock in the Wasm body-to fixture. On the parent of the OPFS change, `bun test ./host/web/body-to.test.mjs -t 'a wasm request uses'` fails with `now is not defined`.
