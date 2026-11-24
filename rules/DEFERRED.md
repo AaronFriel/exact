@@ -24,6 +24,10 @@ is the storage consumer: notes in SQLite, backups in app-scoped files, and a
 multiline editor on web and Apple. Take: further general-purpose API expansion
 waits behind proving these shipped bindings in the app; Snapback2 stays deferred.
 
+**Web SQLite (Charlie, 2026-11-24, "recs ok").** LLP 1027 D10. Unblocks
+page writes through OPFS at SQLite's default durability, with an IndexedDB
+fallback, verified import and ordinary database-file access through `storage.fs`.
+
 **Expanded (Charlie, 2026-10-08, option A for protocol-handler URL templates):**
 `app.json` `protocol_handlers` carries a complete custom-scheme URL through
 the existing navigation root as an encoded handler location (LLP 1038 D8).

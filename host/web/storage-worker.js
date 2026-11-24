@@ -1,10 +1,7 @@
 // @ref LLP 1027 D10 — SQLite runs off the presentation thread.
 import sqlite3InitModule from './sqlite3.mjs';
-import { createFileStore, lockPaths } from './storage-fs.js';
+import { createFileStore, lockPaths, normalizePath } from './storage-fs.js';
 
-// No shared memory or isolation headers: keep the database in WASM memory and
-// atomically publish its complete SQLite file after each successful mutation.
-// This costs O(database size) per write; a connection exclusively locks its file.
 const ready = sqlite3InitModule({ locateFile: file => file === 'sqlite3.wasm'
   ? new URL('./sqlite3.wasm', import.meta.url).href : new URL(file, import.meta.url).href });
 const clients = new Map();
@@ -211,9 +208,54 @@ async function close(databases, id) {
   const session = databases.get(id);
   if (!session) return;
   databases.delete(id);
-  try { session.db.close(); } finally { session.files.close(); await session.release(); }
+  await releaseSession(session);
+}
+async function releaseSession(session) {
+  try { session.db?.close(); }
+  finally {
+    session.files.close();
+    try { session.pool?.pauseVfs(); }
+    catch (error) {
+      // Termination releases this worker's handles and Web Locks together.
+      postMessage({ fatal: 'SQLite worker could not release the OPFS pool' });
+      self.close();
+      throw error;
+    }
+    await session.release();
+  }
+}
+
+async function probeOpfs() {
+  if (!globalThis.FileSystemFileHandle?.prototype.createSyncAccessHandle || !navigator.storage?.getDirectory) return false;
+  const name = `.exact-sqlite-probe-${crypto.randomUUID()}`;
+  let root, file;
+  try {
+    root = await navigator.storage.getDirectory();
+    file = await root.getFileHandle(name, { create: true });
+    const closed = (await file.createSyncAccessHandle()).close();
+    await closed;
+    return !closed?.then; // Older WebKit exposed an asynchronous close.
+  } catch (error) {
+    // Private WebKit refuses the root itself with UnknownError. A failure on a real pool never selects IndexedDB.
+    if (!root && error.name === 'UnknownError') return false;
+    if (['NotSupportedError', 'SecurityError', 'NotAllowedError', 'InvalidStateError'].includes(error.name)) return false;
+    throw error;
+  } finally { if (file) await root.removeEntry(name); }
+}
+let capability;
+function hasOpfs() {
+  return capability ??= probeOpfs().catch(error => { capability = undefined; throw error; });
+}
+async function openPool(sqlite, name) {
+  const pool = await sqlite.installOpfsSAHPoolVfs({
+    name: `opfs-sahpool-${name}`, directory: `exact-sqlite-sahpool/${name}`,
+    preserveOnInitFailure: true, forceReinitIfPreviouslyFailed: true,
+  });
+  if (pool.isPaused()) await pool.unpauseVfs();
+  return pool;
 }
 async function persist(sqlite, databases, id, session) {
+  if (session.pool) return;
   try {
     let bytes;
     session.serializing = true;
@@ -225,7 +267,7 @@ async function persist(sqlite, databases, id, session) {
     } finally { session.serializing = false; }
     // The exporter returns a fresh, full-buffer Uint8Array, independent of WASM.
     // This private snapshot has no further owner after the atomic write.
-    await session.files.atomicWriteOwnedFile(session.path, bytes.buffer);
+    await session.files.atomicWriteOwnedFile(session.path, bytes.buffer, true);
   }
   catch (error) {
     // Memory already committed. Invalidate every handle rather than exposing a
@@ -239,27 +281,32 @@ async function dispatch(owner, { appId, op, args }) {
   const { databases } = owner;
   const sqlite = await ready;
   if (op === 'open') {
-    const path = args[0], release = await lockPaths(appId, [path], undefined, undefined, owner.gone.signal);
+    const path = normalizePath(args[0]), release = await lockPaths(appId, [path], undefined, undefined, owner.gone.signal);
     const files = createFileStore(appId);
-    const session = { path, release, files, db: new sqlite.oo1.DB(':memory:'), statements: new Map(), internal: false };
+    const session = { path, release, files, statements: new Map(), internal: false };
     try {
-      let bytes;
-      try { bytes = new Uint8Array(await files.readFile(path)); }
-      catch (error) { if (error.code !== 'ENOENT') throw error; }
-      if (bytes?.length) {
-        const pointer = sqlite.wasm.allocFromTypedArray(bytes);
-        session.db.checkRc(sqlite.capi.sqlite3_deserialize(session.db.pointer, 'main', pointer,
-          BigInt(bytes.length), BigInt(bytes.length), sqlite.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite.capi.SQLITE_DESERIALIZE_RESIZEABLE));
+      const useOpfs = await hasOpfs();
+      const { entry, pending } = await files.databaseEntry(path, useOpfs);
+      if (entry?.pool || pending) {
+        if (!useOpfs) fail(`OPFS is unavailable for ${path}`);
+        session.pool = await openPool(sqlite, entry?.pool ?? pending);
+        session.db = new session.pool.OpfsSAHPoolDb('/main.sqlite', pending ? 'c' : 'w');
+      } else {
+        session.db = new sqlite.oo1.DB(':memory:');
+        const bytes = entry?.contents instanceof Blob ? await entry.contents.arrayBuffer() : entry?.contents;
+        if (bytes?.byteLength) {
+          const pointer = sqlite.wasm.allocFromTypedArray(new Uint8Array(bytes));
+          session.db.checkRc(sqlite.capi.sqlite3_deserialize(session.db.pointer, 'main', pointer,
+            BigInt(bytes.byteLength), BigInt(bytes.byteLength), sqlite.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite.capi.SQLITE_DESERIALIZE_RESIZEABLE));
+        }
       }
       configure(sqlite, session);
+      if (pending) await files.publishDatabase(path, pending);
+      else if (!entry) await files.atomicWriteOwnedFile(path, new ArrayBuffer(0), true);
       const id = ++owner.nextDatabase;
       databases.set(id, session);
-      if (!bytes) await persist(sqlite, databases, id, session);
       return id;
-    } catch (error) {
-      for (const [id, candidate] of databases) if (candidate === session) databases.delete(id);
-      session.db.close(); files.close(); await release(); throw error;
-    }
+    } catch (error) { await releaseSession(session); throw error; }
   }
   const [id, ...rest] = args;
   if (op === 'close') return close(databases, id);
@@ -296,13 +343,19 @@ async function dispatch(owner, { appId, op, args }) {
         session.checking = false;
         if (check) checkForeignKeys(sqlite, session);
         internal(session, 'COMMIT');
-      } catch (error) { internal(session, 'ROLLBACK'); throw error; }
+      } catch (error) {
+        if (!sqlite.capi.sqlite3_get_autocommit(session.db.pointer)) {
+          try { internal(session, 'ROLLBACK'); }
+          catch { await close(databases, id); }
+        }
+        throw error;
+      }
     } finally {
       session.checking = false;
       // Nothing else reaches this database until enforcement is back: the
       // owner's queue runs one operation at a time, and none awaits before
       // here. One that cannot have it back is closed.
-      if (check && !enforcement(sqlite, session, 1)) {
+      if (check && databases.has(id) && !enforcement(sqlite, session, 1)) {
         await close(databases, id);
         fail('foreign keys could not be turned back on, so the database is closed');
       }
@@ -361,8 +414,13 @@ onmessage = ({ data }) => {
       await earlierDisposals;
       postMessage({ client: data.client, id: data.id, value: await dispatch(owner, data) });
     } catch (error) {
+      const id = data.args?.[0];
+      if (owner.databases.get(id)?.pool && [10, 13].includes(error.resultCode & 0xff)) {
+        // SQLITE_IOERR or SQLITE_FULL may have rolled back the transaction inside SQLite.
+        await close(owner.databases, id);
+      }
       postMessage({ client: data.client, id: data.id,
-        error: { kind: 'Unavailable', code: error.code ?? sqliteCode(error), message: String(error.message || error) } });
+        error: { kind: 'Unavailable', code: typeof error.code === 'string' ? error.code : sqliteCode(error), message: String(error.message || error) } });
     }
   });
 };

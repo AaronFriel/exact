@@ -168,12 +168,12 @@ export function createFileStore(appId) {
     }
     return opening;
   }
-  async function run(write, operation, path, list, subtree) {
+  async function run(write, operation, path, list, subtree, database = false) {
     const db = await open();
     if (closed) throw failure('storage was unloaded');
     return new Promise((resolve, reject) => {
       let transaction;
-      try { transaction = db.transaction('files', write ? 'readwrite' : 'readonly'); }
+      try { transaction = db.transaction('files', write ? 'readwrite' : 'readonly', database && write ? { durability: 'strict' } : undefined); }
       catch (error) { reject(failure(error.message)); return; }
       const store = transaction.objectStore('files');
       let result;
@@ -197,13 +197,19 @@ export function createFileStore(appId) {
           remove(path) { records.delete(path); store.delete(path); },
           touch(path) { const value = directory(records, path); this.put({ ...value, modifiedMs: now() }); },
         };
-        try { result = operation(records, changes, keys.flatMap(request => request.result ?? [])); }
+        try {
+          const names = keys.flatMap(request => request.result ?? []);
+          if (!database && (values.some(value => value.pool) || write && names.some(key => key.includes('\0')))) {
+            throw failure('filesystem operation on an OPFS database is unavailable', 'unsupported');
+          }
+          result = operation(records, changes, names);
+        }
         catch (cause) { error = cause; transaction.abort(); }
       };
       for (const request of [...requests, ...keys]) request.onsuccess = ready;
     });
   }
-  async function write(path, data, append, owned = false) {
+  async function write(path, data, append, owned = false, database = false) {
     path = normalizePath(path);
     requireBelowRoot(path);
     // Snapshot before yielding. A private owned buffer is transferred, not copied.
@@ -225,7 +231,7 @@ export function createFileStore(appId) {
       }
       changes.put({ path, kind: 'file', contents, modifiedMs: now() });
       if (!previous) changes.touch(parentOf(path));
-    }, [path, parentOf(path)]);
+    }, [path, parentOf(path)], undefined, undefined, database);
   }
   function putBlobs(entries, refusal = () => undefined) {
     entries = entries.map(({ path, blob }) => {
@@ -247,6 +253,33 @@ export function createFileStore(appId) {
   }
   return Object.freeze({
     directories: roots,
+    // The path lock protects the choice of backing store across tabs.
+    async databaseEntry(path, useOpfs) {
+      requireBelowRoot(path);
+      const staging = 'sqlite-opfs:' + path;
+      const { entry, pending } = await run(false, records => {
+        directory(records, parentOf(path));
+        const entry = records.get(path);
+        if (entry && entry.kind !== 'file' && entry.kind !== 'sqlite-opfs') throw failure('operation needs a regular file', 'EISDIR');
+        return { entry, pending: records.get(staging)?.pool };
+      }, [path, parentOf(path), staging], undefined, undefined, true);
+      if (entry || !useOpfs) return { entry };
+      if (pending) return { pending };
+      const pool = crypto.randomUUID();
+      await run(true, (_records, changes) => changes.put({ path: staging, pool }), staging, undefined, undefined, true);
+      return { pending: pool };
+    },
+    publishDatabase(path, pool) {
+      const staging = 'sqlite-opfs:' + path;
+      return run(true, (records, changes) => {
+        directory(records, parentOf(path));
+        if (records.get(staging)?.pool !== pool) throw failure('SQLite destination changed');
+        changes.put({ path, kind: 'sqlite-opfs', pool, modifiedMs: now() });
+        changes.put({ path: path + '/\0' + pool, kind: 'guard' });
+        changes.remove(staging);
+        changes.touch(parentOf(path));
+      }, [staging, parentOf(path)], undefined, undefined, true);
+    },
     async readFile(path) {
       path = normalizePath(path);
       // IndexedDB already returns an independent structured clone for this read.
@@ -274,7 +307,7 @@ export function createFileStore(appId) {
     writeFile(path, data) { return write(path, data, false); },
     atomicWriteFile(path, data) { return write(path, data, false); },
     // Trusted host only: takes an ArrayBuffer and detaches it from its caller.
-    atomicWriteOwnedFile(path, data) { return write(path, data, false, true); },
+    atomicWriteOwnedFile(path, data, database = false) { return write(path, data, false, true, database); },
     appendFile(path, data) { return write(path, data, true); },
     async readdir(path) {
       path = normalizePath(path);

@@ -46,6 +46,7 @@ export function createSqlite(appId, grants) {
     if (!shared.worker) {
       const worker = shared.worker = new Worker(new URL('./storage-worker.js', import.meta.url), { type: 'module' });
       worker.onmessage = ({ data }) => {
+        if (data.fatal) { failed(data.fatal); return; }
         const calls = shared.clients.get(data.client)?.pending;
         const call = calls?.get(data.id);
         if (!call) return;

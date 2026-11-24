@@ -3368,11 +3368,15 @@ answer fails for it, caught or not, compiles no value: it shows its placeholder
 So a source that asks the app's module needs no bake code of its own
 (`native!.watch('state'); return native!.call({op: 'state'});`). Catch it only to answer
 something better than the placeholder. Browser storage uses app-scoped IndexedDB files
-and SQLite WASM in a dedicated worker, loaded on the first database operation.
+and loads SQLite WASM in a dedicated worker on the first database operation.
+A new database uses OPFS (`opfs-sahpool`) when the worker can open a synchronous
+access handle. Otherwise it uses IndexedDB. SQLite uses DELETE journaling and
+FULL synchronization on OPFS. The app has no store or durability setting.
 Use HTTPS or localhost for Web Locks. Data persists across reloads within the
 same browser origin, subject to browser storage retention and quota policies.
-An open database exclusively locks its file; conflicting opens or filesystem
-mutations return `Unavailable` with a busy message. Agent mode skips storage.
+An open database exclusively locks its path. When the first tab closes the
+connection, a waiting tab can open the committed database. After ten seconds
+a waiting open returns `Unavailable` with code `EBUSY`. Agent mode skips storage.
 
 In `app.ts`, a storage refusal is an `Error` with `kind: 'Unavailable'`, a `code` and a
 `message`. The code is the same on every host; the message says more and may
@@ -3970,10 +3974,10 @@ worker-placed TypeScript do not provide the send path (on wasm the handle never
 opens); a Rust source's `Request::socket` is refused by name in both. No ambient `WebSocket` constructor is admitted. SSE
 remains unchanged.
 
-This first browser implementation targets modest app stores: filesystem
-operations read the app's file records, and each SQLite mutation atomically
-saves the whole database file. Database files share the filesystem namespace,
-so closed databases can be copied or exported through `storage.fs`. SQLite integer results
+On OPFS, SQLite writes the changed pages. In IndexedDB, a mutation saves
+the whole database image in one transaction. Existing IndexedDB images open
+in place. Filesystem operations on OPFS database paths currently return
+`unsupported`. SQLite integer results
 are `bigint`: convert them to a Contract-compatible value before returning.
 
 ### Sign in through the system browser (`openAuthSession`)
@@ -6934,7 +6938,7 @@ The web does not call `storage`. Its GPU artifact is WebAssembly with generated
 wasm-bindgen JavaScript; Exact supplies it no filesystem or browser-storage bridge.
 A GPU module that needs persistence must supply its own browser API integration.
 The app's data module can separately use Exact's `storage.fs` and `storage.sqlite`
-APIs, backed by IndexedDB in this repo. Those APIs are not injected into GPU modules
+APIs, backed by browser storage on the web. Those APIs are not injected into GPU modules
 and supply no paths usable by `std::fs` or native SQLite.
 `exact-gpu` 0.4 carries the hook and the native `gpu_storage` export; rebuild GPU
 artifacts with the host.
