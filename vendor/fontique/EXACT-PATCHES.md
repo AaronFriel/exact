@@ -72,7 +72,8 @@ here pass.
 
 7. **Presentation and subset coverage.** A query exposes a face’s colour-table
    support and visits each subset of the matching style. Android supplies its
-   Noto symbol subsets under the same family name.
+   Noto symbol subsets under the same family name. A platform can supply a
+   file-specific fallback for bare symbols after the requested families miss.
 
 `Cargo.toml` also carries the empty `[workspace]` boundary described below;
 retain it when updating. All remaining archive files are byte-for-byte upstream.

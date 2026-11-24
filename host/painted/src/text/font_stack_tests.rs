@@ -473,3 +473,56 @@ fn svg_family_ids_resolve_in_the_pictures_own_catalog() {
         assert_eq!(Some(face), text.resolved_face_id(generic, 400, false));
     }
 }
+
+#[test]
+fn android_resolves_text_default_symbols_by_file_and_explicit_presentation() {
+    const EARLY: &[u8] = include_bytes!("../../tests/fonts/MixedPresentation.ttf");
+    const LATE: &[u8] = include_bytes!("../../tests/fonts/MixedPresentation-hand.ttf");
+    const EMOJI: &[u8] = include_bytes!("../../tests/fonts/NotoColorEmoji-subset.ttf");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fonts");
+    let paths = [
+        "RobotoFlex-subset.ttf",
+        "MixedPresentation.ttf",
+        "NotoColorEmoji-subset.ttf",
+        "MixedPresentation-hand.ttf",
+    ]
+    .map(|name| dir.join(name));
+    let xml = r#"<familyset>
+      <family><font>RobotoFlex-subset.ttf</font><font>MixedPresentation.ttf</font></family>
+      <family lang="und-Zsye"><font>NotoColorEmoji-subset.ttf</font><font fallbackFor="serif">MixedPresentation-hand.ttf</font></family>
+      <family lang="und-Zsym"><font>MixedPresentation-hand.ttf</font></family>
+    </familyset>"#;
+    for (locale, arrow, hand) in [
+        ("", EARLY, LATE),
+        ("en", EARLY, EMOJI),
+        ("en-u-em-text", EARLY, LATE),
+        ("en-u-em-emoji", EMOJI, EMOJI),
+    ] {
+        let mut c =
+            catalog::Catalog::from_files(&paths.each_ref().map(|p| p.as_path()), "Roboto Flex");
+        fonts::set_generic(
+            &mut c.fonts.collection,
+            fontique::GenericFamily::Serif,
+            "Roboto Flex",
+        );
+        if !locale.is_empty() {
+            let order =
+                android_symbols::Families::read(&mut c.fonts.collection, &c.files, &dir, xml)
+                    .unwrap();
+            Arc::new(order).configure(&mut c.fonts.collection, locale);
+        }
+        let mut engine = TextEngine::with_catalog(c);
+        if locale == "en" {
+            assert_face(&engine.paragraph(&spec(4, "✌"), None), 0, LATE);
+        }
+        for (text, face) in [
+            ("↗", arrow),
+            ("↔", arrow),
+            ("✌", hand),
+            ("✌︎", LATE),
+            ("✌️", EMOJI),
+        ] {
+            assert_face(&engine.paragraph(&spec(0, text), None), 0, face);
+        }
+    }
+}

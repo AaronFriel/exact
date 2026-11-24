@@ -33,6 +33,7 @@ impl QueryState {
 ///
 /// Instances of this can be obtained from [`Collection::query`].
 pub struct Query<'a> {
+    symbol_fallback: Option<&'a super::SymbolFallback>,
     collection: &'a mut Inner,
     state: &'a mut QueryState,
     source_cache: &'a mut SourceCache,
@@ -44,6 +45,7 @@ impl<'a> Query<'a> {
     pub(super) fn new(collection: &'a mut Collection, source_cache: &'a mut SourceCache) -> Self {
         collection.query_state.clear();
         Self {
+            symbol_fallback: collection.symbol_fallback.as_deref(),
             collection: &mut collection.inner,
             state: &mut collection.query_state,
             source_cache,
@@ -120,79 +122,119 @@ impl<'a> Query<'a> {
     /// Return [`QueryStatus::Stop`] to end iterating over the matching
     /// fonts or [`QueryStatus::Continue`] to continue iterating.
     pub fn matches_with(&mut self, mut f: impl FnMut(&QueryFont) -> QueryStatus) {
-        for family in self
-            .state
-            .families
-            .iter_mut()
-            .chain(self.state.fallback_families.iter_mut())
+        self.matches_for_symbol(None, |font, _| f(font));
+    }
+
+    /// Tries the requested families, the platform's face for a bare symbol,
+    /// then the script fallbacks. The flag identifies a platform presentation.
+    pub fn matches_for_symbol(
+        &mut self,
+        symbol: Option<(char, GenericFamily)>,
+        mut f: impl FnMut(&QueryFont, bool) -> QueryStatus,
+    ) {
+        let select = self.symbol_fallback.zip(symbol);
+        if matches_in(
+            self.collection,
+            self.source_cache,
+            self.attributes,
+            &mut self.state.families,
+            |font| f(font, select.is_some()),
+        ) {
+            return;
+        }
+        if let Some(((_, index), family)) = select
+            .and_then(|(select, (ch, base))| select(ch, self.attributes, base))
+            .and_then(|face| self.collection.family(face.0).map(|family| (face, family)))
         {
-            match &mut family.family {
-                Entry::Error => continue,
-                Entry::Ok(..) => {}
-                status @ Entry::Vacant => {
-                    if let Some(info) = self.collection.family(family.id) {
-                        *status = Entry::Ok(info);
-                    } else {
-                        *status = Entry::Error;
-                        continue;
-                    }
-                }
-            }
-            let Entry::Ok(family_info) = &family.family else {
-                continue;
-            };
-            let attrs = self.attributes;
-            let default = family_info.default_font_index();
-            let best = family.best.get_or_insert_with(|| {
-                (
-                    family_info
-                        .match_index(attrs.width, attrs.style, attrs.weight, true)
-                        .unwrap_or(default),
-                    Entry::Vacant,
-                )
-            });
-            if load_font(family_info, attrs, &mut best.1, best.0, self.source_cache)
-                .is_some_and(|font| f(font) == QueryStatus::Stop)
+            if load_font(
+                &family,
+                self.attributes,
+                &mut Entry::Vacant,
+                index,
+                self.source_cache,
+            )
+            .is_some_and(|font| f(font, true) == QueryStatus::Stop)
             {
                 return;
             }
-            // Android splits Noto Sans Symbols across files with the same family
-            // and style. Look for those subsets only after the best face misses.
-            let others = family.others.get_or_insert_with(|| {
-                let mut fonts = SmallVec::<[(usize, Entry<QueryFont>); 1]>::new();
-                if let Some(face) = family_info.fonts().get(best.0) {
-                    for (i, sibling) in family_info.fonts().iter().enumerate() {
-                        if i != best.0
-                            && sibling.style() == face.style()
-                            && sibling.matching_width(attrs.width)
-                                == face.matching_width(attrs.width)
-                            && sibling.matching_weight(attrs.weight)
-                                == face.matching_weight(attrs.weight)
-                        {
-                            fonts.push((i, Entry::Vacant));
-                        }
+        }
+        matches_in(
+            self.collection,
+            self.source_cache,
+            self.attributes,
+            &mut self.state.fallback_families,
+            |font| f(font, false),
+        );
+    }
+}
+
+fn matches_in(
+    collection: &mut Inner,
+    cache: &mut SourceCache,
+    attrs: Attributes,
+    families: &mut [CachedFamily],
+    mut f: impl FnMut(&QueryFont) -> QueryStatus,
+) -> bool {
+    for family in families {
+        match &mut family.family {
+            Entry::Error => continue,
+            Entry::Ok(..) => {}
+            status @ Entry::Vacant => {
+                if let Some(info) = collection.family(family.id) {
+                    *status = Entry::Ok(info);
+                } else {
+                    *status = Entry::Error;
+                    continue;
+                }
+            }
+        }
+        let Entry::Ok(family_info) = &family.family else {
+            continue;
+        };
+        let default = family_info.default_font_index();
+        let best = family.best.get_or_insert_with(|| {
+            (
+                family_info
+                    .match_index(attrs.width, attrs.style, attrs.weight, true)
+                    .unwrap_or(default),
+                Entry::Vacant,
+            )
+        });
+        if load_font(family_info, attrs, &mut best.1, best.0, cache)
+            .is_some_and(|font| f(font) == QueryStatus::Stop)
+        {
+            return true;
+        }
+        // Android splits Noto Sans Symbols across files with the same family
+        // and style. Look for those subsets only after the best face misses.
+        let others = family.others.get_or_insert_with(|| {
+            let mut fonts = SmallVec::<[(usize, Entry<QueryFont>); 1]>::new();
+            if let Some(face) = family_info.fonts().get(best.0) {
+                for (i, sibling) in family_info.fonts().iter().enumerate() {
+                    if i != best.0
+                        && sibling.style() == face.style()
+                        && sibling.matching_width(attrs.width) == face.matching_width(attrs.width)
+                        && sibling.matching_weight(attrs.weight)
+                            == face.matching_weight(attrs.weight)
+                    {
+                        fonts.push((i, Entry::Vacant));
                     }
                 }
-                if default != best.0 && !fonts.iter().any(|(i, _)| *i == default) {
-                    fonts.push((default, Entry::Vacant));
-                }
-                fonts
-            });
-            for (index, entry) in others {
-                if let Some(font) = load_font(
-                    family_info,
-                    self.attributes,
-                    entry,
-                    *index,
-                    self.source_cache,
-                ) {
-                    if f(font) == QueryStatus::Stop {
-                        return;
-                    }
+            }
+            if default != best.0 && !fonts.iter().any(|(i, _)| *i == default) {
+                fonts.push((default, Entry::Vacant));
+            }
+            fonts
+        });
+        for (index, entry) in others {
+            if let Some(font) = load_font(family_info, attrs, entry, *index, cache) {
+                if f(font) == QueryStatus::Stop {
+                    return true;
                 }
             }
         }
     }
+    false
 }
 
 impl Drop for Query<'_> {

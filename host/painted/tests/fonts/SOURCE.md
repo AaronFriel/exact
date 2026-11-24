@@ -23,6 +23,9 @@ their source and license are recorded beside them.
 outline for ↗. Glyph 2 is ↔ with a blue COLR layer. Its text variation
 (U+2194 U+FE0E) selects glyph 3 through a format 14 cmap.
 
+`MixedPresentation-hand.ttf` uses the same family and upright style. Its only
+Unicode mapping is U+270C to the uncoloured `up` outline from the first file.
+
 # CJK outline fixture
 
 `NotoSansCJKsc-subset.otf` contains exactly 中 (U+4E2D) and 日 (U+65E5),

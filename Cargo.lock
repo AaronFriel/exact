@@ -2101,6 +2101,7 @@ dependencies = [
  "i_overlay",
  "iana-time-zone",
  "ibex2",
+ "icu_locale",
  "jni-sys 0.3.1",
  "jpeg-encoder",
  "libc",

@@ -124,7 +124,7 @@ impl<T: Clone + PartialEq> Cache<T> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct ResolvedFamily {
     pub(crate) id: FamilyId,
-    pub(crate) named: bool,
+    pub(crate) generic: Option<fontique::GenericFamily>,
 }
 
 /// Context for managing dynamic properties during layout.
@@ -219,23 +219,26 @@ impl ResolveContext {
         value: &FontFamily<'_>,
     ) -> Resolved<ResolvedFamily> {
         self.tmp_families.clear();
-        let mut push = |family: &FontFamilyName<'_>| match family {
-            FontFamilyName::Named(name) => {
-                if let Some(family) = fcx.collection.family_by_name(name) {
-                    self.tmp_families.push(ResolvedFamily {
-                        id: family.id(),
-                        named: true,
-                    });
+        let mut push =
+            |family: &FontFamilyName<'_>| match family {
+                FontFamilyName::Named(name) => {
+                    if let Some(family) = fcx.collection.family_by_name(name) {
+                        self.tmp_families.push(ResolvedFamily {
+                            id: family.id(),
+                            generic: None,
+                        });
+                    }
                 }
-            }
-            FontFamilyName::Generic(generic) => {
-                self.tmp_families.extend(
-                    fcx.collection
-                        .generic_families(*generic)
-                        .map(|id| ResolvedFamily { id, named: false }),
-                );
-            }
-        };
+                FontFamilyName::Generic(generic) => {
+                    self.tmp_families
+                        .extend(fcx.collection.generic_families(*generic).map(|id| {
+                            ResolvedFamily {
+                                id,
+                                generic: Some(*generic),
+                            }
+                        }));
+                }
+            };
         match value {
             FontFamily::Source(source) => {
                 for family in FontFamilyName::parse_css_list(source).map_while(Result::ok) {

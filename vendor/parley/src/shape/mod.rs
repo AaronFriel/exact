@@ -671,7 +671,17 @@ impl<'a, 'b, B: Brush> FontSelector<'a, 'b, B> {
             .unwrap_or(&[]);
         let mut selected_font = None;
         let mut other_presentation = None;
-        self.query.matches_with(|font| {
+        let symbol =
+            (cluster.emoji_presentation == Some(false) && cluster.chars.len() == 1).then(|| {
+                (
+                    cluster.chars[0].ch,
+                    stack
+                        .iter()
+                        .find_map(|f| f.generic)
+                        .unwrap_or(fontique::GenericFamily::SansSerif),
+                )
+            });
+        self.query.matches_for_symbol(symbol, |font, platform| {
             let Some(charmap) = font.charmap() else {
                 return fontique::QueryStatus::Continue;
             };
@@ -685,9 +695,12 @@ impl<'a, 'b, B: Brush> FontSelector<'a, 'b, B> {
                 Status::Complete => {
                     // A named face chooses its own glyph for an unqualified character.
                     // A selector on that character still asks for its explicit presentation.
-                    if !presentation_matches(font, cluster)
+                    if !platform
+                        && !presentation_matches(font, cluster)
                         && !(cluster.chars.len() == 1
-                            && stack.iter().any(|f| f.named && f.id == font.family.0))
+                            && stack
+                                .iter()
+                                .any(|f| f.generic.is_none() && f.id == font.family.0))
                     {
                         other_presentation.get_or_insert_with(|| SelectedFont {
                             font: font.clone(),

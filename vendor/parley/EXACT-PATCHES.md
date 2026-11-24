@@ -161,7 +161,8 @@ named here pass.
 
 22. **Emoji presentation.** Font selection uses Unicode emoji presentation and
     the grapheme’s selector before shaping the original text. An authored face
-    keeps its glyph for an unqualified character. A covering face
+    keeps its glyph for an unqualified character. For a bare text-default
+    symbol the platform can choose the fallback presentation. A covering face
     of the other presentation remains available when the preferred one is missing.
 
 `Cargo.toml` also carries the empty `[workspace]` boundary described below;
