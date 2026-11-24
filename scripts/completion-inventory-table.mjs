@@ -409,7 +409,7 @@ export const classifications = [
     ["painted:host/painted/src/holds.rs", "Host::retained_input_eligible"],
     ["painted:host/painted/src/host.rs",
       "Host::agent Host::app_roots Host::carry Host::content_region Host::document_value Host::engine Host::executor Host::executor_with Host::grants Host::kernel Host::log " +
-      "Host::now Host::preorder Host::presented Host::project_navigation Host::roots Host::router_op Host::runner Host::size_new_symbols " +
+      "Host::has_scale Host::now Host::preorder Host::presented Host::project_navigation Host::roots Host::router_op Host::runner Host::size_new_symbols " +
       "Host::take_commands Host::take_surface_updates Host::viewport Host::wants_frames"],
     ["painted:host/painted/src/lower.rs", "Host::layer_tracks Host::lower_eligibility Host::spinner_tracks"],
     ["painted:host/painted/src/media_session.rs", "handled"],
@@ -629,7 +629,7 @@ export const classifications = [
     ["painted:host/painted/src/press.rs", "Host::look_motion Host::retarget_press Host::retire_presses"],
     ["painted:host/painted/src/surfaces.rs", "Presenter::retier_surfaces Presenter::surface_lifecycle Presenter::sync_surfaces"],
     ["painted:host/painted/src/surfaces/window.rs", "Presenter::collect_painter_retirement Presenter::reset_painter_present_deadline"],
-    ["web-js:host/web-js/motion/src/abi.rs", "m_gesture m_in m_out m_scratch m_translate"],
+    ["web-js:host/web-js/motion/src/abi.rs", "m_gesture m_in m_out m_scale m_scratch m_translate"],
     ["painted:host/painted/src/presenter/zoom.rs", "Presenter::move_zoom Presenter::port_point Presenter::reported_zoom Presenter::zoom_layout Presenter::zoom_now"],
     ["painted:host/painted/src/snapshot.rs", "error_json render Session::tree"],
     ["painted:host/painted/src/snapshot/jni.rs", "Java_dev_exact_widgets_Native_render"],
