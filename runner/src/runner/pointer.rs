@@ -1,4 +1,4 @@
-//! `pointerdown`, `pointerup` and `pointermove`'s record (LLP 1005 §3; LLP
+//! The pointer events' record (LLP 1005 §3; LLP
 //! 1056 §3 stage 3, as built): a subset of DOM's `PointerEvent`, by its own
 //! names, which an action takes as an optional last parameter (the paint
 //! diary's F1: a drawing app had no coordinates, movement or pressure).
@@ -294,13 +294,13 @@ impl DropEvent {
 }
 
 impl Event {
-    /// Decode ABI kind 29 (`pointerdown`), 30 (`pointerup`) or 31
-    /// (`pointermove`).
+    /// Decode a pointer dispatch from the host (exact.h).
     pub fn pointer_payload(kind: u32, payload: &str) -> Option<Event> {
         let pointer = PointerEvent::parse(payload)?;
         match kind {
             29 => Some(Event::Pointerdown(pointer)),
             30 => Some(Event::Pointerup(pointer)),
+            65 => Some(Event::Pointercancel(pointer)),
             31 => Some(Event::Pointermove(pointer)),
             _ => None,
         }

@@ -13,7 +13,7 @@ export { contextAt, modalCommand, popoverCommand, popoverSource, placePopovers }
 export { appRootFontSize, fitText, noteFit, refitTexts, installFits } from "./navigation/type.js";
 export { noteSymbolEffect, playSymbolEffects, installSymbolEffects } from "./navigation/symbol.js";
 export { storeInPage, pageStore } from "./navigation/store.js";
-export { valuedControl, settleValue, typedControl, textField, sourceField, editMenu, fieldSelection, settleRadios, setFieldSelection, setFieldRangeText, controlEvent } from "./navigation/controls.js";
+export { suppressPointerClick, valuedControl, settleValue, typedControl, textField, sourceField, editMenu, fieldSelection, settleRadios, setFieldSelection, setFieldRangeText, controlEvent } from "./navigation/controls.js";
 export { grantOrigins } from "./navigation/grant-origins.js";
 export { isCloudMetadata, isLocalNetwork } from "./grant-admission.js";
 export { bundledAsset, socketProtocols, createGrantSet, grantError, trimGrant, grantWords, rawGrantText, hasGrant, sameGrantDeclaration, scopedGrantSet, unionGrantSets, admittingGrant, admitsNetwork, admitsSecret, coversPath, knownFolderPath } from "./grant-admission.js";

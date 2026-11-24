@@ -394,10 +394,8 @@ pub(crate) fn unknown_attr(tag: &str, a: &Attr) -> LowerError {
              `-exact-press-haptic` names the platform feedback"
                 .into()
         }
-        // Every host ends a hold the system took (a scroll, an alert, the
-        // window losing focus) with the hold's `pointerup`.
-        None if matches!(a.name.as_str(), "pointercancel" | "touchcancel" | "lostpointercapture") => {
-            "; a cancelled pointer ends with `pointerup` (its `buttons` 0), so the `pointerup` handler that ends a hold covers it".into()
+        None if matches!(a.name.as_str(), "touchcancel" | "lostpointercapture") => {
+            "; handle a cancelled contact with `pointercancel`".into()
         }
         // LLP 1055.000 §8 ruling 7: the end of a motion is not an event.
         None if matches!(

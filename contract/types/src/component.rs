@@ -597,6 +597,7 @@ pub(crate) fn handler_attr(name: &str) -> bool {
             | "dblclick"
             | "pointerdown"
             | "pointerup"
+            | "pointercancel"
             | "pointermove"
             | "copy"
             | "cut"

@@ -373,7 +373,7 @@ fn check_tasks(c: &Component) -> Vec<AnalyzeError> {
 
 /// The handler attributes (the web's events, LLP 1005 §3): `press`,
 /// `change`, `input`, `hover`, `focus`, `blur`, `key`, `submit`, `load`, `message`.
-pub const HANDLERS: [&str; 87] = [
+pub const HANDLERS: [&str; 88] = [
     "press",
     "change",
     "input",
@@ -406,6 +406,7 @@ pub const HANDLERS: [&str; 87] = [
     // hand its action a `PointerEvent`.
     "pointerdown",
     "pointerup",
+    "pointercancel",
     "pointermove",
     // DOM's clipboard events at the focused node (spreadsheet F4, F14);
     // each may hand its action a `ClipboardEvent`.

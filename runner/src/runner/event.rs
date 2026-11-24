@@ -315,9 +315,10 @@ pub enum Event {
     /// A touch or primary button went down on the view (DOM's
     /// `pointerdown`), before any gesture is recognized (LLP 1005 §3).
     Pointerdown(super::PointerEvent),
-    /// That touch or button came up, or the platform cancelled it (DOM's
-    /// `pointerup`; a `pointercancel` is delivered as one).
+    /// That touch or button came up (DOM's `pointerup`).
     Pointerup(super::PointerEvent),
+    /// The held contact was cancelled.
+    Pointercancel(super::PointerEvent),
     /// The pointer moved over the view, or while held after going down on
     /// it: at most one a frame (LLP 1056 §3 stage 3, as built).
     Pointermove(super::PointerEvent),
@@ -592,6 +593,7 @@ impl Event {
             Event::Key(k) | Event::Keycapture(k) | Event::Keyup(k) => Some(k.value()),
             Event::Pointerdown(p)
             | Event::Pointerup(p)
+            | Event::Pointercancel(p)
             | Event::Pointermove(p)
             | Event::ContextmenuAt(p) => Some(p.value()),
             // A menu asked for with no point (a keyboard's menu key): the
@@ -1103,6 +1105,7 @@ impl<D: DataSource> Runner<D> {
             Event::Dblclick => "dblclick",
             Event::Pointerdown(_) => "pointerdown",
             Event::Pointerup(_) => "pointerup",
+            Event::Pointercancel(_) => "pointercancel",
             Event::Pointermove(_) => "pointermove",
             Event::Swiperight => "swiperight",
             Event::Swipeleft => "swipeleft",
@@ -1307,6 +1310,7 @@ impl<D: DataSource> Runner<D> {
             Event::Dblclick => (EventKind::Dblclick, None, "dblclick"),
             Event::Pointerdown(_) => (EventKind::Pointerdown, None, "pointerdown"),
             Event::Pointerup(_) => (EventKind::Pointerup, None, "pointerup"),
+            Event::Pointercancel(_) => (EventKind::Pointercancel, None, "pointercancel"),
             Event::Pointermove(_) => (EventKind::Pointermove, None, "pointermove"),
             Event::Swiperight => (EventKind::Swiperight, None, "swiperight"),
             Event::Swipeleft => (EventKind::Swipeleft, None, "swipeleft"),

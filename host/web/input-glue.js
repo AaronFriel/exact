@@ -1,4 +1,4 @@
-import { focusStack, viewChildren, viewParent } from './navigation.js';
+import { suppressPointerClick, focusStack, viewChildren, viewParent } from './navigation.js';
 import { receive, takes } from './drag-in.js';
 // Input-only glue: loaded after the baked first pixel, independently of data readiness.
 import "./prompt-glue.js"; // a prompt's Return
@@ -35,12 +35,12 @@ const physicalKey = e => {
 /** The modifiers an event holds, as a chord prefix (a pointer record's last field; glue.js's press writes the same). */
 const modifiers = e => (e.shiftKey ? "Shift+" : "") + (e.ctrlKey ? "Control+" : "") + (e.altKey ? "Alt+" : "") + (e.metaKey ? "Meta+" : "");
 /** The `PointerEvent` line of `e` at `el`: the point from its content box in its own CSS px (a scale undone), the button and the buttons, pressure, device, id, the viewport point (LLP 1094 D11) and modifiers. */
-function pointerLine(el, e, lifted = false) {
+function pointerLine(el, e, lifted = false, button = e.button ?? -1) {
   const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
   const sx = el.offsetWidth ? r.width / el.offsetWidth : 1, sy = el.offsetHeight ? r.height / el.offsetHeight : 1;
   const left = parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft), top = parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop);
   const type = e.pointerType === "pen" || e.pointerType === "touch" ? e.pointerType : "mouse";
-  return `${(e.clientX - r.left) / (sx || 1) - left},${(e.clientY - r.top) / (sy || 1) - top},${e.button ?? -1},${lifted ? 0 : e.buttons},${lifted ? 0 : Math.min(1, Math.max(0, e.pressure || 0))},${type},${e.pointerId ?? 1},${e.clientX},${e.clientY},${modifiers(e)}`;
+  return `${(e.clientX - r.left) / (sx || 1) - left},${(e.clientY - r.top) / (sy || 1) - top},${button},${lifted ? 0 : e.buttons},${lifted ? 0 : Math.min(1, Math.max(0, e.pressure || 0))},${type},${e.pointerId ?? 1},${e.clientX},${e.clientY},${modifiers(e)}`;
 }
 /** @ref LLP 1116.004 D5.2 — a `radiogroup` of `radio`s, a value chosen from a few (the segmented
  * control the shell draws), keyed as WAI-ARIA's radio group and a native one: one Tab stop, its
@@ -1197,8 +1197,7 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
     arrive, // once the piece is made (the stack as it stands), then after each commit's tree, its focus commands and its `autofocus`
     ...(WASM_HOST && {
       // @ref LLP 1005 §3 — `pointerdown`/`pointerup`, DOM's own: the primary
-      // button or a touch going down on the node, then up or cancelled (a
-      // cancel is an up), bubbling to every enabled ancestor that hears either
+      // button or a touch going down on the node, then up or cancelled, bubbling to every enabled ancestor that hears either
       // (Charlie, 2026-10-15). The up is heard on the document, so it arrives
       // wherever the pointer lifts; a pointer capture would also retarget the
       // click there, a press the platforms do not make. LLP 1056 §3 stage 3 —
@@ -1206,11 +1205,11 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
       // held one anywhere, at most once a frame, the latest. Each carries the
       // `PointerEvent` record (`offsetX,offsetY,button,buttons,pressure,pointerType,
       // pointerId,` the modifiers held, from the content box): `fire(29, r)` is down, 30 up, 31 a
-      // move. The JS target's pointer.js is the same rule.
+      // move and 65 a cancel. The JS target's pointer.js is the same rule.
       pointer(el, on, fire) {
         let held = null, owner = false, last = null, move = null, frame = 0, spent = false, downOf = null;
         const wants = kind => el.exactHandlers?.includes(kind);
-        const record = (e, lifted = false) => pointerLine(el, e, lifted);
+        const record = (e, lifted = false, button) => pointerLine(el, e, lifted, button);
         const flush = () => {
           const m = move; move = null;
           if (m && wants("pointermove") && ready()) fire(31, record(m));
@@ -1229,16 +1228,21 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
         // The end: an up or cancel anywhere in the document, or the pointer
         // leaving it (out of the window, into a frame) or the window losing
         // focus, which this document never hears the up from.
-        const ends = [["pointerup", document], ["pointercancel", document], ["pointerout", document], ["blur", window]];
+        const ends = [["pointerup", document], ["pointercancel", document], ["lostpointercapture", document], ["pointerout", document], ["blur", window]];
         const up = e => {
           if (e.type === "blur" ? e.target !== window : e.pointerId !== held || (e.type === "pointerout" && e.relatedTarget && e.relatedTarget.localName !== "iframe")) return;
+          if (e.type === "lostpointercapture") {
+            if (e.composedPath().some(n => n.exactPanCapturesFrom === e.target && n.hasPointerCapture?.(e.pointerId))) return;
+          }
+          const lifted = e.type === "pointerup";
+          if (!lifted) suppressPointerClick(held);
           held = null; downOf = null;
           for (const [type, target] of ends) target.removeEventListener(type, up, target === document);
           document.removeEventListener("pointermove", heldMove, true);
           flush();
           // Never for a removed node, nor past a handler further in that
           // stopped this up (`exactStopped`, glue.js).
-          if (wants("pointerup") && ready() && el.isConnected && !e.exactStopped) fire(30, record(e.type === "blur" ? last : e, true), e);
+          if (wants(lifted ? "pointerup" : "pointercancel") && ready() && el.isConnected && !e.exactStopped) fire(lifted ? 30 : 65, record(e.type === "blur" ? last : e, true, lifted ? e.button : -1), e);
         };
         const disabled = () => el.matches(":disabled") || el.hasAttribute("disabled") || inertAncestor(el);
         // A free pointer over it: the innermost node hearing moves takes them;
@@ -1259,7 +1263,7 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
           // The innermost enabled pointer node holds its moves (the walk
           // reaches it first and marks the event); an ancestor holds only its up.
           owner = !e.exactPointerOwner;
-          if (!owner && !wants("pointerdown") && !wants("pointerup")) return;
+          if (!owner && !wants("pointerdown") && !wants("pointerup") && !wants("pointercancel")) return;
           e.exactPointerOwner = el;
           held = e.pointerId; last = e; downOf = e;
           for (const [type, target] of ends) target.addEventListener(type, up, target === document);
@@ -1299,7 +1303,7 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
       // LLP 1057.001 §1: an inner swipe that is still deciding (its pointer
       // 'pending' in exact.contacts) goes first; the pan waits for its verdict,
       // and a pan that began cancels the click (rule 4).
-      let contact = null, frame = 0, suppressClick = false;
+      let contact = null, frame = 0;
       const contacts = () => (globalThis.exact ??= {}).contacts ??= new Map();
       const live = () => views.get(id) === el && !retiredViews.has(el) && ready() && !inertAncestor(el) && !el.closest(":disabled,[disabled='true']");
       // Under a nested press the pan captures nothing until it begins, so until
@@ -1313,7 +1317,16 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
         for (const type of ['pointerup', 'pointercancel'])
           el.ownerDocument[enabled ? 'addEventListener' : 'removeEventListener'](type, endDeferred, true);
       };
-      const drop = () => { if (contact?.watching) watch(false); watchEnd(false); contact = null; };
+      const capture = () => {
+        el.exactPanCapturesFrom = contact.target;
+        el.setPointerCapture(contact.pointer);
+      };
+      const drop = () => {
+        if (contact?.watching) watch(false);
+        window.removeEventListener("blur", outside);
+        window.removeEventListener("pointerout", outside);
+        watchEnd(false); contact = null; el.exactPanCapturesFrom = null;
+      };
       const flush = () => {
         cancelAnimationFrame(frame); frame = 0;
         if (!contact || !live()) { drop(); return; }
@@ -1322,7 +1335,7 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
         if (!contact.active && Math.max(Math.abs(x-px),Math.abs(y-py)) <= 4) return;
         if (!contact.active) release(); // a pan ends a press, as it cancels a touch
         // The button's tap is over: the drag is the pan's, captured, so this node hears the rest.
-        if (contact.watching) { watch(false); contact.watching = false; el.setPointerCapture(contact.pointer); }
+        if (contact.watching) { watch(false); contact.watching = false; capture(); }
         contact.active = true; contact.from = [x,y];
         if (x !== px || y !== py) dispatch(id, `${x-px},${y-py}`);
       };
@@ -1331,7 +1344,7 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
         const state = contacts().get(e.pointerId);
         if (state === "pending") return true;
         if (state === "claimed") { drop(); return true; }
-        contact.deferred = false; watchEnd(false); el.setPointerCapture(e.pointerId); return false;
+        contact.deferred = false; watchEnd(false); capture(); return false;
       };
       // @ref LLP 1057 §10.6 — a pan that began ends with one `panrelease`:
       // the engine's tracker over the contact's samples, at each event's own
@@ -1343,7 +1356,9 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
       // finger this node does not claim. Silent, it was a drag that died after
       // two moves (files diary F10); the journal says why and what claims it.
       const cancelled = e => {
-        if (contact?.pointer === e.pointerId) log(`pan cancelled: the browser took the ${e.pointerType || "pointer"} contact to scroll or zoom; give the dragged node touch-action="none", or "pan-y" or "pan-x" to leave the browser the other axis`);
+        if (contact?.pointer !== e.pointerId) return;
+        suppressPointerClick(e.pointerId);
+        log(`pan cancelled: the browser took the ${e.pointerType || "pointer"} contact to scroll or zoom; give the dragged node touch-action="none", or "pan-y" or "pan-x" to leave the browser the other axis`);
         cancel();
       };
       // A watched contact is the window's alone (`watched`); this node's listeners take it once captured.
@@ -1357,16 +1372,18 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
         if (contact?.pointer === e.pointerId && !!contact.watching !== outside) return;
         if (contact?.pointer !== e.pointerId) return;
         if (contact.deferred) { cancel(); return; }
-        sample(e); contact.to=[e.clientX,e.clientY]; flush(); suppressClick = !!contact?.active;
+        sample(e); contact.to=[e.clientX,e.clientY]; flush(); if (contact?.active) suppressPointerClick(e.pointerId);
         const began = contact?.active; drop();
         if (began) { const [vx, vy] = velocity.velocity?.(id, e.timeStamp) ?? [0, 0]; released(`${vx},${vy}`); }
       };
       on("pointermove", e => move(e));
       on("pointerup", e => up(e));
       on("pointercancel", cancelled);
-      // A child's implicit touch capture, lost when a deferred pan takes it, bubbles here.
-      on("lostpointercapture", e => { if (e.target === el) cancel(); });
-      el.addEventListener("click", e => { if (suppressClick) { suppressClick = false; e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+      on("lostpointercapture", e => {
+        if (e.pointerId !== contact?.pointer || (e.target !== el && e.target !== contact.target)) return;
+        if (e.target === el.exactPanCapturesFrom && el.hasPointerCapture(e.pointerId)) return;
+        suppressPointerClick(e.pointerId); cancel();
+      });
       // A drag the browser begins at the down's point of the pan's contact is the contact's, unless the most recent
       // trusted primary down the pan heard is another pointer's at that point, as each engine gives `dragstart` the point
       // of the down it began from. By a mouse it is
@@ -1384,12 +1401,16 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
         if (source && source !== el && source.exactDraggable !== "true" && el.contains(source)) return;
         if (contact.mouse || (contact.nested && !source)) e.preventDefault();
       });
+      const outside = e => {
+        if (!contact || (e.type === "blur" ? e.target !== window : e.pointerId !== contact.pointer || (e.relatedTarget && e.relatedTarget.localName !== "iframe"))) return;
+        suppressPointerClick(contact.pointer);
+        if (el.hasPointerCapture(contact.pointer)) el.releasePointerCapture(contact.pointer);
+        cancel();
+      };
       const start = e => {
         // A down a script dispatches is no contact: it changes nothing, as the guest frame's scripted tap pans nothing.
         if (e.isTrusted === false) return;
         if (e.isPrimary && e.button === 0) latest = { pointer: e.pointerId, down: [e.clientX, e.clientY] };
-        // Only the click right after a pan is suppressed; a drag makes none.
-        suppressClick = false;
         if (!live() || !e.isPrimary || e.button !== 0 || contact || e.exactPan || el.matches("input,textarea,[contenteditable]")) return;
         // A control or editor between the contact and this node keeps it (rule 3).
         const inner = e.target.closest("input,textarea,select,[contenteditable]");
@@ -1407,8 +1428,10 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
         const press = e.target.closest("button,a[href],[data-exact-on~='press']"), nested = !!press && press !== el && el.contains(press);
         const deferred = contacts().get(e.pointerId) === "pending";
         e.exactPan = true; // the innermost pan takes the contact (rule 3)
-        if (!nested) { e.preventDefault(); e.stopPropagation(); if (!deferred) el.setPointerCapture(e.pointerId); }
-        contact = {pointer:e.pointerId,down:[e.clientX,e.clientY],from:[e.clientX,e.clientY],to:[e.clientX,e.clientY],active:false,deferred,nested,watching:nested,mouse:e.pointerType === "mouse"};
+        contact = {target:e.target,pointer:e.pointerId,down:[e.clientX,e.clientY],from:[e.clientX,e.clientY],to:[e.clientX,e.clientY],active:false,deferred,nested,watching:nested,mouse:e.pointerType === "mouse"};
+        if (!nested) { e.preventDefault(); e.stopPropagation(); if (!deferred) capture(); }
+        window.addEventListener("blur", outside);
+        window.addEventListener("pointerout", outside);
         if (deferred) watchEnd(true);
         if (nested) watch(true);
         velocity.sample?.(id, e.clientX, e.clientY, e.timeStamp, true);

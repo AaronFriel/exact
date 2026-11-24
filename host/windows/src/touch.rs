@@ -24,6 +24,8 @@ pub(crate) struct Touches {
     pinch: Option<Pinch>,
     /// Every finger and pen down, the contact's or not.
     down: Vec<u64>,
+    #[cfg(windows)]
+    ends: std::rc::Rc<std::cell::RefCell<NativeEnds>>,
 }
 
 /// Two fingers on a zoomable scroller: its pinch (LLP 1057.001.000 §5,
@@ -221,7 +223,107 @@ impl Touches {
             (touch.location.x / scale) as f32,
             (touch.location.y / scale) as f32,
         );
+        let phase = if matches!(phase, Phase::Ended | Phase::Cancelled)
+            && self.ends.borrow_mut().take(touch.id) == Some(Phase::Cancelled)
+        {
+            Phase::Cancelled
+        } else {
+            phase
+        };
         self.contact(p, (touch.id, phase), at, now, || pen(touch.id))
+    }
+}
+
+// winit buffers touch frames, drops WM_POINTERCAPTURECHANGED and translates
+// a cancelled up to Ended. Match native endings to those frames in order.
+#[cfg(any(windows, test))]
+#[derive(Default)]
+struct NativeEnds {
+    down: std::collections::HashSet<u64>,
+    pending: Vec<(u64, Phase)>,
+}
+#[cfg(any(windows, test))]
+impl NativeEnds {
+    fn record(&mut self, id: u64, phase: Phase) {
+        if phase == Phase::Started {
+            self.down.insert(id);
+        } else if self.down.remove(&id) {
+            self.pending.push((id, phase));
+        }
+    }
+    fn take(&mut self, id: u64) -> Option<Phase> {
+        let i = self
+            .pending
+            .iter()
+            .position(|(pointer, _)| *pointer == id)?;
+        Some(self.pending.remove(i).1)
+    }
+}
+#[cfg(windows)]
+impl Touches {
+    #[allow(unsafe_code)]
+    pub(super) fn observe(&self, window: isize) -> Result<(), String> {
+        use std::rc::Rc;
+        use windows_sys::Win32::UI::Shell::SetWindowSubclass;
+        let data = Rc::into_raw(self.ends.clone());
+        if unsafe { SetWindowSubclass(window as _, Some(pointer_message), 0, data as usize) } == 0 {
+            unsafe { drop(Rc::from_raw(data)) };
+            return Err("could not observe native pointer cancellations".into());
+        }
+        Ok(())
+    }
+
+    pub(super) fn drain_cancels<D: DataSource>(&mut self, p: &mut Presenter<D>, now: f64) {
+        // A real capture loss may have no following up.
+        let ends = std::mem::take(&mut self.ends.borrow_mut().pending);
+        for (id, phase) in ends {
+            if phase == Phase::Cancelled && self.down.contains(&id) {
+                let at = self
+                    .held
+                    .filter(|(held, _, _)| *held == id)
+                    .map(|(_, _, at)| at)
+                    .unwrap_or_default();
+                self.contact(p, (id, Phase::Cancelled), at, now, || false);
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+unsafe extern "system" fn pointer_message(
+    window: windows_sys::Win32::Foundation::HWND,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+    subclass: usize,
+    data: usize,
+) -> isize {
+    use std::{cell::RefCell, rc::Rc};
+    use windows_sys::Win32::UI::{
+        Shell::{DefSubclassProc, RemoveWindowSubclass},
+        WindowsAndMessaging::{
+            POINTER_MESSAGE_FLAG_CANCELED, WM_NCDESTROY, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN,
+            WM_POINTERUP, WM_POINTERUPDATE,
+        },
+    };
+    let queue = data as *const RefCell<NativeEnds>;
+    let id = u64::from(wparam as u16);
+    unsafe {
+        if message == WM_POINTERDOWN {
+            (*queue).borrow_mut().record(id, Phase::Started);
+        } else if message == WM_POINTERCAPTURECHANGED
+            || matches!(message, WM_POINTERUP | WM_POINTERUPDATE)
+                && (wparam >> 16) as u32 & POINTER_MESSAGE_FLAG_CANCELED != 0
+        {
+            (*queue).borrow_mut().record(id, Phase::Cancelled);
+        } else if message == WM_POINTERUP {
+            (*queue).borrow_mut().record(id, Phase::Ended);
+        } else if message == WM_NCDESTROY {
+            RemoveWindowSubclass(window, Some(pointer_message), subclass);
+            drop(Rc::from_raw(queue));
+        }
+        DefSubclassProc(window, message, wparam, lparam)
     }
 }
 
@@ -267,6 +369,24 @@ pub(crate) fn from_touch_or_pen(extra: isize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capture_loss_after_up_keeps_the_up_even_when_winit_buffers_two_contacts() {
+        let mut native = NativeEnds::default();
+        for phase in [
+            Phase::Started,
+            Phase::Ended,
+            Phase::Cancelled,
+            Phase::Started,
+            Phase::Cancelled,
+            Phase::Ended,
+        ] {
+            native.record(7, phase);
+        }
+        assert_eq!(native.take(7), Some(Phase::Ended));
+        assert_eq!(native.take(7), Some(Phase::Cancelled));
+        assert_eq!(native.take(7), None);
+    }
 
     #[test]
     fn a_mouse_message_made_from_a_touch_or_a_pen_is_known_by_its_signature() {

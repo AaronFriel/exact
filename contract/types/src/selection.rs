@@ -70,7 +70,9 @@ pub fn event_record(attr: &str) -> Option<&'static str> {
     match attr {
         // A `contextmenu` is DOM's `PointerEvent` too (UI Events): where the
         // secondary click was (studio diary R22).
-        "pointerdown" | "pointerup" | "pointermove" | "contextmenu" => Some("PointerEvent"),
+        "pointerdown" | "pointerup" | "pointercancel" | "pointermove" | "contextmenu" => {
+            Some("PointerEvent")
+        }
         "wheel" => Some("WheelEvent"),
         "drop" | "dragenter" | "dragleave" => Some("DragEvent"),
         "atompress" => Some("AtomEvent"),

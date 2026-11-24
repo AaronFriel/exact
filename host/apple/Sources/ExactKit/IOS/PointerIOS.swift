@@ -161,7 +161,7 @@ final class PointerRecognizer: UIGestureRecognizer {
         var view: UIView? = node
         let presenter = node.presenter
         while let v = view {
-            if let n = v as? NodeView, !n.disabled, n.handlers.contains("pointerdown") || n.handlers.contains("pointerup") { nodes.append(n) }
+            if let n = v as? NodeView, !n.disabled, n.handlers.contains("pointerdown") || n.handlers.contains("pointerup") || n.handlers.contains("pointercancel") { nodes.append(n) }
             view = presenter?.pointerParent(of: v) ?? v.superview
         }
         return nodes
@@ -203,15 +203,15 @@ final class PointerRecognizer: UIGestureRecognizer {
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesEnded(touches, with: event)
-        lift(touches)
+        lift(touches, kind: .up)
     }
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesCancelled(touches, with: event)
-        lift(touches)
+        lift(touches, kind: .cancel)
     }
-    private func lift(_ touches: Set<UITouch>) {
-        releaseEnded()
+    private func lift(_ touches: Set<UITouch>, kind: PointerKind) {
         guard let held = touch, touches.contains(held) else {
+            releaseEnded()
             // A touch it never took (another was held, or none listened)
             // ends: holding none, it is done. Left possible, it keeps UIKit
             // from resetting the touch's other recognizers, and a scroll
@@ -219,7 +219,7 @@ final class PointerRecognizer: UIGestureRecognizer {
             if touch == nil { state = .failed }
             return
         }
-        release(held)
+        release(held, kind: kind)
         state = .failed
     }
     /// The held touch, if it has ended or been cancelled without its end
@@ -227,16 +227,19 @@ final class PointerRecognizer: UIGestureRecognizer {
     /// lifted as its end would have lifted it.
     private func releaseEnded() {
         guard let held = touch, held.phase == .ended || held.phase == .cancelled else { return }
-        release(held)
+        release(held, kind: held.phase == .cancelled ? .cancel : .up)
     }
-    private func release(_ held: UITouch) {
+    func cancel(_ held: UITouch) {
+        if touch === held { release(held, kind: .cancel) }
+    }
+    private func release(_ held: UITouch, kind: PointerKind) {
         touch = nil
         // A turn later, once UIKit's own tap (a field's focus) has had the lift.
         if presenter?.preventedTouches.contains(held) == true { DispatchQueue.main.async { [weak presenter] in presenter?.preventedTouches.remove(held) } }
         presenter?.cancelledPressTouches.remove(held)
-        let nodes = path.compactMap(\.node).filter { $0.handlers.contains("pointerup") }
+        let nodes = path.compactMap(\.node).filter { $0.handlers.contains(kind == .up ? "pointerup" : "pointercancel") }
         path = []
-        dispatch(nodes) { n in n.presenter?.pointer(n.id, .up, sample(held, lifted: true, button: Self.domButton(buttons), at: n)) }
+        dispatch(nodes) { n in n.presenter?.pointer(n.id, kind, sample(held, lifted: true, button: kind == .cancel ? -1 : Self.domButton(buttons), at: n)) }
         if relay != nil { node = nil }
     }
     override func reset() {
@@ -265,7 +268,7 @@ extension Presenter {
 
 extension NodeView {
     /// Install or remove the node's pointer observer with its handlers.
-    var wantsPointer: Bool { handlers.contains("pointerdown") || handlers.contains("pointerup") || handlers.contains("pointermove") }
+    var wantsPointer: Bool { handlers.contains("pointerdown") || handlers.contains("pointerup") || handlers.contains("pointermove") || handlers.contains("pointercancel") }
     func syncPointerRecognizer() {
         let wants = wantsPointer
         let current = gestureRecognizers?.first { $0 is PointerRecognizer }

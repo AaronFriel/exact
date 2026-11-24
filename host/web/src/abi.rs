@@ -573,7 +573,7 @@ impl<D: DataSource> Bridge<D> {
             // their targets, toggle (50), scrollend (51), a file drag's enter
             // and leave (55, 56), a paste with files (57), an iframe's record (58), an atom's press (59),
             // a left swipe (61), and a scroll drag's start (62) and release (63) (`Event::of_host_kind`).
-            6 | 10 | 13 | 19 | 20 | 21 | 28..=48 | 50..=59 | 61..=63 => {
+            6 | 10 | 13 | 19 | 20 | 21 | 28..=48 | 50..=59 | 61..=63 | 65 => {
                 match Event::of_host_kind(kind, &payload) {
                     Ok(event) => event,
                     Err(error) => return self.refuse(error),

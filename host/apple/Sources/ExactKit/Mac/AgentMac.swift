@@ -621,6 +621,7 @@ extension Agent {
         case "cancel":
             guard let p = contact else { return ["error": "no contact is down"] }
             contactClock += 1.0 / 60
+            presenter.mouseLayoutPan.systemCancel()
             contactButton?.cancelHeldContact()
             // End AppKit's tracking loop outside the button's bounds.
             let release = contactTracksNative ? CGPoint(x: -10000, y: -10000) : p

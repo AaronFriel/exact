@@ -12,7 +12,7 @@ import UIKit
 /// makes, still on its target; the driver seeks the clock through a hold.
 struct AgentPan {
     /// The `pan` node; nil for a finger (`pressing`), which presses on its lift.
-    weak var node: NodeView?
+    var node: HeldNode?
     var pressing = false
     var pointer: HeldNode?
     /// The nodes its `pointerdown` went to, which hear its `pointerup`.
@@ -121,7 +121,7 @@ extension Agent {
         var current: UIView? = view
         while let v = current {
             if let n = v as? NodeView, !n.disabled,
-               !n.handlers.isDisjoint(with: ["pointerdown", "pointermove", "pointerup"]) { return n }
+               !n.handlers.isDisjoint(with: ["pointerdown", "pointermove", "pointerup", "pointercancel"]) { return n }
             // Through a `portal` mover's declaration, and a sheet's or a lifted popover's authored parents, as `MountRelay`
             let presenter = (v as? NodeView)?.presenter
             current = presenter?.declaredParent(of: v) ?? presenter?.listenerParent(of: v) ?? v.superview
@@ -176,13 +176,13 @@ extension Agent {
     /// it, the up to each still the tree's (one its down disabled hears its
     /// release too), until a handler stops it; `held`, the modifiers.
     func fingerPointer(_ kind: PointerKind, _ path: [HeldNode], at window: CGPoint, held: String = "") {
-        let name = kind == .down ? "pointerdown" : "pointerup"
+        let name = kind == .down ? "pointerdown" : kind == .cancel ? "pointercancel" : "pointerup"
         guard path.contains(where: { $0.live(in: presenter)?.handlers.contains(name) == true }) else { return }
         presenter.propagating {
             // Each resolved at its turn: a handler further in may have
             // removed a node, or the pool given its view to another.
             for snapshot in path {
-                guard let n = snapshot.live(in: presenter), n.handlers.contains(name), kind == .up || !n.disabled else { continue }
+                guard let n = snapshot.live(in: presenter), n.handlers.contains(name), kind == .up || kind == .cancel || !n.disabled else { continue }
                 presenter.pointer(n.id, kind, fingerSample(kind, n, at: window, held: held))
                 if presenter.propagationStopped { break }
             }
@@ -192,8 +192,8 @@ extension Agent {
     private func fingerSample(_ kind: PointerKind, _ node: NodeView, at window: CGPoint, held: String) -> PointerSample {
         let local = node.convert(window, from: nil), box = node.contentBox(), client = presenter.client(window)
         return PointerSample(x: Double(local.x - box.minX), y: Double(local.y - box.minY),
-            buttons: kind == .up ? 0 : 1, pressure: kind == .up ? 0 : 0.5, type: "touch", id: 2,
-            clientX: Double(client.x), clientY: Double(client.y), held: held, button: kind == .move ? -1 : 0)
+            buttons: kind == .up || kind == .cancel ? 0 : 1, pressure: kind == .up || kind == .cancel ? 0 : 0.5, type: "touch", id: 2,
+            clientX: Double(client.x), clientY: Double(client.y), held: held, button: kind == .move || kind == .cancel ? -1 : 0)
     }
 
     private func panPointer(_ contact: AgentPan, _ kind: PointerKind) {
@@ -529,7 +529,7 @@ extension Agent {
             }
             presenter.onPanSample?(true, Double(at.x), Double(at.y), t)
             // A stationary contact keeps its activation even without a press listener.
-            var contact = AgentPan(node: node, pointer: Agent.pointerNode(from: hit).map(HeldNode.init), path: Agent.fingerPath(from: hit),
+            var contact = AgentPan(node: HeldNode(node), pointer: Agent.pointerNode(from: hit).map(HeldNode.init), path: Agent.fingerPath(from: hit),
                                    reach: fingerReach(hit, at: p), at: at, t: t, held: Agent.heldPrefix(req))
             MainActor.assumeIsolated { HeldState.input(at: hit) } // where the finger lands, a held node inside the pan's included
             panContact = contact
@@ -539,11 +539,11 @@ extension Agent {
         }
         guard var contact = panContact else { return nil }
         if contact.pressing { return fingerPhase(phase, req, &contact) }
-        guard let node = contact.node, presenter.views[node.id] === node, node.handlers.contains("pan"), SwipeInput.allows(node) else {
+        guard let node = contact.node?.live(in: presenter), node.handlers.contains("pan"), SwipeInput.allows(node) else {
             // The node went or stopped panning: the contact is over, at rest.
             panContact = nil
-            panPointer(contact, .up)
-            if contact.began, let node = contact.node, presenter.views[node.id] === node { presenter.panRelease(node.id, 0, 0) }
+            panPointer(contact, .cancel)
+            if contact.began, let node = contact.node?.live(in: presenter) { presenter.panRelease(node.id, 0, 0) }
             return ["phase": phase, "contact": false, "cancelled": true, "at": point(contact.at), "delivery": "recognized"]
         }
         let ms = max(0, (req["ms"] as? Double) ?? 0)
@@ -580,6 +580,7 @@ extension Agent {
             panContact = nil
             panPointer(contact, .up)
             if contact.began {
+                guard contact.node?.live(in: presenter) != nil else { return ["phase": "up", "delivery": "recognized"] }
                 // The lift is one frame after the last move, where it lands
                 // on the web and AppKit carriers too.
                 contact.t += 1.0 / 60
@@ -600,8 +601,8 @@ extension Agent {
             return ["phase": "up", "at": point(contact.at), "delivery": "recognized"]
         case "cancel":
             panContact = nil
-            panPointer(contact, .up)
-            if contact.began { presenter.panRelease(node.id, 0, 0) }
+            panPointer(contact, .cancel)
+            if contact.began, contact.node?.live(in: presenter) != nil { presenter.panRelease(node.id, 0, 0) }
             return ["phase": "cancel", "at": point(contact.at), "delivery": "recognized"]
         default:
             return nil
@@ -652,7 +653,7 @@ extension Agent {
             // Released before the press runs, as `touchesEnded` releases it;
             // the pool reuses no pressed view, so this is still the one shown.
             if let node = contact.shown?.node, !node.hasPressContact { node.pressed = false; highlight(node, false) }
-            panPointer(contact, .up)
+            panPointer(contact, phase == "up" ? .up : .cancel)
             var reply: [String: Any] = ["phase": phase, "at": point(contact.at), "delivery": "recognized"]
             // The press its lift makes, against what it reached where it went
             // down: a lift beside that presses nothing, as a touch up outside

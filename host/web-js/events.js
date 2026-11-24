@@ -35,7 +35,7 @@ export function on(e, kind, f, bind) {
     go = f,
     wall = !clock.agent,
     own = ends ? Owner : null,
-    pointer = kind === 'pointerdown' || kind === 'pointerup',
+    pointer = kind === 'pointerdown' || kind === 'pointerup' || kind === 'pointercancel',
     // another event's handler run inside a pointer handler (a focus it moved) is not that pointer event's: its
     // `stopPropagation()` does not stop it
     run = (...a) => {

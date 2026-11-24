@@ -1960,7 +1960,7 @@ browser as the oracle, the same shape layout already has. In exchange, not in v1
   with its consumer. Still no phases, pointer ids or per-frame callbacks.
   **Expanded (Charlie, 2026-10-03: yes to `pointerdown`/`pointerup`):** DOM's
   two events, a touch or the primary button going down on a node and coming
-  up (a cancel is an up), with no payload and no recognition. They observe
+  up, with no recognition. They observe
   beside `press`, `pan` and `contextmenu` and take nothing from them (LLP 1005
   §Events). The Signal Clone's hold-to-record mic is the consumer: recording
   starts the moment the finger lands. Unblocks hold-to-act controls. Take:
@@ -1973,6 +1973,9 @@ browser as the oracle, the same shape layout already has. In exchange, not in v1
   delegation, 2026-10-15, after Astra's review). Unblocks a window's
   outside-press dismiss beside a popup that hears `pointermove`. Take: none;
   Charlie's ruling.
+  **Amended (Charlie, 2026-11-24, "recs ok"):** A cancelled contact fires
+  `pointercancel` in place of `pointerup`, before `panrelease(0, 0)`.
+  It bubbles along the held path. Unblocks restoring a cancelled drag while committing a drop at rest.
   **Built (2026-10-04, LLP 1056 §8.6; the widening confirmed by Charlie the
   same day):** stage 3's pointer coordinates, which Canvas 2D's acceptance
   admitted for a canvas's handlers, as a `PointerEvent` record (DOM's

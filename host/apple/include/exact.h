@@ -634,7 +634,7 @@ uint32_t exact_share_land(ExactRuntime rt);
  * 22 = refresh (the platform's pull-to-refresh control fired; no payload);
  * 28 = panrelease (UTF-8 vx,vy; px/s, once when a pan that began ends; a
  *      cancelled contact releases at 0,0; LLP 1057 §10.6);
- * 29 = pointerdown, 30 = pointerup, 31 = pointermove (UTF-8
+ * 29 = pointerdown, 30 = pointerup, 31 = pointermove, 65 = pointercancel (UTF-8
  *      offsetX,offsetY,button,buttons,pressure,pointerType,pointerId,clientX,clientY:
  *      content-box CSS px, DOM's button and buttons bits, 0 to 1, mouse|pen|touch, then
  *      the viewport point; LLP 1056 §3 stage 3, LLP 1094 D11);

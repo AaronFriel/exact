@@ -2099,7 +2099,7 @@ working fixture, not inferred from JavaScript's Event interface.
 
 These events bubble, as in the DOM: `key` and `keyup` from the focus,
 `focusin` and `focusout` from the element gaining or losing focus,
-`pointerdown` and `pointerup` from the node pressed, and `wheel` from the node
+`pointerdown`, `pointerup` and `pointercancel` from the node pressed, and `wheel` from the node
 under the pointer, each to every ancestor that declares it, innermost first
 (`keycapture` goes outermost first). An action that calls `stopPropagation()`
 stops that event at its handler, as DOM's
@@ -2171,7 +2171,7 @@ host.
 | Four numbers | `transformgeometry` |
 | Six numbers | `transformrelease` |
 | Special: zero or one location string, no captured args | `navigate` |
-| Zero or one `PointerEvent` (the action takes it or leaves it) | `pointerdown`, `pointerup`, `pointermove`, `contextmenu` (UI Events makes it one: where the secondary click or long press was; a keyboard's menu key targets the focus) |
+| Zero or one `PointerEvent` (the action takes it or leaves it) | `pointerdown`, `pointerup`, `pointercancel`, `pointermove`, `contextmenu` (UI Events makes it one: where the secondary click or long press was; a keyboard's menu key targets the focus) |
 | Zero or one `WheelEvent` (the action takes it or leaves it) | `wheel` |
 | Zero or one `HistorySwipeEvent` (the action takes it or leaves it) | `historyswipe`, on the navigation root |
 | Zero or one `ScrollDragEvent` (the action takes it or leaves it) | `scrolldragend`: the release velocity and where the scroll will stop (below) |
@@ -2398,15 +2398,15 @@ bindings are required as a pair. See
 
 ### Pointer
 
-`pointerdown`, `pointerup` and `pointermove` are DOM's, on every host. A
+`pointerdown`, `pointerup`, `pointercancel` and `pointermove` are DOM's, on every host. A
 touch or a button going down (any: `buttons` says which, 2 for a right-click)
 is the `pointerdown` of every enabled node from the one under it up that
 declares it, innermost first, as `key` and `wheel` bubble, before any gesture
 decides; a press inside a popover or a modal dialog reaches its authored
-ancestors, never a node only under it. When the pointer lifts or is cancelled (a cancel is an
-up), each node the down passed that declares `pointerup` hears it, innermost
-first, wherever the pointer is, before the click's `press`. The innermost
-enabled node that hears any of the three holds the pointer: its
+ancestors, never a node only under it. A lift sends `pointerup` before the click's `press`. A cancelled contact
+sends `pointercancel` instead, before a begun pan's `panrelease(0, 0)`.
+Each terminal event visits the nodes the down passed, innermost first,
+wherever the pointer is. The innermost enabled node that hears any pointer event holds the pointer: its
 `pointermove`s follow the pointer wherever it goes until it lifts, and a
 `pointermove`, or a `pan` that takes the contact, takes no ancestor's down
 or up. A node disabled when the pointer goes down hears none of them, and

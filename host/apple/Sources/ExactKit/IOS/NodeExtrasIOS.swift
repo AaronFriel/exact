@@ -122,7 +122,7 @@ final class NodeExtras {
     /// Its surface at a layout transition's size (`Surface.swift`).
     var surface: SurfaceLayer?
     var layoutPanRecognizer: UIPanGestureRecognizer?
-    var layoutPanOrigin: CGPoint = .zero
+    var layoutPanOrigin: CGPoint?
     var swipeRecognizer: UIPanGestureRecognizer?
     var swipeArmed: Bool = false
     /// Where a swipe's first finger landed, in the window (its shouldBegin's edge rule).
@@ -360,7 +360,7 @@ extension NodeView {
     var layoutResize: CGSize { get { extras?.layoutResize ?? .zero } set { if newValue != .zero || extras != nil { more.layoutResize = newValue } } }
     var surface: SurfaceLayer? { get { extras?.surface } set { if newValue != nil || extras != nil { more.surface = newValue } } }
     var layoutPanRecognizer: UIPanGestureRecognizer? { get { extras?.layoutPanRecognizer } set { if newValue != nil || extras != nil { more.layoutPanRecognizer = newValue } } }
-    var layoutPanOrigin: CGPoint { get { extras?.layoutPanOrigin ?? .zero } set { if newValue != .zero || extras != nil { more.layoutPanOrigin = newValue } } }
+    var layoutPanOrigin: CGPoint? { get { extras?.layoutPanOrigin } set { if newValue != nil || extras != nil { more.layoutPanOrigin = newValue } } }
     var swipeRecognizer: UIPanGestureRecognizer? { get { extras?.swipeRecognizer } set { if newValue != nil || extras != nil { more.swipeRecognizer = newValue } } }
     var swipeDownX: CGFloat? { get { extras?.swipeDownX } set { if newValue != nil || extras != nil { more.swipeDownX = newValue } } }
     var swipeArmed: Bool { get { extras?.swipeArmed ?? false } set { if newValue || extras != nil { more.swipeArmed = newValue } } }

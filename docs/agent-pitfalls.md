@@ -1276,10 +1276,9 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   Alt+F4, Alt+Space, Control+Escape, Control+Shift+Escape, Control+Alt+Delete).
   (LLP 1115.004 D9.6.)
 
-- **A hold's `pointerup` never arrives.** Cause: the press started on a node that a
-  state change replaced during the hold; the up is not delivered to a node that no
-  longer exists (declared in LLP 1005). Fix: keep the pressed node across the state
-  change (change its contents, not which branch renders it).
+- **A hold's `pointerup` never arrives.** Handle `pointercancel` when the system
+  takes the contact. Keep the pressed node mounted through either end. If a
+  state change replaces it during the hold, its handler is gone (LLP 1005).
   **Candidate diagnostic:** the runtime could log a dropped up in development.
 - **A `heightDragFor` handle does nothing.** Its target must be the handle's
   unique strict ancestor with that `id`, with `box-sizing="border-box"` and a

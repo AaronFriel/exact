@@ -773,8 +773,8 @@ package final class Presenter {
     /// went down on, perhaps a child of the held node, kept in the window
     /// until the button comes up even if a batch removes it (`MouseChainMac`).
     package internal(set) var pointerSource: NodeView?
-    /// The drag last delivered as a `pointermove` (LLP 1056 §3 stage 3).
-    weak var pointerDrag: NSEvent?
+    /// The held pointer's last position, including when Escape ends its contact.
+    var pointerDrag: NSEvent?
     /// Each node's latest free move, in the order the pointer reached them,
     /// sent at the next display frame or before a button goes down or up
     /// (`hoverMoved`).

@@ -517,6 +517,7 @@ pub fn attr(name: &str) -> Option<AttrTarget> {
         "dblclick" => AttrTarget::Handler("dblclick"),
         "pointerdown" => AttrTarget::Handler("pointerdown"), // LLP 1005 §Events, DOM's own
         "pointerup" => AttrTarget::Handler("pointerup"),
+        "pointercancel" => AttrTarget::Handler("pointercancel"),
         "pointermove" => AttrTarget::Handler("pointermove"), // LLP 1056 §3 stage 3
         // DOM's `beforeunload` (studio diary R17): the window is closing or
         // the app quitting; an action that calls `preventDefault()` keeps it.

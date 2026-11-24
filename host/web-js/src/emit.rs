@@ -1345,7 +1345,7 @@ impl Em<'_> {
                 | EventKind::Contextmenu
                 | EventKind::Dblclick
                 | EventKind::Pointerdown
-                | EventKind::Pointerup
+                | EventKind::Pointercancel | EventKind::Pointerup
                 | EventKind::Pointermove
                 | EventKind::Copy
                 | EventKind::Cut

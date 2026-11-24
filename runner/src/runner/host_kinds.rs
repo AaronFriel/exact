@@ -151,7 +151,7 @@ impl Event {
             21 => Event::selection_payload(payload).ok_or("invalid Markdown selection"),
             28 => Event::pan_release_payload(payload).ok_or("invalid pan release velocity"),
             // LLP 1056 §3 stage 3: the pointer's record.
-            29..=31 => Event::pointer_payload(kind, payload).ok_or("invalid pointer event"),
+            29..=31 | 65 => Event::pointer_payload(kind, payload).ok_or("invalid pointer event"),
             // The clipboard's copy, cut and paste, with its plain text.
             32..=34 => Event::clipboard_payload(kind, payload).ok_or("invalid clipboard event"),
             // The reader's selection inside a `text`: its offsets, then its text.

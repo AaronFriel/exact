@@ -1294,7 +1294,7 @@ public struct RootTabs: Equatable {
 }
 
 /// The pointer's three events and their ABI kinds (LLP 1005 §3).
-package enum PointerKind: UInt32 { case down = 29, up = 30, move = 31 }
+package enum PointerKind: UInt32 { case down = 29, up = 30, move = 31, cancel = 65 }
 
 /// DOM's `PointerEvent`, the subset the runner's record carries (LLP 1056 §3
 /// stage 3): the point from the node's content box in its own points, DOM's

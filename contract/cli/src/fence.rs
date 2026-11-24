@@ -227,6 +227,7 @@ const PERSON_EVENTS: &[&str] = &[
     "pointerdown",
     "pointermove",
     "pointerup",
+    "pointercancel",
     "pan",
     "panrelease",
     "wheel",

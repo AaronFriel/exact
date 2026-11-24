@@ -411,7 +411,7 @@ fn a_stop_ends_one_dispatch_and_neither_the_up_nor_the_scroll() {
 
 /// A down handler that removes the pressed node and stops the down: the
 /// contact is cancelled once the walk ends, so the ancestors hear no down
-/// and then the cancel's up, never an up before a down.
+/// and then the cancel, never an up before a down.
 #[test]
 fn a_handler_that_removes_the_pressed_node_ends_the_walk_before_the_cancel() {
     const GONE: &str = r#"component App
@@ -424,16 +424,16 @@ fn a_handler_that_removes_the_pressed_node_ends_the_walk_before_the_cancel() {
     shown = false
     stopPropagation()
   view
-    column width=400 height=400 pointerdown=at("d:outer") pointerup=at("u:outer")
-      column pointerdown=at("d:mid") pointerup=at("u:mid") width=300 height=200
+    column width=400 height=400 pointerdown=at("d:outer") pointercancel=at("c:outer")
+      column pointerdown=at("d:mid") pointercancel=at("c:mid") width=300 height=200
         if shown
-          box pointerdown=gone pointerup=at("u:inner") width=100 height=100
+          box pointerdown=gone pointercancel=at("c:inner") width=100 height=100
       text seen testId="log" height=20
 "#;
     let mut p = boot(GONE);
     p.pointer_down(20., 20., 1.).unwrap();
     p.pointer_up(20., 20., 2.).unwrap();
-    assert_eq!(log(&p), " d:inner u:mid u:outer");
+    assert_eq!(log(&p), " d:inner c:mid c:outer");
 }
 
 const PRESS_FOCUS: &str = r#"component App

@@ -987,7 +987,11 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
                     .install(handle.hwnd.get(), self.modal.clone(), self.proxy.clone());
                 self.desktop.set_window(handle.hwnd.get());
                 crate::displays::install(handle.hwnd.get(), self.min_size);
-                if let Err(error) = self.clicks.install(handle.hwnd.get()) {
+                if let Err(error) = self
+                    .clicks
+                    .install(handle.hwnd.get())
+                    .and_then(|()| self.touches.observe(handle.hwnd.get()))
+                {
                     self.fail(events, error);
                     return;
                 }
@@ -1425,6 +1429,10 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
         }
     }
     fn about_to_wait(&mut self, events: &ActiveEventLoop) {
+        if let Some(p) = &mut self.presenter {
+            let now = p.host().now();
+            self.touches.drain_cancels(p, now);
+        }
         self.file_dialog_answers();
         self.handed_launches();
         self.tray_input(events);

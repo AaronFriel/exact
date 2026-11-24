@@ -1393,8 +1393,8 @@ impl<D: DataSource> Presenter<D> {
         self.cancel_aux(self.contact_canvas(), now_ms);
         self.pointer_cancel(now_ms)
     }
-    /// Escape, wheel takeover, disconnection, or invalidated binding: no
-    /// release event, except a pan that began, which releases at rest. The
+    /// Escape, wheel takeover, disconnection, or an invalidated binding sends
+    /// pointercancel before a pan that began releases at rest. The
     /// button may still be down: its release is the shell's to say.
     pub fn pointer_cancel(&mut self, now_ms: f64) -> Result<(), String> {
         self.brush.ripples.input(now_ms);
@@ -1423,9 +1423,11 @@ impl<D: DataSource> Presenter<D> {
         } else {
             None
         };
-        // A cancel is an up (LLP 1005 §3).
         let at = contact.as_ref().map(|contact| contact.position);
-        let mut result = self.pointer_lifted(at, now_ms).map_or(Ok(()), Err);
+        let mut result = self
+            .pointer_lifted_by(at, None, now_ms)
+            .0
+            .map_or(Ok(()), Err);
         let Some(contact) = contact else {
             return result;
         };
