@@ -227,4 +227,17 @@ class NativesBrowserTest {
         assertEquals("https://example.com/", shadowOf(NativesPartitionTest.Compat.last()).lastLoadedUrl)
         natives.destroyAll()
     }
+
+    /** `clearSiteData` refuses, by the DOMException's name, what Android cannot clear, and answers when the WebView
+     * provider fails rather than throwing. */
+    @Test fun clearSiteDataRefusesWhatItCannotClear() {
+        val answers = ArrayList<Pair<String, String>?>()
+        fun clear(partition: String, vararg types: String) = FrameStorage.clearSiteData(partition, types.toList()) { answers += it }
+        clear("a", "cookies")
+        clear("persist:a", "cookies")
+        NativesPartitionTest.Features.navigation = false
+        clear("persist:a", "cookies")
+        assertEquals(listOf("NotSupportedError", "NotSupportedError", "NotSupportedError"), answers.map { it?.first })
+        assertTrue(answers[1]!!.second, answers[1]!!.second.contains("could not clear"))
+    }
 }
