@@ -108,7 +108,8 @@ impl Em<'_> {
 
     /// The runtime function that registers node `i` with presence, if any. A bound
     /// exit takes `px`, which keeps its value from the start of each commit and
-    /// loads presence even when the first value is `none`; another node takes `pr`
+    /// loads presence even when the first value is `none`. A literal exit tracks only
+    /// its region membership (`fixedExit`). Another node takes `pr`
     /// when `inline` (the declarations `rows::presence_decls` moved inline)
     /// holds one of `PRESENCE_ROWS`. The other inline declarations (a press, a
     /// fit, a timeline) belong to other pieces and load no presence.
@@ -133,16 +134,19 @@ impl Em<'_> {
             });
         if bound_exit {
             Some("px")
+        } else if inline
+            .split(';')
+            .any(|d| d.starts_with("--exact-exit-animation:"))
+        {
+            Some("fixedExit")
         } else {
             (declares || self.binds_route_part(i)).then_some("pr")
         }
     }
 
-    /// Hands the runtime the probes through which each commit reads bound exits
-    /// and layout transitions (presence-bindings.js), before the first commit
-    /// builds the view: only a plan that binds one links them.
+    /// Install probes before mounting a plan with exits or a bound layout transition.
     pub(super) fn presence_bindings(&mut self, body: &mut String) {
-        if ["px", "lt"]
+        if ["px", "fixedExit", "lt"]
             .iter()
             .any(|name| self.uses.names.contains(*name))
         {
