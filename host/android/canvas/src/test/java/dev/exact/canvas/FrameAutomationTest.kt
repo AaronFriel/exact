@@ -6,6 +6,7 @@ import android.webkit.WebView
 import androidx.webkit.JavaScriptExecutionException
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.Navigation
+import androidx.webkit.Page
 import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewOutcomeReceiver
 import org.json.JSONArray
@@ -67,11 +68,17 @@ class FrameAutomationTest {
     private class Proxy : JavaScriptReplyProxy() {
         val token = java.util.UUID.randomUUID().toString().replace("-", "")
         val scripts = ArrayList<Pair<String, WebViewOutcomeReceiver<String, JavaScriptExecutionException>>>()
+        var fullyActive = true
+        var holdCheck = false
+        val checks = mutableListOf<WebViewOutcomeReceiver<String, JavaScriptExecutionException>>()
         val acknowledgements = mutableListOf<String>()
         override fun postMessage(message: String) { acknowledgements += message }
         override fun postMessage(message: ByteArray) {}
         override fun executeJavaScript(script: String, receiver: WebViewOutcomeReceiver<String, JavaScriptExecutionException>?) {
-            scripts += script to receiver!!
+            if (script.endsWith(".active()")) {
+                checks += receiver!!
+                if (!holdCheck) receiver.onResult(fullyActive.toString())
+            } else scripts += script to receiver!!
         }
     }
 
@@ -202,16 +209,15 @@ class FrameAutomationTest {
         assertEquals("agent", NativesPartitionTest.Host.sent.last { it.event == "currententrychange" }.record.getString("controller"))
 
         // A changed partition is a new frame: a call in flight ends, and the preload script goes with it.
-        post(web, sb, "ready", proxy)
         val original = call("evaluate", "expression" to "1", "sandbox" to sb)
-        val originalNumber = Regex("n: (\\d+)").find(proxy.scripts.last().first)!!.groupValues[1].toInt()
+        val originalNumber = Regex("n: (\\d+)").find(early.scripts.last().first)!!.groupValues[1].toInt()
         val replacement = Proxy()
         post(web, sb, "ready", replacement)
         val current = call("evaluate", "expression" to "2", "sandbox" to sb)
-        post(web, sb, JSONObject().put("n", originalNumber).put("r", "2").toString(), proxy, source = replacement)
+        post(web, sb, JSONObject().put("n", originalNumber).put("r", "2").toString(), early, source = replacement)
         assertNull("only the original AndroidX source can settle the call", original[0])
         answer(web, replacement, sb, "2")
-        post(web, sb, JSONObject().put("n", originalNumber).put("r", "1").toString(), proxy)
+        post(web, sb, JSONObject().put("n", originalNumber).put("r", "1").toString(), early)
         assertEquals(1, original[0]!!.getInt("result"))
         assertNotEquals(current[0]!!.getString("realm"), original[0]!!.getString("realm"))
         val held = call("evaluate", "expression" to "new Promise(() => {})", "sandbox" to sb)
@@ -376,6 +382,278 @@ class FrameAutomationTest {
         emit(otherKey, "5", current)
         assertEquals(1, messages.size)
         assertEquals("5", other.single().getString("json"))
+    }
+
+    private inner class Channel {
+        val natives = natives()
+        val world = "ordering"
+        val web: WebView
+        val frame: FrameAutomation
+        private val key: String
+        private val messages = mutableListOf<JSONObject>()
+
+        init {
+            natives.ensure(1, 1, 0, 0, props("tab"), 0)
+            web = compat.last()
+            frame = natives.automations("tab").single()!!
+            val args = JSONObject().put("id", "tab").put("sandbox", world)
+                .put("arguments", JSONArray("""[{"type":"channel","value":{"channel":"status"}}]"""))
+                .put("functionDeclaration", "post => post(1)")
+            FrameAutomations.run("addPreloadScript", args, { messages.add(it) }) { assertTrue(it.has("script")) }
+            key = Regex("[0-9a-f-]{36}").find(compat.worldScripts.getValue(web).last().second)!!.value
+            commit(web, "https://example.com/first")
+        }
+
+        fun postSource(doc: Proxy): JSONObject? {
+            post(web, world, JSONObject().put("capability", key).put("json", "1").toString(), doc)
+            return if (messages.isEmpty()) null else messages.single().getJSONObject("source").also { messages.clear() }
+        }
+
+        fun source(doc: Proxy): JSONObject = checkNotNull(postSource(doc))
+
+        fun read(source: JSONObject) = call("evaluate", "id" to null,
+            "target" to JSONObject().put("realm", source.getString("realm")), "expression" to "42")
+
+        fun ready(doc: Proxy) = post(web, world, "ready", doc)
+
+        fun checkCurrent(doc: Proxy) {
+            val read = call("evaluate", "sandbox" to world, "expression" to "42")
+            answer(web, doc, world, "42")
+            assertEquals(source(doc).getString("realm"), read[0]?.getString("realm"))
+        }
+    }
+
+    private fun outgoingReply(readyDuringNavigation: Boolean) {
+        val channel = Channel()
+        val old = Proxy()
+        val current = Proxy()
+        val source = channel.source(old)
+        lateinit var reply: Array<JSONObject?>
+        commit(channel.web, "https://example.com/next") {
+            if (readyDuringNavigation) channel.ready(old)
+            reply = channel.read(source)
+            assertTrue(old.scripts.isEmpty())
+            old.fullyActive = false
+        }
+        if (!readyDuringNavigation) channel.ready(old)
+        assertEquals("no such frame", reply.error())
+        assertTrue(old.scripts.isEmpty())
+        assertTrue(current.scripts.isEmpty())
+        assertEquals("no such frame", channel.read(source).error())
+        val frameRead = call("evaluate", "sandbox" to channel.world, "expression" to "42")
+        assertTrue(old.scripts.isEmpty())
+        channel.ready(current)
+        answer(channel.web, current, channel.world, "42")
+        assertEquals(channel.source(current).getString("realm"), frameRead[0]?.getString("realm"))
+        channel.natives.destroyAll()
+    }
+
+    @Test fun aPostBeforeReadyDoesNotCarryItsReplyIntoTheNextPage() = outgoingReply(false)
+
+    @Test fun anOutgoingReadyDuringNavigationCannotClaimTheCommit() = outgoingReply(true)
+
+    private fun cancelledReply(stillCurrent: Boolean, waiting: Boolean = false) {
+        val channel = Channel()
+        val doc = Proxy()
+        channel.frame.starting()
+        val source = channel.source(doc)
+        // In both cases the first callback from this proxy is the post during navigation.
+        val pending = if (waiting) channel.read(source) else null
+        doc.fullyActive = stillCurrent
+        channel.frame.cancelled()
+        val reply = pending ?: channel.read(source)
+        channel.ready(doc)
+        if (stillCurrent) {
+            doc.scripts.last().second.onResult("true")
+            answer(channel.web, doc, channel.world, "42")
+            assertEquals(source.getString("realm"), reply[0]?.getString("realm"))
+        } else {
+            assertEquals("no such frame", reply.error())
+            assertTrue(doc.scripts.isEmpty())
+            assertEquals("no such frame", channel.read(source).error())
+        }
+        channel.natives.destroyAll()
+    }
+
+    @Test fun cancellingLeavesTheCurrentPostingDocumentLive() = cancelledReply(true)
+
+    @Test fun cancellingRetiresTheProvisionalPostingDocument() = cancelledReply(false)
+
+    @Test fun cancellationSettlesAWaitingReplyAccordingToWhichDocumentPosted() {
+        cancelledReply(stillCurrent = false, waiting = true)
+        cancelledReply(stillCurrent = true, waiting = true)
+    }
+
+    @Test fun aRepeatedReadyCannotReplaceTheCommittedWorld() {
+        val channel = Channel()
+        val old = Proxy()
+        channel.ready(old)
+        channel.checkCurrent(old)
+        commit(channel.web, "https://example.com/next") { old.fullyActive = false }
+        val current = Proxy()
+        channel.ready(current)
+        val checks = old.checks.size
+        channel.ready(old)
+        assertEquals(checks, old.checks.size)
+        channel.checkCurrent(current)
+        assertEquals(1, old.scripts.size)
+        channel.natives.destroyAll()
+    }
+
+    @Test fun aWorldCheckAnsweredAfterCommitCannotPublishItsOldResult() {
+        val channel = Channel()
+        val old = Proxy().apply { holdCheck = true }
+        channel.ready(old)
+        commit(channel.web, "https://example.com/next")
+        val read = call("evaluate", "sandbox" to channel.world, "expression" to "42")
+        old.checks.single().onResult("true")
+        assertTrue(old.scripts.isEmpty())
+        val current = Proxy()
+        channel.ready(current)
+        answer(channel.web, current, channel.world, "42")
+        assertEquals(channel.source(current).getString("realm"), read[0]?.getString("realm"))
+        channel.natives.destroyAll()
+    }
+
+    @Test fun aCheckStartedBeforeNavigationCanStillAdmitTheCurrentDocument() {
+        val channel = Channel()
+        val old = Proxy().apply { holdCheck = true }
+        channel.ready(old)
+        channel.frame.starting()
+        val source = channel.source(old)
+        val reply = channel.read(source)
+        old.checks.single().onResult("true")
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(11))
+        old.scripts.last().second.onResult("true")
+        answer(channel.web, old, channel.world, "42")
+        assertEquals(source.getString("realm"), reply[0]?.getString("realm"))
+        channel.natives.destroyAll()
+    }
+
+    @Test fun historyRestoresAWorldWhoseFirstCheckCrossedACommit() {
+        val channel = Channel()
+        val a = Page.forInvocationHandler(Peer())
+        channel.frame.starting()
+        channel.frame.committed(a)
+        val old = Proxy().apply { holdCheck = true }
+        val source = channel.source(old)
+        channel.ready(old)
+        channel.frame.starting()
+        old.holdCheck = false
+        old.fullyActive = false
+        channel.frame.committed(Page.forInvocationHandler(Peer()))
+        old.checks.first().onResult("true")
+        assertEquals("no such frame", channel.read(source).error())
+        channel.frame.starting()
+        old.fullyActive = true
+        channel.frame.committed(a)
+        val reply = channel.read(source)
+        old.scripts.last().second.onResult("true")
+        answer(channel.web, old, channel.world, "42")
+        assertEquals(source.getString("realm"), reply[0]?.getString("realm"))
+        channel.natives.destroyAll()
+    }
+
+    @Test fun aProviderErrorCheckingALiveDocumentAllowsAnotherAttempt() {
+        val channel = Channel()
+        val doc = Proxy().apply { holdCheck = true }
+        val source = channel.source(doc)
+        channel.ready(doc)
+        val first = channel.read(source)
+        doc.checks.single().onError(JavaScriptExecutionException(JavaScriptExecutionException.ERROR_GENERIC, "unavailable"))
+        assertEquals("Error", first.error())
+        doc.holdCheck = false
+        val next = channel.read(source)
+        doc.scripts.last().second.onResult("true")
+        answer(channel.web, doc, channel.world, "42")
+        assertEquals(source.getString("realm"), next[0]?.getString("realm"))
+        channel.natives.destroyAll()
+    }
+
+    @Test fun anUnpublishedWorldCanAnnounceTheSameTokenWhenActive() {
+        val channel = Channel()
+        val doc = Proxy().apply { fullyActive = false }
+        val source = channel.source(doc)
+        channel.ready(doc)
+        assertEquals("no such frame", channel.read(source).error())
+        doc.fullyActive = true
+        channel.ready(doc)
+        channel.checkCurrent(doc)
+        channel.natives.destroyAll()
+    }
+
+    @Test fun cancellationOfADestroyedProxyNeedsNoReadyToEndItsWaitingReply() {
+        val channel = Channel()
+        val doc = Proxy().apply { holdCheck = true }
+        channel.frame.starting()
+        val reply = channel.read(channel.source(doc))
+        channel.frame.cancelled()
+        doc.checks.single().onError(JavaScriptExecutionException(JavaScriptExecutionException.ERROR_FRAME_DESTROYED, "gone"))
+        assertEquals("no such frame", reply.error())
+        assertTrue(doc.scripts.isEmpty())
+        channel.natives.destroyAll()
+    }
+
+    @Test fun aFirstReadyFromAnOlderProxyCannotDivertAFrameRead() {
+        val channel = Channel()
+        val old = Proxy().apply { fullyActive = false }
+        val current = Proxy()
+        commit(channel.web, "https://example.com/current")
+        channel.ready(current)
+        channel.checkCurrent(current)
+        channel.ready(old)
+        channel.checkCurrent(current)
+        assertTrue(old.scripts.isEmpty())
+        channel.natives.destroyAll()
+    }
+
+    @Test fun aSupersededWorldCannotTakeTheNextWorldsWaitingReply() {
+        val channel = Channel()
+        val lost = Proxy()
+        channel.frame.starting()
+        channel.ready(lost)
+        channel.frame.starting()
+        lost.fullyActive = false
+        val incoming = Proxy()
+        val reply = channel.read(channel.source(incoming))
+        channel.ready(incoming)
+        channel.frame.committed(null)
+        incoming.scripts.last().second.onResult("true")
+        answer(channel.web, incoming, channel.world, "42")
+        assertEquals(42, reply[0]?.getInt("result"))
+        assertTrue(lost.scripts.isEmpty())
+        channel.checkCurrent(incoming)
+        channel.natives.destroyAll()
+    }
+
+    @Test fun aSameDocumentNavigationWithNoPageKeepsTheWorld() {
+        val channel = Channel()
+        val doc = Proxy()
+        channel.frame.committed(null)
+        channel.ready(doc)
+        channel.checkCurrent(doc)
+        val nav = Navigation.forInvocationHandler(Peer(mapOf(
+            "getUrl" to "https://example.com/first#here", "getPage" to null, "isSameDocument" to true,
+            "isHistory" to false, "isReload" to false, "didCommit" to true,
+        )))
+        compat.listeners.getValue(channel.web).onNavigationStarted(nav)
+        compat.listeners.getValue(channel.web).onNavigationCompleted(nav)
+        channel.checkCurrent(doc)
+        channel.natives.destroyAll()
+    }
+
+    @Test fun aPostDeliveredFromADroppedViewNamesItsPostingDocument() {
+        val channel = Channel()
+        val old = Proxy()
+        val source = channel.source(old)
+        channel.ready(old)
+        channel.natives.ensure(1, 1, 0, 0, props("tab", "persist:b"), 0)
+        assertNotSame(channel.web, compat.last())
+        channel.postSource(old)?.let { after ->
+            for (key in listOf("realm", "context", "origin")) assertEquals(source.getString(key), after.getString(key))
+        }
+        assertEquals("no such frame", channel.read(source).error())
+        channel.natives.destroyAll()
     }
 
     @Test fun closingAPackageSessionRemovesItsPreloadWithoutArguments() {

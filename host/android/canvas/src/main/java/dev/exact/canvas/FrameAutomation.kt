@@ -75,8 +75,11 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
     private class Document {
         val id = UUID.randomUUID().toString()
         var token: String? = null
+        var retryReady = false
     }
-    private class World(val proxy: JavaScriptReplyProxy, val doc: Document, val token: String, val origin: String)
+    private class World(val name: String, val proxy: JavaScriptReplyProxy, val doc: Document, val token: String, val origin: String) {
+        var retry = false
+    }
     // AndroidX pairs one JavaScriptReplyProxy with one injected JavaScript object in the frame.
     private val markers = java.util.WeakHashMap<JavaScriptReplyProxy, Document>()
     private val confirmed = HashMap<Page?, MutableMap<String, World>>()
@@ -86,12 +89,15 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
     private val routes = HashMap<String?, String>()
     // This lexical constant adds no property, handler or listener on window. Each document gets its own value.
     private val binding = "_exact" + UUID.randomUUID().toString().replace("-", "")
-    private fun plant(origin: String = "this.origin", token: String = "null") =
-        "const $binding = window === top ? { __proto__: null, document, token: $token, origin: $origin } : null"
+    private fun plant(origin: String = "this.origin", token: String = "null", fields: String = "") =
+        "const $binding = window === top ? { __proto__: null, document, token: $token, origin: $origin$fields } : null"
     private var pageIdentity: ScriptHandler? = null
-    /** Posts made while a navigation to a new document is uncommitted: only that document can have made them. */
     private var navigating = false
-    private val early = HashMap<String, World>()
+    // A listener identifies its sender, but supplies no Page. Either document can post during navigation.
+    private val early = LinkedHashSet<World>()
+    // An interrupted check belongs to its Page. A history traversal can resume it.
+    private val checks = HashMap<Page?, MutableSet<World>>()
+    private var revision = 0L
     /** Navigations begun on the view, and how many had begun when the current document's began. */
     private var starts = 0
     private var documentStart = 0
@@ -137,14 +143,15 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
     private fun forgetView() {
         pageIdentity = null
         realms.clear()
-        handlers.clear(); worlds.clear(); channels.clear(); proxies.clear(); confirmed.clear(); early.clear()
+        handlers.clear(); worlds.clear(); channels.clear(); proxies.clear(); confirmed.clear(); early.clear(); checks.clear()
+        revision++
         page = null
         navigating = false
         starts = 0; documentStart = 0
     }
 
     fun starting() {
-        cancelled()
+        if (navigating) endAll("AbortError", "the navigation was superseded") { !it.mayCrossCommit }
         navigating = true
         starts++
     }
@@ -152,30 +159,46 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
     fun cancelled() {
         if (!navigating) return
         navigating = false
-        early.clear()
-        endAll("AbortError", "the navigation did not commit") { !it.mayCrossCommit }
+        val at = revision
+        val waiting = pending.values.filter { it.mayCrossCommit }.mapNotNull { call ->
+            call.mayCrossCommit = false
+            call.postingDocument?.takeIf { it.token == null }
+        }.toSet()
+        verifyEarlyWorlds()
+        if (waiting.isNotEmpty()) for ((proxy, doc) in markers.entries.filter { it.value in waiting }) {
+            // A cancelled provisional document might never send ready. Its proxy can already report its end.
+            checkActive(proxy) { active ->
+                if (active == false && revision == at && doc.token == null) refuseDocument(doc)
+            }
+        }
     }
 
     /** A new document committed (or one came back from the back-forward cache): a script in the old one is aborted. */
     fun committed(page: Page?) {
         realms.clear()
-        if (page == null) confirmed.remove(null)
+        if (page == null || this.page == null) {
+            checks.remove(null)
+            confirmed.remove(null)
+            proxies.keys.removeAll { it.first == null }
+        }
         this.page = page
         navigating = false
+        revision++
         documentStart = starts
-        // A reply waiting for the incoming document belongs on the far side of this commit.
+        // A reply requested during navigation can wait for proof that its own document survived.
         endAll("AbortError", "the document navigated away") { call ->
-            val keep = call.mayCrossCommit && early[call.world]?.let { it.doc === call.postingDocument } != false
+            val keep = call.mayCrossCommit && call.postingDocument?.let(::awaitingWorld) == true
             call.mayCrossCommit = false
             keep
         }
-        for ((name, proxy) in early) ready(name, proxy)
-        early.clear()
+        early.addAll(checks[page].orEmpty())
+        verifyEarlyWorlds()
     }
 
     fun deleted(page: Page) {
         proxies.keys.removeAll { it.first == page }
         confirmed.remove(page)
+        checks.remove(page)?.clear()
     }
 
     /** The frame's view went (out of view, a renderer's end): its document with it. */
@@ -352,9 +375,10 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
             return Realm(marker, origin, id).also { realms[sandbox] = it }
         }
         fun guarded(realm: Realm, body: String, plantToken: Boolean = false): String {
+            val active = if (sandbox == null) "" else " && $binding.active()"
             val marker = JSONObject.quote(realm.marker)
             val token = if (plantToken) "($binding.token ??= $marker)" else "$binding.token"
-            return "(typeof $binding === 'object' && $binding && $binding.document === document && $token === $marker) ? ($body) : false"
+            return "(typeof $binding === 'object' && $binding && $binding.document === document && $token === $marker$active) ? ($body) : false"
         }
         // Admit a realm call before entering guest code. Navigation after admission aborts the call.
         // The second guard still runs in the evaluation that executes the caller's expression.
@@ -445,12 +469,15 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
             call.postingDocument = document
             call.mayCrossCommit = document != null && navigating
             main.postDelayed({ if (call.onReady != null) answer(timeout) }, READY_WAIT)
+            for (world in checks[page].orEmpty().filter { it.retry && it.name == sandbox && (document == null || it.doc === document) }) {
+                verifyWorld(world)
+            }
         }
         val key = page to sandbox
         if (target != null) {
             confirmed[page]?.get(target)?.let { return send(it) }
             val document = markers.values.firstOrNull { target == "${routes[sandbox]}.${it.id}" }
-            if (document != null && (document.token == null || early[sandbox]?.doc === document)) {
+            if (document != null && awaitingWorld(document)) {
                 // Both the channel post and ready can precede the native commit, in either order.
                 waitForReady(missingRealm(), document)
                 return
@@ -460,7 +487,7 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
         if (target != null) return answer(missingRealm())
         // The world's channel was on the view before this document began, so its post is on its way.
         val installed = channels[sandbox]
-        if (installed != null && (navigating || installed < documentStart)) {
+        if (checks[page].orEmpty().any { it.name == sandbox } || installed != null && (navigating || installed < documentStart)) {
             waitForReady(failure("InvalidStateError", "$op: the document's sandbox $sandbox did not start"))
             return
         }
@@ -507,11 +534,18 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
                 val token = data.removePrefix("ready:")
                 if (token.length != 32 || token.any { it !in "0123456789abcdef" }) return@addWebMessageListener
                 val doc = markers.getOrPut(proxy) { Document() }
-                if (doc.token != null && doc.token != token) return@addWebMessageListener
-                doc.token = token
                 if (this.view !== view) return@addWebMessageListener
-                val world = World(proxy, doc, token, serializedOrigin(origin))
-                if (navigating) early[name] = world else ready(name, world)
+                if (doc.token != null) {
+                    if (doc.token != token) return@addWebMessageListener
+                    if (!doc.retryReady) {
+                        checks[page]?.firstOrNull { it.doc === doc && it.retry }?.let(::verifyWorld)
+                        return@addWebMessageListener
+                    }
+                }
+                doc.token = token
+                doc.retryReady = false
+                val world = World(name, proxy, doc, token, serializedOrigin(origin))
+                if (navigating) early.add(world) else verifyWorld(world)
                 return@addWebMessageListener
             }
             val posted = runCatching { JSONObject(data) }.getOrNull() ?: return@addWebMessageListener
@@ -552,15 +586,62 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
                 else -> failure("Error", "the script's exception has no text")
             })
         }
+        val active = """, active: (length => () => { try { length(); return true; } catch { return false; } })(
+            Object.getOwnPropertyDescriptor(History.prototype, 'length').get.bind(history))""".trimIndent()
         val token = "Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('')"
         try {
-            WebViewCompat.addJavaScriptOnEvent(view, "${plant(token = token)}; if (window === top) $CHANNEL.postMessage('ready:' + $binding.token);",
+            WebViewCompat.addJavaScriptOnEvent(view, "${plant(token = token, fields = active)}; if (window === top) $CHANNEL.postMessage('ready:' + $binding.token);",
                 WebViewCompat.INJECTION_EVENT_DOCUMENT_START, setOf("*"), world)
         } catch (e: RuntimeException) {
             WebViewCompat.removeWebMessageListener(view, world, CHANNEL)
             throw e
         }
         channels[name] = starts
+    }
+
+    private fun awaitingWorld(doc: Document) =
+        doc.token == null || early.any { it.doc === doc } || checks[page].orEmpty().any { it.doc === doc }
+
+    private fun verifyEarlyWorlds() {
+        val batch = early.toList()
+        early.clear()
+        val at = revision
+        for (world in batch) if (revision == at) verifyWorld(world)
+    }
+
+    // HTML's History.length getter throws unless its document is fully active. Check after
+    // commit or cancellation if ready arrived during navigation, before sending the caller's script.
+    private fun verifyWorld(world: World) {
+        val at = revision
+        val candidates = checks.getOrPut(page) { LinkedHashSet() }
+        candidates.add(world)
+        world.retry = false
+        checkActive(world.proxy) { active ->
+            if (revision != at || world !in candidates) return@checkActive
+            world.retry = active == null
+            if (!world.retry) candidates.remove(world)
+            when (active) {
+                true -> ready(world.name, world)
+                false -> {
+                    world.doc.retryReady = true
+                    refuseDocument(world.doc)
+                }
+                null -> endAll("Error", "the WebView could not check the document", frameEnded = false) { it.postingDocument !== world.doc }
+            }
+        }
+    }
+
+    private fun refuseDocument(doc: Document) =
+        endAll("AbortError", "the document navigated away") { it.postingDocument !== doc }
+
+    private fun checkActive(proxy: JavaScriptReplyProxy, answer: (Boolean?) -> Unit) {
+        try {
+            proxy.executeJavaScript("$binding.active()", object : WebViewOutcomeReceiver<String, JavaScriptExecutionException> {
+                override fun onResult(result: String?) = answer(result?.toBooleanStrictOrNull())
+                override fun onError(error: JavaScriptExecutionException) =
+                    answer(if (error.errorType == JavaScriptExecutionException.ERROR_FRAME_DESTROYED) false else null)
+            })
+        } catch (_: RuntimeException) { answer(null) }
     }
 
     /** The current document's post in [name]'s world: its proxy, and the calls that waited for it. */
