@@ -451,6 +451,12 @@ async function dispatch(owner, { appId, op, args }) {
   if (op === 'statementClose') { databases.get(id)?.statements.delete(rest[0]); return; }
   const session = databases.get(id);
   if (!session) fail('database is closed');
+  if (op === 'prepare') {
+    validate(sqlite, session, rest[0]);
+    const statement = ++owner.nextStatement;
+    session.statements.set(statement, rest[0]);
+    return statement;
+  }
   const mutating = op === 'execute' || op === 'statementExecute' || op === 'transaction';
   const release = session.pool && mutating && await holdTimed(mutationLock(session.poolId), session.path, { signal: owner.gone.signal });
   try { return await operate(sqlite, databases, id, session, op, rest); }
@@ -458,12 +464,6 @@ async function dispatch(owner, { appId, op, args }) {
 }
 
 async function operate(sqlite, databases, id, session, op, rest) {
-  if (op === 'prepare') {
-    validate(sqlite, session, rest[0]);
-    const statement = ++owner.nextStatement;
-    session.statements.set(statement, rest[0]);
-    return statement;
-  }
   if (op === 'transaction') {
     const [commands, check] = rest;
     if (!Array.isArray(commands) || commands.length > 10000) fail('transaction exceeds 10000 commands or is not an array');
