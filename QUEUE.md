@@ -1452,6 +1452,8 @@ sits on that list carries the trade it would take.
 - An app-set window frame is saved like any other (#1412). Expand with `setBounds`, quit and relaunch: the window reopens expanded. To restore the saved compact frame after quitting during or after expansion, the host needs to distinguish a person’s move or resize (including through Accessibility) from AppKit correcting the app’s animation between vertically offset displays. Only the person’s change should replace the saved frame.
 - An embedder's plain `NSWindow` still freezes page layout during an animated `setFrame` inside `native.call`. Run the window-frame fixture's 300-by-200 resize in an embedder window and compare the root and viewport at each resize notification (#1412).
 - Restore the LLP working set to 15 documents. `bun scripts/caps.mjs` reports 16 in `llp/current` on main.
+- On macOS, pressing `link href="#keys" target="other"` at `/shortcuts` leaves the ordinary named window unopened. Resolve the fragment against the current visit before choosing its target (LLP 1153 D5, LLP 1030.004 D1).
+- An ordinary named Mac window with a toolbar reopens lower on the screen (LLP 1030.004 D3). Close and reopen it from a two-route app with `window-controls-overlay`. On macOS 27 its 480 × 322 frame moved down 52 points each time.
 
 - **Editor support in the async lane** (2026-11-13, LLP 1035.005.003): once TypeScript 7.1 is
   stable, run `editors/content-mapper`'s tests with a pinned `tsc` (`EXACT_TSC71`).
