@@ -132,6 +132,13 @@ impl<D: DataSource> Presenter<D> {
                 // The shell's share sheet; with no shell, refused into the
                 // journal. Held for the agent like every host (LLP 1069.003 D6).
                 "share" => self.share(&c.args, c.source),
+                "cancelReorder" => {
+                    if let Some(id) = c.args.first().and_then(exact_plan::Value::as_str) {
+                        if let Err(error) = self.cancel_reorder(id) {
+                            self.host.log(error);
+                        }
+                    }
+                }
                 "blur" => self.blur_command(&c.args),
                 "focus" => {
                     self.focus_command(&c.args);

@@ -849,6 +849,16 @@ pub(super) fn check_command(
     if name.starts_with("show") && name.ends_with("Picker") && name != "showPicker" {
         return pickers::picker_args(name, args, scope, shapes, span);
     }
+    if name == "cancelReorder" {
+        if matches!(args, [id] if infer(id, scope, shapes)?.is_string()) {
+            return Ok(());
+        }
+        return err(
+            "type-cancel-reorder",
+            "`cancelReorder` takes the source list's string id",
+            span,
+        );
+    }
     if name == "scrollIntoView" {
         return into_view_args(args, scope, shapes, span);
     }

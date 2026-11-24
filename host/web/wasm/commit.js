@@ -616,6 +616,7 @@ function apply(batch) {
               globalThis.exact?.fragment?.cancel();
             }
           } else if ([
+            "cancelReorder",
             "showPopover",
             "hidePopover",
             "togglePopover"
@@ -1018,7 +1019,9 @@ function apply(batch) {
   syncLists();
   // Focusing can dispatch an action: every node/value of the batch is committed before its focus handler runs.
   for (const command of focusCommands) {
-    if ([
+    if (command.name === "cancelReorder") {
+      arrange.cancel(command.args[0]);
+    } else if ([
       "showPopover",
       "hidePopover",
       "togglePopover"

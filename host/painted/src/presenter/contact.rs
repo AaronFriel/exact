@@ -1183,7 +1183,9 @@ impl<D: DataSource> Presenter<D> {
                     .map(|_| false)
             } else {
                 match held.kind {
-                    HeldKind::Arrange(_) => self.end_arrange(&held, true, now_ms),
+                    HeldKind::Arrange(token) => {
+                        self.end_arrange(token, Some(&held.velocity), now_ms)
+                    }
                     HeldKind::Height { .. } => self.finish_height_drag(&held, now_ms),
                     HeldKind::Transform { .. } => self.finish_transform_drag(&held, now_ms),
                     HeldKind::Swipe { ways, .. } => {
@@ -1374,7 +1376,7 @@ impl<D: DataSource> Presenter<D> {
 
     fn end_contact(&mut self, held: &Hold, end: HoldEnd, now_ms: f64) -> Result<(), String> {
         match held.kind {
-            HeldKind::Arrange(_) => self.end_arrange(held, false, now_ms).map(|_| ()),
+            HeldKind::Arrange(token) => self.end_arrange(token, None, now_ms).map(|_| ()),
             HeldKind::Transform { pair, .. } => self.end_transform_drag(pair, None, now_ms),
             HeldKind::Height { .. } => self.height_end(held.primary.token, end, now_ms).map(|_| ()),
             HeldKind::Swipe { .. } => self.end_swipe(held, end, now_ms),

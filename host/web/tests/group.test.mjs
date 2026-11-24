@@ -173,6 +173,11 @@ check('a row the keys lifted holds a replacement until it drops or cancels', asy
     const key = async (key, code, windowsVirtualKeyCode) => {
       for (const type of ['keyDown', 'keyUp']) await call('Input.dispatchKeyEvent', { type, key, code, windowsVirtualKeyCode });
     };
+    await key(' ', 'Space', 32);
+    await evaluate('ctrl.cancel("other")');
+    expect(await evaluate('held()')).toBe('gesture');
+    await evaluate('ctrl.cancel("port")');
+    expect(await evaluate('held()')).toBeNull();
     for (const [end, code, vk] of [['Escape', 'Escape', 27], [' ', 'Space', 32]]) {
       expect(await evaluate('held()')).toBeNull();
       await key(' ', 'Space', 32);

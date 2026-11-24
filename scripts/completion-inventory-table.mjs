@@ -325,7 +325,7 @@ export const classifications = [
     ["painted:host/painted/src/host.rs", "Host::answer_hold"],
     ["painted:host/painted/src/presenter/arrange.rs",
       "Presenter::arrange_candidate Presenter::arrange_edge Presenter::arrange_live Presenter::arrange_pin Presenter::arrange_settled Presenter::begin_arrange " +
-      "Presenter::end_arrange Presenter::needs_animation_frame Presenter::sample_arrange"],
+      "Presenter::cancel_reorder Presenter::end_arrange Presenter::needs_animation_frame Presenter::sample_arrange"],
     ["painted:host/painted/src/presenter/arrange_geometry.rs", "Presenter::arrange_mapping"],
     ["painted:host/painted/src/presenter/group.rs",
       "Presenter::end_group Presenter::finish_group Presenter::group_brush Presenter::group_edge Presenter::group_grip Presenter::group_live Presenter::group_pin " +

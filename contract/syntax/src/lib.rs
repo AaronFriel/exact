@@ -204,6 +204,7 @@ pub const HOST_COMMANDS: &[&str] = &[
     "requestPermission",
     // @ref LLP 1070.000 — a virtualized list's row brought into view, by key.
     "scrollIntoView",
+    "cancelReorder",
     // @ref LLP 1101.004 R3 — `Element.scrollBy(x, y)` by the scroller's
     // `id`, in pixels: a reader's `j` and `k`.
     "scrollBy",

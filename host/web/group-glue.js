@@ -147,6 +147,7 @@ export function groupController({ views, collections, request, applyBatch, now, 
     return d;
   }
   function move(d, v) {
+    if (cur !== d || d.phase !== 'active') return;
     d.ghost.dx = v.clientX - d.grab[0]; d.ghost.dy = v.clientY - d.grab[1];
     d.ghost.el.style.translate = `${d.ghost.dx}px ${d.ghost.dy}px`;
     sample(d); edges(d);
@@ -328,6 +329,7 @@ export function groupController({ views, collections, request, applyBatch, now, 
       // registers the ghost's return with the commit's own animations.
       if (op.phase === 'settling' || op.phase === 'cancelling') land(d, op);
     },
+    cancel(id) { if (cur && views.get(cur.b.list)?.id === id) cancel(cur); },
     commit() { if (cur?.phase === 'active' && cur.ghost) edges(cur); },
     reset() {
       const d = cur;

@@ -34,6 +34,21 @@ final class ReorderHost: ReorderHosting {
         }
         lift?.raiseLifted()
     }
+    func cancel(_ id: String) {
+        guard let presenter else { return }
+        let cancel: () -> Void
+        if let group, group.active, presenter.views[group.state.list]?.props["id"] == id {
+            cancel = group.cancel
+        } else if let lift, lift.phase == .active, presenter.views[lift.state.list]?.props["id"] == id {
+            cancel = lift.cancel
+        } else {
+            return
+        }
+        #if os(macOS)
+        if mouse.engaged { mouse.cancel(); return }
+        #endif
+        cancel()
+    }
     func abandon() {
         lift?.abandon()
         group?.abandon()

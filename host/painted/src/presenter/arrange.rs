@@ -27,6 +27,40 @@ pub(super) struct State {
     edge_clock: Option<f64>,
 }
 impl<D: DataSource> Presenter<D> {
+    pub(super) fn cancel_reorder(&mut self, id: &str) -> Result<(), String> {
+        let token = self.group.as_ref().map(|s| s.token).or_else(|| {
+            self.arrange
+                .as_ref()
+                .filter(|s| s.phase == Phase::Active)
+                .map(|s| s.token)
+        });
+        let Some(token) = token else { return Ok(()) };
+        let source = self.host.kernel().node_by_key(token.list());
+        if source.and_then(|n| n.props.str(PropId::Id)) != Some(id)
+            || self
+                .host
+                .runner()
+                .reorder_frame(token)
+                .is_none_or(|f| f.phase != exact_runner::ReorderPhase::Active)
+        {
+            return Ok(());
+        }
+        let now = self.host.now();
+        if self.group.is_some() {
+            if !self.group_keyed() {
+                self.contact.take();
+            }
+            self.end_group(false, now)?;
+        } else {
+            self.contact.take_if(|c| {
+                c.hold
+                    .as_ref()
+                    .is_some_and(|h| matches!(h.kind, HeldKind::Arrange(t) if t == token))
+            });
+            self.end_arrange(token, None, now)?;
+        }
+        Ok(())
+    }
     pub(super) fn arrange_candidate(&self, hit: NodeKey) -> Option<Candidate> {
         if !self.input_live(hit) {
             return None;
@@ -261,16 +295,18 @@ impl<D: DataSource> Presenter<D> {
     }
     pub(super) fn end_arrange(
         &mut self,
-        held: &Hold,
-        drop: bool,
+        token: ReorderToken,
+        drop_velocity: Option<&VelocityTracker>,
         now: f64,
     ) -> Result<bool, String> {
-        let HeldKind::Arrange(token) = held.kind else {
-            unreachable!()
-        };
-        if self.arrange.as_ref().is_none_or(|s| s.token != token) {
+        let Some(hold) = self
+            .arrange
+            .as_ref()
+            .filter(|s| s.token == token && s.phase == Phase::Active)
+            .map(|s| s.hold)
+        else {
             return Ok(false);
-        }
+        };
         let live = self.arrange_live(token);
         // Stale cleanup has no new clock. Accepted receipt paths already sought
         // the latest declaration at receipt time before retire_pointer calls us.
@@ -280,8 +316,8 @@ impl<D: DataSource> Presenter<D> {
         } else {
             self.host.now()
         };
-        let velocity = if drop && live {
-            held.velocity.estimate(now / 1000.)
+        let velocity = if let Some(tracker) = drop_velocity.filter(|_| live) {
+            tracker.estimate(now / 1000.)
         } else {
             Value::ZERO
         };
@@ -315,9 +351,9 @@ impl<D: DataSource> Presenter<D> {
         self.arrange.as_mut().unwrap().phase = Phase::Committing;
         self.arrange.as_mut().unwrap().edge_clock = None;
         let mut error = None;
-        let accepted = if drop && live {
+        let accepted = if drop_velocity.is_some() && live {
             let g = self.host.runner().reorder_geometry(token.list()).unwrap();
-            match self.host.arrange_drop(token, held.primary.token, g) {
+            match self.host.arrange_drop(token, hold, g) {
                 Ok(v) => v,
                 Err(e) => {
                     error = Some(e);
@@ -348,8 +384,8 @@ impl<D: DataSource> Presenter<D> {
                 continue;
             }
             if key == source {
-                if self.host.has_hold(held.primary.token) {
-                    error = error.or(self.host.hold_update(held.primary.token, value, now).err());
+                if self.host.has_hold(hold) {
+                    error = error.or(self.host.hold_update(hold, value, now).err());
                 }
             } else {
                 error = error.or(self.host.arrange_rebase_neighbor(key, value, now).err());
@@ -357,7 +393,7 @@ impl<D: DataSource> Presenter<D> {
         }
         error = error.or(self
             .host
-            .hold_end(held.primary.token, HoldEnd::Release { velocity }, now)
+            .hold_end(hold, HoldEnd::Release { velocity }, now)
             .err());
         self.dirty = true;
         self.arrange.as_mut().unwrap().phase = Phase::Settling;

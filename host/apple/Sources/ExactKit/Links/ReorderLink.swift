@@ -17,6 +17,8 @@ package protocol ReorderHosting: AnyObject {
     func lifts(_ view: UInt32) -> Bool
     /// Whether a reorder across a `reorderGroup`'s lists is under way.
     var groupActive: Bool { get }
+    /// Cancel the active drag from the list with this authored id (LLP 1094 D8).
+    func cancel(_ id: String)
     /// A batch's reorder ops, after it applies.
     func observe(_ ops: [BatchOp])
     /// The presenter's tree goes: every reorder ends.
@@ -48,6 +50,7 @@ package final class NoReorders: ReorderHosting {
     package func lifts(_ view: UInt32) -> Bool { false }
     package var groupActive: Bool { false }
     package func observe(_ ops: [BatchOp]) {}
+    package func cancel(_ id: String) {}
     package func abandon() {}
     package func takesKeys(_ view: NodeView) -> Bool { false }
     package func key(_ view: NodeView, _ name: String) -> Bool { false }

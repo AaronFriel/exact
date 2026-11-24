@@ -60,6 +60,7 @@ export const haptic = () => k => navigator.vibrate?.(k === "selection" ? 5 : 12)
 export const removeAllRanges = () => () => getSelection()?.removeAllRanges();
 export const setSelectionRange = say => (...args) => setFieldSelection(liveById(args[0]), args, say);
 export const setRangeText = say => (...args) => setFieldRangeText(liveById(args[0]), args, say);
+export const cancelReorder = () => id => globalThis.exact?.cancelReorder?.(id);
 // Focus, then the field's whole text selected, as `select()` does
 // (navigation.js `runFocusCommands`).
 export const selectText = say => id => {

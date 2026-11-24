@@ -79,6 +79,53 @@ fn start(p: &mut Presenter<Rows>) -> (NodeKey, ReorderToken, HoldToken) {
     (s.binding.wrapper, s.token, s.hold)
 }
 #[test]
+fn the_list_owns_its_cancel_while_input_holds_the_contact() {
+    let mut p = boot();
+    let (_, token, _) = start(&mut p);
+    let contact = p.contact.take().unwrap();
+    p.cancel_reorder("items").unwrap();
+    p.contact = Some(contact);
+    p.pointer_up(10., 20., 30.).unwrap();
+    assert!(p
+        .host
+        .runner()
+        .reorder_frame(token)
+        .is_none_or(|f| f.terminal));
+    assert_eq!(p.host.runner().slot("count"), Some(&AppValue::Number(0.)));
+}
+
+#[test]
+fn a_reset_button_cancels_the_drag_before_the_finger_lifts() {
+    let source = APP
+        .replace("  state grips", "  state reset = false\n  state grips")
+        .replace(
+            "for item in rows",
+            "for item in (reset ? [\"2\", \"1\", \"0\"] : rows)",
+        )
+        .replace(
+            "    grips = false\n  action show",
+            "    cancelReorder(\"items\")\n    reset = true\n  action show",
+        );
+    let mut p = boot_source(&source);
+    let (_, token, _) = start(&mut p);
+    p.pointer_move(10., 100., 20.).unwrap();
+    p.tap(id(&p, "hide")).unwrap();
+    p.run_queued_commands();
+    assert!(p
+        .host
+        .runner()
+        .reorder_frame(token)
+        .is_none_or(|f| f.terminal));
+    p.pointer_move(10., 70., 30.).unwrap();
+    p.pointer_up(10., 70., 40.).unwrap();
+    p.clock(2000.);
+    p.frame();
+    assert!(p.arrange.is_none());
+    assert_eq!(p.host.runner().slot("count"), Some(&AppValue::Number(0.)));
+    assert!(centre(&mut p, "grip-2").1 < centre(&mut p, "grip-0").1);
+}
+
+#[test]
 fn padded_reorder_uses_row_coordinates_before_and_after_native_scrolling() {
     for (top, bottom, scroll) in [(0, 0, 0.), (48, 80, 0.), (48, 80, 64.), (0, 80, 64.)] {
         let source = APP
@@ -955,6 +1002,28 @@ fn a_contact_at_the_edge_scrolls_though_the_ghost_centre_has_passed_it() {
 }
 
 #[test]
+fn only_the_source_lists_cancel_button_returns_a_grouped_ghost() {
+    let source = BOARD.replace("  action stall", "  action cancel(id: string)\n    cancelReorder(id)\n  action stall")
+        .replace("      button testId=\"stall", "      button testId=\"source\" press=cancel(\"col-a\")\n        text \"Cancel drag\"\n      button testId=\"other\" press=cancel(\"col-b\")\n        text \"Cancel other\"\n      button testId=\"stall");
+    let mut p = board_source(&source);
+    let source = id(&p, "source");
+    p.tap(source).unwrap();
+    p.run_queued_commands();
+    assert!(p.group.is_none());
+    carry(&mut p, "a1", (150., 100.), 0.);
+    p.tap(id(&p, "other")).unwrap();
+    p.run_queued_commands();
+    assert_eq!(phase(&p), Some(exact_runner::ReorderPhase::Active));
+    p.tap(source).unwrap();
+    p.run_queued_commands();
+    assert_ne!(phase(&p), Some(exact_runner::ReorderPhase::Active));
+    p.pointer_up(150., 100., 40.).unwrap();
+    p.clock(2000.);
+    assert!(p.group.is_none() && p.brush.lift.ghost.is_none());
+    assert_eq!(slot(&p, "log"), "");
+}
+
+#[test]
 fn a_held_drop_waits_ignores_escape_then_lands_when_the_answer_shows() {
     let mut p = board();
     let c = p
@@ -977,6 +1046,8 @@ fn a_held_drop_waits_ignores_escape_then_lands_when_the_answer_shows() {
     carry(&mut p, "b1", (r.0 + 30., r.1 + 20.), 0.);
     assert!(p.pointer_up(r.0 + 30., r.1 + 20., 30.).unwrap());
     assert_eq!(slot(&p, "log"), "b1>c@");
+    assert_eq!(phase(&p), Some(exact_runner::ReorderPhase::Holding));
+    p.cancel_reorder("col-b").unwrap();
     assert_eq!(phase(&p), Some(exact_runner::ReorderPhase::Holding));
     // Escape while holding: the send is out.
     p.pointer_lost(40.).unwrap();

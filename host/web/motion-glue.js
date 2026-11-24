@@ -1382,6 +1382,10 @@ export function arrangeController({views,collections,motion,request,applyBatch,n
       bindings.set(op.id,b);b.el.addEventListener('pointerdown',b.down);
       if(groups.has(op.id))group?.bind(b,groups.get(op.id));
     },
+    cancel(id) {
+      if (current && views.get(current.binding.list)?.id === id) terminal(current, true);
+      group?.cancel(id);
+    },
     // A grip's group and whether the keys may drive it (LLP 1094 D1, D9).
     group(op) {groups.set(op.id,op);const b=bindings.get(op.id);if(b)group?.bind(b,op);},
     destroy,
