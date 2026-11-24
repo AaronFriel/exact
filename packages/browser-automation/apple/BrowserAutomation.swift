@@ -33,14 +33,13 @@ public final class BrowserAutomationModule: ExactPackage {
 
     private func post(_ message: [String: Any]) {
         guard !ended else { return }
-        if unsent.count == 32 {
-            unsent.removeFirst()
-            if !reported {
-                reported = true
-                context.invoke("script.message", "script.message", ["overflow": true]) { _ in }
-            }
-        }
+        let overflow = unsent.count >= 32
+        if overflow { unsent.removeFirst() }
         unsent.append(message)
+        if overflow && !reported {
+            reported = true
+            context.invoke("script.message", "script.message", ["overflow": true]) { _ in }
+        }
         drain()
     }
 

@@ -25,6 +25,7 @@ android {
             "../../../packages/alarms/android", "../../../packages/alarms/test",
             "../../../packages/background/android", "../../../packages/background/test",
             "../../../packages/background-transfer/android", "../../../packages/background-transfer/test/android",
+            "../../../packages/browser-automation/android", "../../../packages/browser-automation/test",
             "../../../packages/calendar/android", "../../../packages/calendar/test",
             "../../../packages/calls/android", "../../../packages/calls/test",
             "../../../packages/camera/android", "../../../packages/camera/test",

@@ -1,4 +1,8 @@
 import { expect, test } from 'bun:test';
+import { $ } from 'bun';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { suiteBrowser } from '../../../scripts/agent-launch.mjs';
 
 async function inFrame(check) {
@@ -55,3 +59,18 @@ test('a channel is refused by name before page code runs', async () => {
       typeof document.querySelector('iframe').contentWindow.invoked];
   })).toEqual(['news', 1, true, 'undefined']);
 }, 60_000);
+
+test.skipIf(process.platform !== 'darwin')('a post during the overflow report keeps the last 32 posts', async () => {
+  const root = resolve(import.meta.dir, '../../..');
+  const out = await mkdtemp(join(tmpdir(), 'exact-player-queue-'));
+  try {
+    await $`xcrun swiftc -parse-as-library -emit-library -static -module-name ExactPackage -emit-module -emit-module-path ${out}/ExactPackage.swiftmodule ${root}/host/apple/modules/ExactPackage.swift -o ${out}/libExactPackage.a`.quiet();
+    const module = await Bun.file(join(import.meta.dir, '../apple/BrowserAutomation.swift')).text();
+    const test = await Bun.file(join(import.meta.dir, 'Queue.swift')).text();
+    await Bun.write(join(out, 'Queue.swift'), module + '\n' + test);
+    await $`xcrun swiftc -parse-as-library -I ${out} -L ${out} -lExactPackage ${out}/Queue.swift -o ${out}/queue`.quiet();
+    await $`${out}/queue`.quiet();
+  } finally {
+    await rm(out, { recursive: true, force: true });
+  }
+}, 120_000);

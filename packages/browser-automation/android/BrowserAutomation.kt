@@ -25,14 +25,13 @@ class BrowserAutomationModule(context: ExtensionContext) : ExactExtension(contex
 
     private fun post(message: JSONObject) {
         if (ended) return
-        if (unsent.size == 32) {
-            unsent.removeFirst()
-            if (!reported) {
-                reported = true
-                context.journal("script.message: dropped oldest unsent messages (queue limit 32)")
-            }
-        }
+        val overflow = unsent.size >= 32
+        if (overflow) unsent.removeFirst()
         unsent.addLast(message)
+        if (overflow && !reported) {
+            reported = true
+            context.journal("script.message: dropped oldest unsent messages (queue limit 32)")
+        }
         drain()
     }
 
