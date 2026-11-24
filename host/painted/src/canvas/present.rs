@@ -62,9 +62,9 @@ impl Pictures {
 /// A `CLOCK_MONOTONIC` instant in ns (`System.nanoTime`, Choreographer's
 /// vsyncs) on the loop's clock, `now_ms` being that clock now: the loop's
 /// `Instant` reads `CLOCK_MONOTONIC` too.
-#[cfg(target_os = "android")]
-pub(crate) fn monotonic_ms(at_ns: i64, now_ms: f64) -> f64 {
-    now_ms - (super::reader::monotonic_ns() - at_ns) as f64 / 1e6
+#[cfg(any(target_os = "android", test))]
+pub(super) fn monotonic_ms(at_ns: i64, now_ns: i64, now_ms: f64) -> f64 {
+    now_ms - (now_ns - at_ns) as f64 / 1e6
 }
 
 /// Runners this thread boots from now on await their page's first present:
@@ -91,7 +91,7 @@ impl<D: exact_runner::DataSource + Default> super::CanvasHost<D> {
         let Some(carried) = self.presents.presented(token, startup_at, &mut self.launch) else {
             return false;
         };
-        let at = monotonic_ms(at_ns, self.now());
+        let at = monotonic_ms(at_ns, super::reader::monotonic_ns(), self.now());
         if let Some(e) = self.p.picture_presented(carried, at) {
             eprintln!("exact: {e}");
         }
@@ -103,6 +103,20 @@ impl<D: exact_runner::DataSource + Default> super::CanvasHost<D> {
 mod tests {
     use super::Pictures;
     use crate::presenter::Presenter;
+
+    #[test]
+    fn the_vsync_and_callback_keep_their_distance_on_the_canvas_clock() {
+        let now_ns = 4_500_013_500_000;
+        let now_ms = 157.0;
+        assert_eq!(
+            super::monotonic_ms(4_500_000_000_000, now_ns, now_ms),
+            143.5
+        );
+        assert_eq!(
+            super::monotonic_ms(4_500_012_000_000, now_ns, now_ms),
+            155.5
+        );
+    }
 
     #[test]
     fn a_report_takes_its_picture_and_every_older_one() {

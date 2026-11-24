@@ -314,12 +314,14 @@ class Natives(
         val size = (e.w.toLong() shl 32) or e.h.toLong()
         if (e.asked == size) return
         e.asked = size
+        HostFacts.attached(e.view)
         Exact.attachBuffers(e.id, e.w, e.h)
         poll()
     }
 
     /** Buffers were refused: the canvas gets a TextureView and its window, as with gpubuf=0. */
     private fun unbuffer(e: Element) {
+        detachBuffers(e)
         e.buffers = false
         e.wrapped.clear()
         byView.remove(e.view)
@@ -403,7 +405,7 @@ class Natives(
     private var placing = false
     private val placeMatrix = android.graphics.Matrix()
     private val placePoint = FloatArray(2)
-    private val placer = android.view.ViewTreeObserver.OnPreDrawListener { placeControls(); true }
+    private val placer = android.view.ViewTreeObserver.OnPreDrawListener { HostFacts.onScreen(display); placeControls(); true }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -1102,7 +1104,7 @@ class Natives(
     }
 
     private fun replacePresentation(e: Element, surface: Boolean) {
-        if (e.buffers) { if (e.asked != 0L) Exact.detachBuffers(e.id) } else unwindow(e)
+        if (e.buffers) { detachBuffers(e) } else unwindow(e)
         finishRedraws(e)
         e.presentation.clear()
         e.snapshotReady = false
@@ -1118,6 +1120,7 @@ class Natives(
                 unwindow(e)
                 e.presentation.attach()
                 e.surface = holder.surface
+                HostFacts.attached(view)
                 Exact.attachSurface(e.id, holder.surface, w, h) { e.window = it }
                 frameRate(e)
                 e.dirty = true
@@ -1302,6 +1305,7 @@ class Natives(
         e.surface = surface
         // Not waited for: exact2's thread may be busy (the GPU module's first frame, right after the first content),
         // and the main thread would wait out that work in its first draw.
+        HostFacts.attached(e.view)
         Exact.attachSurface(e.id, surface, w, h) { e.window = it }
         frameRate(e)
         poll()
@@ -1337,7 +1341,15 @@ class Natives(
         }
     }
 
+    private fun detachBuffers(e: Element) {
+        if (e.asked == 0L) return
+        HostFacts.detached(e.view)
+        Exact.detachBuffers(e.id)
+        e.asked = 0L
+    }
+
     private fun unwindow(e: Element) {
+        if (e.surface != null) HostFacts.detached(e.view)
         // Waited for: after the attach posted before it, and before the surface goes.
         if (e.surface != null) Exact.detachSurface(e.id) { e.window.also { e.window = 0L } }
         if (e.view !is SurfaceView) e.surface?.release()
@@ -1357,7 +1369,7 @@ class Natives(
         if (e.kind == 0 && forget) MediaRecords.forget(e.id)
         if (e.parked) { waiting--; e.node.discardDisplayList(); return }
         byView.remove(e.view)
-        if (e.kind == 3) { if (e.buffers) { if (e.asked != 0L) Exact.detachBuffers(e.id); e.wrapped.clear() } else unwindow(e) }
+        if (e.kind == 3) { if (e.buffers) { detachBuffers(e); e.wrapped.clear() } else unwindow(e) }
         retire(e, reuse)
         e.node.discardDisplayList()
     }

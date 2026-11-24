@@ -1050,7 +1050,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         if (take(vsync)) { if (moved) ticker?.invalidate() else { taken = true; invalidate() } } else schedule()
     }
     /** exact2 wants another turn: at the next vsync, ask it, and draw only if the stream changed. */
-    private val turn = android.view.Choreographer.FrameCallback { turnPosted = false; Native.displayFrame(); pump(vsync = true) }
+    private val turn = android.view.Choreographer.FrameCallback { t -> HostFacts.turned(t, System.nanoTime()); turnPosted = false; pump(vsync = true) }
     private var turnPosted = false
     /** While a layer plays: each vsync, sample them and draw a frame (the ticker: nothing is recorded again). */
     private val sampler = android.view.Choreographer.FrameCallback { t ->

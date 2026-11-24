@@ -375,6 +375,9 @@ impl Painter {
                     "props": p.str(PropId::NativeViewProps),
                 }),
             ),
+            // Only surfaces opened by a GPU module need a window or buffers from the Android reader.
+            #[cfg(target_os = "android")]
+            NodeType::Canvas if !self.gpu_canvases.contains_key(&node.id) => return,
             NodeType::Canvas => (NativeKind::Surface, serde_json::json!({})),
             _ => return,
         };
@@ -384,7 +387,7 @@ impl Painter {
             edge,
             ts,
             &props.to_string(),
-            self.direct_canvases.contains(&node.id),
+            self.gpu_canvases.get(&node.id) == Some(&true),
         );
     }
 }

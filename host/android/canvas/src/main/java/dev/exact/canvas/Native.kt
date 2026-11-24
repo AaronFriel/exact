@@ -58,7 +58,9 @@ object Native {
     @JvmStatic external fun acquired(running: Boolean)
     @JvmStatic external fun timerObservation(scrolling: Boolean, sampling: Boolean, applying: Boolean, idle: Boolean): Boolean
     @JvmStatic external fun timerHeld(): Int
-    @JvmStatic external fun displayFrame()
+    /** A display tick: Choreographer's frame time, when its callback began (`System.nanoTime`), the display's fastest
+     * period in nanoseconds, thermal code, and this tick's scheduled period ([HostFacts.turned]). */
+    @JvmStatic external fun displayFrame(vsync: Long, arrival: Long, fastest: Long, thermal: Int, period: Long)
     /** `perf frames` (LLP 1079.000 §6.2), all on exact2's thread and in `System.nanoTime`: a Choreographer turn at
      * [vsync], its frame's [deadline] and its vsyncs' [period] (0 where Choreographer gave none), when it ran from
      * [arrival] to [finished], and the publication it made (0: none), whose ingest finishes its work. */

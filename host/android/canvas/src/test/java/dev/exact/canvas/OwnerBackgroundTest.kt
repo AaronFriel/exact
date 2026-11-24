@@ -90,7 +90,7 @@ class OwnerBackgroundTest {
             @JvmStatic @Implementation fun chrome(): IntArray? = chromeStatement.also { chromeStatement = null }
             @JvmStatic @Implementation fun timerHeld() = 0
             @JvmStatic @Implementation fun animating(vsyncOnly: Boolean) = frameDemand
-            @JvmStatic @Implementation fun displayFrame() {}
+            @JvmStatic @Implementation fun displayFrame(vsync: Long, arrival: Long, fastest: Long, thermal: Int, period: Long) {}
             var owing = false
             @JvmStatic @Implementation fun owed() = owing
             @JvmStatic @Implementation fun nextDue() = (due - SystemClock.uptimeMillis()).toDouble()

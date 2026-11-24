@@ -629,8 +629,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
 
     /** A turn at vsync [t]: the frame's [deadline] and its vsyncs' [period] where Choreographer gives them ([Turns]),
      * else 0. Told to exact2 with when it ran and the publication it made, if any, whose ingest finishes its work. */
-    private fun turned(t: Long, deadline: Long, period: Long) {
-        val arrival = System.nanoTime()
+    private fun turned(t: Long, deadline: Long, period: Long, arrival: Long) {
         // The display's frame: the shortest gap between consecutive vsyncs seen.
         if (vsync > 0 && t - vsync > 2_000_000) frameNanos = minOf(frameNanos, t - vsync)
         vsync = t
@@ -640,7 +639,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         // after: asked for after the frame, a Note 9 frame that ended 2.8 ms before the vsync lost it.
         if (running && Native.animating()) { turnPosted = true; choreographer?.let { turns.post(it) } }
         val before = timerReports.publication
-        Native.displayFrame(); produce(vsync = true)
+        HostFacts.turned(t, arrival, period); produce(vsync = true)
         if (!timing) return
         val published = if (timerReports.publication != before) timerReports.publication else 0L
         try {
@@ -691,7 +690,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
             }
         }
         val animating = Native.animating()
-        // Frame tasks need a display callback even if every paint overruns.
+        // Contract frame tasks and live GPU frames both need their display callback after an overrun.
         if (animating && late && !turnPosted && !Native.animating(vsyncOnly = true)) {
             late = false
             handler.removeCallbacks(again); handler.post(again)
