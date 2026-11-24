@@ -25,7 +25,7 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
  * takes `host.ios` (scripts/app.schema.json). */
 export const PLATFORMS = { ios: 'apple', macos: 'apple', linux: 'linux', android: 'android', windows: 'windows' };
 /** SDK dependencies whose names app and game crates may not take. */
-export const SDK_CRATES = new Set(['ibex2-sqlite', 'exact-logic', 'exact-apple', 'exact-apple-update', 'exact-js', 'exact-js-bake', 'exact-linux', 'exact-painted', 'exact-painted-update', 'exact-web', 'exact-web-capabilities', 'exact-js-web', 'exact-game-bake', 'exact-game-render']);
+export const SDK_CRATES = new Set(['ibex2-sqlite', 'exact-logic', 'exact-apple', 'exact-apple-update', 'exact-js', 'exact-js-bake', 'exact-linux', 'exact-linux-update', 'exact-painted', 'exact-painted-update', 'exact-web', 'exact-web-capabilities', 'exact-js-web', 'exact-game-bake', 'exact-game-render']);
 
 /** Authored host crates own their identity. Otherwise package.json keeps the scaffold's prefix across directory
  * and display-name changes; a caller's name or the folder supplies it for an app without a package manifest. */
@@ -193,7 +193,10 @@ ${target}
 ${dev ? `\n[[bin]]\nname = "${name}-dev"\npath = "src/bin/${name}-dev.rs"\ntest = false\nbench = false\n` : ''}
 ${kind === 'android' ? `[target.'cfg(target_os = "android")'.dependencies]` : '[dependencies]'}
 ${dependencies}
-
+${kind === 'linux' ? `
+[target.'cfg(unix)'.dependencies]
+exact-linux-update = ${dep('host/linux-update')}
+` : ''}
 [build-dependencies]
 exact-bake = ${dep('bake')}
 ${data.krate} = ${data.dependency}
@@ -394,6 +397,9 @@ exact-linux = ${dep('host/linux')}
 exact-painted = ${dep('host/painted')}
 exact-js = ${dep('js')}
 ${linked}
+[target.'cfg(unix)'.dependencies]
+exact-linux-update = ${dep('host/linux-update')}
+
 ${build}`,
     'build.rs': bake('linux'),
     'src/main.rs': `//! ${title} on Linux (and Android): the Contract UI and the TypeScript data module.
@@ -404,10 +410,7 @@ ${module(false)}include!(concat!(env!("OUT_DIR"), "/logic.rs"));
 // (exact_hatches(), from modules/linux).
 include!(concat!(env!("OUT_DIR"), "/packages.rs"));
 include!(concat!(env!("OUT_DIR"), "/hatches.rs"));
-fn main() {
-    let composed = exact_painted::Composed { hatches: exact_hatches(), packages: exact_packages() };
-    std::process::exit(exact_linux::run_composed::<AppData>(PLAN, COMPAT, composed));
-}
+include!(concat!(env!("OUT_DIR"), "/linux.rs"));
 `,
   };
   // The library the Canvas reader loads (LLP 1107, host/android/README.md), in Shelf's shape: empty off Android.

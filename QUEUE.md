@@ -2,7 +2,7 @@
 
 - A gated resource keeps its answer across idleness, but Contract cannot read the arguments that answer belongs to. Check the same-account return and the changed-filter placeholder in the progressive-tabs recipe (#1549).
 - Trace a warm return on iOS from touch delivery through route commit to presentation, and from HTTP arrival through resource settlement to presentation. Check which joins and cache or retained-answer facts survive export. The web trace matches a separately observed epoch to a frame callback (#1549).
-- A Rust app declaring `host.linux` without `deploy.store.linux` baked successfully and exited at launch with “the baked store level requires the delivery adapter”. Check the generated Linux entry for the default store level A. The progressive-tabs fixture sets level 0.
+- Windows has no update store. A manifest declaring `host.windows` without `deploy.store.windows` bakes level A, which the window refuses at launch. Refuse it at bake time and name `deploy.store.windows: "0"`.
 - An Android native module that emits `submit`, `key` or `hover` on a node with the matching handler never reaches it. Compare those callbacks with the iOS module event roster in LLP 1024.
 - Check an Android in-list reorder grip inside a height-drag handle with vertical scrolling allowed. The ancestor still claims the vertical axis at down. Compare a quick swipe there with one on the grip alone.
 - Compare the Android reader driver with native input on a text field inside a scroller and on a scrolled list inside a partially expanded sheet. Drag from an unselected part of the field, then drag the list through its top edge. The deterministic scroll samples do not exercise either native handoff.

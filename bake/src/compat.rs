@@ -696,6 +696,9 @@ pub(crate) fn compatibility_with_trust(
         return Err(format!("deploy.store.{platform} must be \"0\" or \"A\""));
     }
     let binary_only = store == "0";
+    if platform == "linux" && target.contains("-windows") && !binary_only {
+        return Err("the headless Linux host on Windows has no update store; set deploy.store.linux to \"0\"".into());
+    }
     let keys = if binary_only {
         Value::Null
     } else {

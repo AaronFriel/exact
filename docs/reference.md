@@ -6678,12 +6678,14 @@ Linux native apps can run TypeScript through `exact-js` and Hermes;
 
 Signed delivery carries one module pair, and which pair depends on the host. The
 Apple loader accepts TypeScript or a Rust module enabled by the binary's Rust policy.
-A Linux binary built with its update entry installs a Rust pair only. A Linux app
-whose module is TypeScript, and every Windows app, sets that platform's
-`deploy.store` to `"0"`: with any other level the binary exits at start. The
-installed binary must supply the required runtime and admit the module's app
-identity and grants. An app with both TypeScript and Rust modules sets every
-`deploy.store` entry to `"0"`: delivery of both together is not implemented. See LLP 1027 for the design record.
+A generated Linux entry links the delivery adapter at the default store level
+`"A"`. It can install a TypeScript pair or a Rust pair when the binary admits it.
+Set `deploy.store.linux` to `"0"` for a binary-only build or to run the Linux
+host headless on Windows. The Windows host requires `deploy.store.windows` to
+be `"0"`. The installed binary must supply the required runtime and admit the
+module's app identity and grants. An app with both TypeScript and Rust modules
+sets every `deploy.store` entry to `"0"` because delivery of both together is
+not implemented. See LLP 1027 for the design record.
 
 ## Package configuration
 
