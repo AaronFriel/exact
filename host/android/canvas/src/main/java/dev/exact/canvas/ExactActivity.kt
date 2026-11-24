@@ -29,6 +29,7 @@ open class ExactActivity : Activity() {
     /** The `video` and `audio` elements' player ([VideoPlayer]), where the APK links one (LLP 1042.001 D2). */
     protected open val video: ((Context) -> VideoPlayer)? = null
     private var natives: Natives? = null
+    private val hostedModules by lazy { HostedModules(Extensions.withViews(modules)) }
 
     /** A signed update activated ([Requests]): the open videos and pages are opened from its assets again, and its
      * boot is good once the view draws it; a control's press waits for that frame too. */
@@ -351,12 +352,15 @@ open class ExactActivity : Activity() {
      * sent it. A new one adopts the host, which paints everything again for it; the app is as it was.
      */
     private fun read() {
-        natives?.let {
-            nativeState = it.lifecycle.save()
-            it.destroyAll(keepPlayback = true)
+        val elements = Natives(this, { AssetRoot.of(this) }, hostedModules, video)
+        val oldChildren = root.childCount
+        root.addView(elements, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        natives?.let { old ->
+            elements.takeModuleViews(old)
+            old.destroyAll(keepPlayback = true)
         }
         fields?.leaving()
-        root.removeAllViews()
+        root.removeViews(0, oldChildren)
         // Before the host boots: its first layout measures the app's text fields in a field of this activity's
         // theme ([Fields.measure], LLP 1115.001 D8).
         Fields.context = this
@@ -423,9 +427,8 @@ open class ExactActivity : Activity() {
         Exact.answered = { view.onPublished() }
         Exact.turned = { view.turned() }
         if (input) view.keys = Keys(view)
-        val elements = Natives(this, { AssetRoot.of(this) }, Extensions.withViews(modules), video)
         natives = elements
-        elements.lifecycle.restore(nativeState)
+        nativeState?.let { elements.lifecycle.restore(it) }
         nativeState = null
         if (nativeStarted) elements.lifecycle.event(ViewLifecycle.START)
         if (nativeResumed) elements.lifecycle.event(ViewLifecycle.RESUME)
@@ -448,7 +451,6 @@ open class ExactActivity : Activity() {
         root.access.fields = hosted
         root.access.others = { listOfNotNull(elements.takeIf { it.childCount > 0 }, loopNotice?.label?.takeIf { it.isShown }) }
         root.access.controller = { elements.controller(it) }
-        root.addView(elements, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(hosted, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val ticker = if (intent.getStringExtra("tag") == "1") TagView(this) { view.tagState() } else View(this)
@@ -797,7 +799,10 @@ open class ExactActivity : Activity() {
     private fun release() {
         hatchReader?.takeIf { it.activity === this }?.activity = null
         requests.surfaces?.destroy()
-        natives?.destroyAll(keepPlayback = !isFinishing)
+        natives?.let { elements ->
+            elements.destroyAll(keepPlayback = !isFinishing)
+            elements.lifecycle.event(ViewLifecycle.STOP)
+        }
         natives = null
         fields?.leaving()
         if (Fields.context === this) Fields.context = null

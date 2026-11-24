@@ -4,13 +4,16 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.widget.EditText
 import android.widget.FrameLayout
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
@@ -41,11 +44,13 @@ class ComposeModuleTest {
         var shown = ""
         var change: (String) -> Unit = {}
         var disposed = false
+        lateinit var remembered: Any
         override fun create(context: Context, props: JSONObject): View = ComposeView(context).also {
             disposed = false
             view = it
             it.id = 1234 // Stable across Activity recreation, as rememberSaveable requires.
             it.setContent {
+                remembered = remember { Any() }
                 val text = rememberSaveable { mutableStateOf("hello") }
                 SideEffect { shown = text.value; change = { text.value = it } }
                 DisposableEffect(Unit) { onDispose { disposed = true } }
@@ -56,9 +61,43 @@ class ComposeModuleTest {
         override fun destroy(view: View) { (view as ComposeView).disposeComposition() }
     }
 
+    class PlainView(context: Context) : View(context) {
+        var value = ""
+        var returnedParent: android.view.ViewParent? = null
+        override fun onFinishTemporaryDetach() { super.onFinishTemporaryDetach(); returnedParent = parent }
+    }
+
+    class PlainModule : NativeModule {
+        val destroyed = mutableListOf<View>()
+        val events = mutableListOf<Pair<View, ViewLifecycle>>()
+        val states = mutableListOf<Pair<ViewLifecycle, String?>>()
+        override fun lifecycle(view: View, event: ViewLifecycle, state: Bundle?) {
+            events += view to event
+            val value = (view as PlainView).value
+            if (event == ViewLifecycle.SAVE_INSTANCE_STATE) state!!.putString("value", value)
+            states += event to (if (event == ViewLifecycle.CREATE) state?.getString("value") else value)
+        }
+        override fun create(context: Context, props: JSONObject) = PlainView(context)
+        override fun update(view: View, props: JSONObject) { (view as PlainView).value = props.optString("value") }
+        override fun destroy(view: View) { destroyed += view }
+    }
+
     class Reader : ExactActivity() {
         val module = Module()
-        override val modules get() = mapOf("hello-compose" to module)
+        val plain = PlainModule()
+        lateinit var nestedMemory: Any
+        val nested = object : NativeModule {
+            override fun create(context: Context, props: JSONObject) = FrameLayout(context).apply {
+                addView(EditText(context))
+                addView(EditText(context))
+                addView(ComposeView(context).apply {
+                    setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                    setContent { nestedMemory = remember { Any() } }
+                })
+            }
+            override fun update(view: View, props: JSONObject) {}
+        }
+        override val modules = mapOf("hello-compose" to module, "plain" to plain, "nested" to nested)
         internal lateinit var content: Root
         internal lateinit var hosted: Natives
         override fun getDisplay(): android.view.Display =
@@ -130,7 +169,7 @@ class ComposeModuleTest {
         assertSame(owner, view.findViewTreeViewModelStoreOwner())
     }
 
-    @Test fun aPlainComposeModuleInheritsLazyOwnersAndIsRecreatedAfterAStop() {
+    @Test fun aPlainComposeModuleKeepsItsViewAndCompositionAcrossAStop() {
         activity.mount()
         settle()
         val root = activity.content
@@ -143,6 +182,8 @@ class ComposeModuleTest {
             assertSame(owner, child.findViewTreeViewModelStoreOwner())
         }
         val model = ViewModelProvider(root.findViewTreeViewModelStoreOwner()!!)[Model::class.java]
+        val remembered = activity.module.remembered
+        val originalParent = view.parent
         activity.module.change("temporary")
         settle()
         assertEquals("temporary", activity.module.shown)
@@ -154,14 +195,80 @@ class ComposeModuleTest {
         controller.start().resume()
         activity.mount()
         settle()
-        assertNotSame(view, activity.module.view)
-        assertEquals("hello", activity.module.shown)
+        assertNotSame(originalParent, view.parent)
+        assertSame(activity.hosted, view.parent)
+        assertSame(view, activity.module.view)
+        assertSame(remembered, activity.module.remembered)
+        assertFalse(activity.module.disposed)
+        assertEquals("temporary", activity.module.shown)
         assertSame(model, ViewModelProvider(root.findViewTreeViewModelStoreOwner()!!)[Model::class.java])
         activity.module.change("back again")
         settle()
         assertEquals("back again", activity.module.shown)
         activity.hosted.destroyAll()
         assertTrue(activity.module.disposed)
+    }
+
+    @Test fun aPlainViewKeepsItsFieldAndAnAbsentNodeIsDestroyedOnTheFirstPaintAfterAStop() {
+        fun layer() = activity.content.getChildAt(0) as Natives
+        fun mount(id: Int, row: Int) {
+            layer().ensure(id, 2, 40, 40, "{\"module\":\"plain\"}", row)
+        }
+        layer().everywhere()
+        mount(10, 0)
+        mount(11, 3)
+        val kept = layer().taker(10, 0, 0, 0) as PlainView
+        val gone = layer().taker(11, 0, 0, 0)!!
+        kept.value = "temporary"
+        controller.pause().stop().start().resume()
+        mount(10, 0)
+        layer().unrowed(setOf(10))
+        assertSame(layer(), kept.parent)
+        assertSame(kept.parent, kept.returnedParent)
+        assertSame(kept, layer().taker(10, 0, 0, 0))
+        assertEquals("temporary", kept.value)
+        assertNull(gone.parent)
+        assertEquals(listOf(gone), activity.plain.destroyed)
+        assertEquals(listOf(ViewLifecycle.CREATE, ViewLifecycle.START, ViewLifecycle.RESUME, ViewLifecycle.PAUSE,
+            ViewLifecycle.STOP, ViewLifecycle.DESTROY), activity.plain.events.filter { it.first === gone }.map { it.second })
+    }
+
+    @Test fun theReturningRowResumesWithCurrentPropsAndAParkedRowReceivesItsBundle() {
+        fun layer() = activity.content.getChildAt(0) as Natives
+        fun mount(id: Int, value: String) {
+            val props = JSONObject().put("module", "plain").put("props", JSONObject().put("value", value).toString())
+            layer().ensure(id, 2, 40, 40, props.toString(), id)
+        }
+        mount(10, "old")
+        mount(11, "keep")
+        (layer().taker(11, 0, 0, 0) as PlainView).value = "edited"
+        controller.pause().stop().start().resume()
+        layer().lazy = true
+        mount(10, "new")
+        mount(11, "keep")
+        layer().near(setOf(10), setOf(10), setOf(10, 11))
+        assertEquals(ViewLifecycle.RESUME to "new", activity.plain.states.last { it.first == ViewLifecycle.RESUME })
+        assertNull(layer().taker(11, 0, 0, 0))
+        layer().near(setOf(11), setOf(10, 11), setOf(10, 11))
+        assertEquals(ViewLifecycle.CREATE to "edited", activity.plain.states.last { it.first == ViewLifecycle.CREATE })
+    }
+
+    @Test fun aNestedCompositionAndTheFocusedChildStayAttachedToTheWindow() {
+        fun mount(): FrameLayout {
+            val layer = activity.content.getChildAt(0) as Natives
+            layer.ensure(8, 2, 100, 100, "{\"module\":\"nested\"}", 0)
+            return layer.taker(8, 0, 0, 0) as FrameLayout
+        }
+        val module = mount()
+        settle()
+        val memory = activity.nestedMemory
+        val field = module.getChildAt(1)
+        assertTrue(field.requestFocus())
+        controller.pause().stop().start().resume()
+        assertSame(module, mount())
+        settle()
+        assertSame(memory, activity.nestedMemory)
+        assertSame(field, activity.content.findFocus())
     }
 
     @Test fun recreationRestoresComposeStateAndRetainsTheViewModelUntilTheActivityEnds() {
