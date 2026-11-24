@@ -604,7 +604,7 @@ export function commit(f, what = 'commit', finished) {
     try {
       flush();
       openTabs();
-      Sched?.gates();
+      Sched?.made();
     } catch (e) {
       Poisoned = true;
       Why = why('updating the tree', String(e));
