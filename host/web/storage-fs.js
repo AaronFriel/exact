@@ -143,6 +143,21 @@ function bytes(data) {
  */
 export function createFileStore(appId) {
   if (typeof appId !== 'string' || !appId) throw failure('missing admitted app identity');
+  const trashPrefix = 'sqlite-trash:';
+  async function reclaim(db, keys) {
+    if (!keys.length) return;
+    const root = await navigator.storage.getDirectory();
+    for (const key of keys) {
+      try { await (await root.getDirectoryHandle('exact-sqlite-sahpool')).removeEntry(key.slice(trashPrefix.length), { recursive: true }); }
+      catch (error) { if (error.name !== 'NotFoundError') throw error; }
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('files', 'readwrite');
+        tx.objectStore('files').delete(key);
+        tx.oncomplete = resolve;
+        tx.onabort = () => reject(tx.error);
+      });
+    }
+  }
   let opening;
   let closed = false;
   function open() {
@@ -162,29 +177,40 @@ export function createFileStore(appId) {
           const db = request.result;
           if (closed) { db.close(); reject(failure('storage was unloaded')); return; }
           db.onversionchange = () => db.close();
+          // Retry a pool removal interrupted after the namespace transaction committed.
+          const scan = db.transaction('files').objectStore('files').getAllKeys(IDBKeyRange.bound(trashPrefix, 'sqlite-trash;'));
+          scan.onsuccess = () => { void reclaim(db, scan.result).catch(() => {}); };
           resolve(db);
         };
       });
     }
     return opening;
   }
-  async function run(write, operation, path, list, subtree, database = false) {
+  async function run(write, operation, path, list, subtree, database = false, discard = []) {
     const db = await open();
     if (closed) throw failure('storage was unloaded');
     return new Promise((resolve, reject) => {
       let transaction;
-      try { transaction = db.transaction('files', write ? 'readwrite' : 'readonly', database && write ? { durability: 'strict' } : undefined); }
+      try { transaction = db.transaction('files', write ? 'readwrite' : 'readonly', write && (database || discard.length) ? { durability: 'strict' } : undefined); }
       catch (error) { reject(failure(error.message)); return; }
       const store = transaction.objectStore('files');
       let result;
       let error;
-      transaction.oncomplete = () => resolve(result);
+      const trash = new Set();
+      transaction.oncomplete = () => {
+        if (trash.size) void reclaim(db, [...trash]).then(() => resolve(result), () => resolve(result));
+        else resolve(result);
+      };
       transaction.onabort = () => reject(error || failure(transaction.error?.message || 'transaction aborted'));
       transaction.onerror = () => {}; // onabort reports once, including quota failures.
       const requests = [...new Set(Array.isArray(path) ? path : [path])].map(key => store.get(key));
       if (subtree) requests.push(store.getAll(descendants(subtree)));
       const keys = list ? [store.getKey(list), store.getAllKeys(descendants(list))] : [];
-      let pending = requests.length + keys.length;
+      const staged = discard.flatMap(path => {
+        const key = 'sqlite-opfs:' + path;
+        return list || subtree ? [store.get(key), store.getAll(descendants(key))] : [store.get(key)];
+      });
+      let pending = requests.length + keys.length + staged.length;
       const ready = () => {
         if (--pending) return;
         const values = requests.flatMap(request => request.result ?? []);
@@ -203,10 +229,16 @@ export function createFileStore(appId) {
             throw failure('filesystem operation on an OPFS database is unavailable', 'unsupported');
           }
           result = operation(records, changes, names);
+          for (const reservation of staged.flatMap(request => request.result ?? [])) {
+            store.delete(reservation.path);
+            const key = trashPrefix + reservation.pool;
+            store.put({ path: key });
+            trash.add(key);
+          }
         }
         catch (cause) { error = cause; transaction.abort(); }
       };
-      for (const request of [...requests, ...keys]) request.onsuccess = ready;
+      for (const request of [...requests, ...keys, ...staged]) request.onsuccess = ready;
     });
   }
   async function write(path, data, append, owned = false, database = false) {
@@ -231,7 +263,7 @@ export function createFileStore(appId) {
       }
       changes.put({ path, kind: 'file', contents, modifiedMs: now() });
       if (!previous) changes.touch(parentOf(path));
-    }, [path, parentOf(path)], undefined, undefined, database);
+    }, [path, parentOf(path)], undefined, undefined, database, database ? [] : [path]);
   }
   function putBlobs(entries, refusal = () => undefined) {
     entries = entries.map(({ path, blob }) => {
@@ -249,7 +281,7 @@ export function createFileStore(appId) {
         changes.put({ path, kind: 'file', contents: blob, modifiedMs: now() });
         if (!previous) changes.touch(parentOf(path));
       }
-    }, entries.flatMap(({ path }) => [path, parentOf(path)]));
+    }, entries.flatMap(({ path }) => [path, parentOf(path)]), undefined, undefined, false, entries.map(entry => entry.path));
   }
   return Object.freeze({
     directories: roots,
@@ -263,21 +295,21 @@ export function createFileStore(appId) {
         if (entry && entry.kind !== 'file' && entry.kind !== 'sqlite-opfs') throw failure('operation needs a regular file', 'EISDIR');
         return { entry, pending: records.get(staging)?.pool };
       }, [path, parentOf(path), staging], undefined, undefined, true);
-      if (entry || !useOpfs) return { entry };
-      if (pending) return { pending };
+      if (entry?.kind === 'sqlite-opfs' || !useOpfs) return { entry };
+      if (pending) return { entry, pending };
       const pool = crypto.randomUUID();
       await run(true, (_records, changes) => changes.put({ path: staging, pool }), staging, undefined, undefined, true);
-      return { pending: pool };
+      return { entry, pending: pool };
     },
-    publishDatabase(path, pool) {
+    publishDatabase(path, pool, source) {
       const staging = 'sqlite-opfs:' + path;
       return run(true, (records, changes) => {
         directory(records, parentOf(path));
         if (records.get(staging)?.pool !== pool) throw failure('SQLite destination changed');
-        changes.put({ path, kind: 'sqlite-opfs', pool, modifiedMs: now() });
+        changes.put({ path, kind: 'sqlite-opfs', pool, modifiedMs: source?.modifiedMs ?? now() });
         changes.put({ path: path + '/\0' + pool, kind: 'guard' });
         changes.remove(staging);
-        changes.touch(parentOf(path));
+        if (!source) changes.touch(parentOf(path));
       }, [staging, parentOf(path)], undefined, undefined, true);
     },
     async readFile(path) {
@@ -345,7 +377,7 @@ export function createFileStore(appId) {
         if (!keys.includes(path)) return;
         for (const key of keys) changes.remove(key);
         changes.touch(parentOf(path));
-      }, parentOf(path), path);
+      }, parentOf(path), path, undefined, false, [path]);
     },
     async stat(path) {
       path = normalizePath(path);
@@ -381,7 +413,7 @@ export function createFileStore(appId) {
         for (const value of moving) changes.put({ ...value, path: to + value.path.slice(from.length) });
         changes.touch(parentOf(from));
         changes.touch(parentOf(to));
-      }, [from, to, parentOf(from), parentOf(to)], to, from);
+      }, [from, to, parentOf(from), parentOf(to)], to, from, false, [from, to]);
     },
     async copyFile(from, to) {
       from = normalizePath(from);
@@ -396,7 +428,7 @@ export function createFileStore(appId) {
         const { contents } = source;
         changes.put({ path: to, kind: 'file', contents: contents instanceof Blob ? contents.slice(0, contents.size, contents.type) : contents.slice(0), modifiedMs: now() });
         changes.touch(parentOf(to));
-      }, [from, to, parentOf(to)]);
+      }, [from, to, parentOf(to)], undefined, undefined, false, [to]);
     },
     async realpath(path) {
       path = normalizePath(path);

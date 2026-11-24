@@ -254,6 +254,48 @@ async function openPool(sqlite, name) {
   if (pool.isPaused()) await pool.unpauseVfs();
   return pool;
 }
+const mainFile = '/main.sqlite';
+// Read through the remounted VFS. importDb normalizes the two journal-format
+// bytes to DELETE. Every other byte must match, including application payload.
+function inspectFile({ capi: c, wasm: w }, db, source) {
+  const scope = w.scopedAllocPush();
+  try {
+    const out = w.scopedAlloc(8);
+    db.checkRc(c.sqlite3_file_control(db.pointer, 'main', c.SQLITE_FCNTL_FILE_POINTER, out));
+    const file = new c.sqlite3_file(w.peekPtr(out)), methods = new c.sqlite3_io_methods(file.$pMethods);
+    try {
+      db.checkRc(w.functionEntry(methods.$xFileSize)(file.pointer, out));
+      const size = Number(w.peek(out, 'i64'));
+      if (source?.byteLength === size && size) {
+        const chunk = Math.min(65536, size), buffer = w.scopedAlloc(chunk);
+        const read = w.functionEntry(methods.$xRead);
+        for (let at = 0; at < size; at += chunk) {
+          const count = Math.min(chunk, size - at);
+          db.checkRc(read(file.pointer, buffer, count, BigInt(at)));
+          const actual = w.heap8u().subarray(buffer, buffer + count);
+          for (let i = 0; i < count; i++) {
+            const offset = at + i, expected = offset === 18 || offset === 19 ? 1 : source[offset];
+            if (actual[i] !== expected) fail('SQLite import contents mismatch');
+          }
+        }
+      }
+      return size;
+    } finally { methods.dispose(); file.dispose(); }
+  } finally { w.scopedAllocPop(scope); }
+}
+
+async function copyDatabase(pool, contents) {
+  const bytes = contents instanceof Blob ? await contents.arrayBuffer() : contents;
+  if (bytes.byteLength) pool.importDb(mainFile, bytes);
+  else {
+    pool.unlink(mainFile);
+    new pool.OpfsSAHPoolDb(mainFile).close();
+  }
+  // Rebuild the VFS's filename map from disk before trusting the destination.
+  pool.pauseVfs();
+  await pool.unpauseVfs();
+  return new Uint8Array(bytes);
+}
 async function persist(sqlite, databases, id, session) {
   if (session.pool) return;
   try {
@@ -287,10 +329,18 @@ async function dispatch(owner, { appId, op, args }) {
     try {
       const useOpfs = await hasOpfs();
       const { entry, pending } = await files.databaseEntry(path, useOpfs);
+      let imported;
       if (entry?.pool || pending) {
         if (!useOpfs) fail(`OPFS is unavailable for ${path}`);
         session.pool = await openPool(sqlite, entry?.pool ?? pending);
-        session.db = new session.pool.OpfsSAHPoolDb('/main.sqlite', pending ? 'c' : 'w');
+        if (pending && entry) {
+          imported = await copyDatabase(session.pool, entry.contents);
+          session.db = new session.pool.OpfsSAHPoolDb(mainFile, 'w');
+        } else {
+          // A failed import may have left a copy of an image the app has since deleted.
+          if (pending && session.pool.getFileCount()) await session.pool.wipeFiles();
+          session.db = new session.pool.OpfsSAHPoolDb(mainFile, pending ? 'c' : 'w');
+        }
       } else {
         session.db = new sqlite.oo1.DB(':memory:');
         const bytes = entry?.contents instanceof Blob ? await entry.contents.arrayBuffer() : entry?.contents;
@@ -301,7 +351,12 @@ async function dispatch(owner, { appId, op, args }) {
         }
       }
       configure(sqlite, session);
-      if (pending) await files.publishDatabase(path, pending);
+      if (imported !== undefined) {
+        if (inspectFile(sqlite, session.db, imported) !== imported.byteLength) fail(`SQLite import size mismatch for ${path}`);
+        const rows = session.db.selectValues('PRAGMA integrity_check');
+        if (rows.length !== 1 || rows[0] !== 'ok') fail(`SQLite import integrity check failed for ${path}: ${rows[0]}`);
+      }
+      if (pending) await files.publishDatabase(path, pending, entry);
       else if (!entry) await files.atomicWriteOwnedFile(path, new ArrayBuffer(0), true);
       const id = ++owner.nextDatabase;
       databases.set(id, session);

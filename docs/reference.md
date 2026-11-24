@@ -3371,8 +3371,9 @@ So a source that asks the app's module needs no bake code of its own
 (`native!.watch('state'); return native!.call({op: 'state'});`). Catch it only to answer
 something better than the placeholder. Browser storage uses app-scoped IndexedDB files
 and loads SQLite WASM in a dedicated worker on the first database operation.
-A new database uses OPFS (`opfs-sahpool`) when the worker can open a synchronous
-access handle. Otherwise it uses IndexedDB. SQLite uses DELETE journaling and
+A database uses OPFS (`opfs-sahpool`) when the worker can open a synchronous
+access handle. Without that capability it opens IndexedDB images and creates
+new databases in IndexedDB. Opening an existing OPFS database requires OPFS. SQLite uses DELETE journaling and
 FULL synchronization on OPFS. The app has no store or durability setting.
 Use HTTPS or localhost for Web Locks. Data persists across reloads within the
 same browser origin, subject to browser storage retention and quota policies.
@@ -3977,8 +3978,10 @@ opens); a Rust source's `Request::socket` is refused by name in both. No ambient
 remains unchanged.
 
 On OPFS, SQLite writes the changed pages. In IndexedDB, a mutation saves
-the whole database image in one transaction. Existing IndexedDB images open
-in place. Filesystem operations on OPFS database paths currently return
+the whole database image in one transaction. When the worker can use OPFS,
+it imports any existing IndexedDB image under the path lock. The worker
+checks the stored byte count and runs SQLite’s integrity check before it
+replaces the source record. An interrupted import retries at the next open. Filesystem operations on OPFS database paths currently return
 `unsupported`. SQLite integer results
 are `bigint`: convert them to a Contract-compatible value before returning.
 
