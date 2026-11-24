@@ -1,5 +1,5 @@
 //! Actual Apple boundary: generation-safe pair admission and receipt order.
-//! Fixtures mirror the frozen120-byte Web protocol; no Swift/DOM emulation.
+//! Fixtures are the 128-byte v3 packet; no Swift/DOM emulation.
 use super::Host;
 use crate::abi::{Bridge, Hooks};
 use exact_kernel::MonospaceMeasurer;
@@ -47,8 +47,9 @@ const SOURCE: &str = r#"component App
       text `${released}/${measured}/${bw}` testId="result"
 "#;
 
-// v2 LE: version/op, runtime/handle/target/clip/geometry/T/S u64,
-// six scalar f64 payload slots and one clock-ms. Nothing crosses as a JS Number.
+// v3 LE: version/op, runtime/handle/target/clip/geometry/T/S u64,
+// six scalar f64 payload slots, clock-ms and sample-ms. Nothing crosses as a
+// JS Number. A fixture samples on the clock unless it says otherwise.
 #[derive(Clone, Copy)]
 struct Packet {
     op: u32,
@@ -56,20 +57,25 @@ struct Packet {
     tokens: [u64; 2],
     values: [f64; 6],
     now: f64,
+    at: Option<f64>,
 }
 impl Packet {
     fn bytes(self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(120);
-        for word in [2u32, self.op] {
+        let mut bytes = Vec::with_capacity(128);
+        for word in [3u32, self.op] {
             bytes.extend(word.to_le_bytes());
         }
         for word in self.identity.into_iter().chain(self.tokens) {
             bytes.extend(word.to_le_bytes());
         }
-        for value in self.values.into_iter().chain([self.now]) {
+        for value in self
+            .values
+            .into_iter()
+            .chain([self.now, self.at.unwrap_or(self.now)])
+        {
             bytes.extend(value.to_le_bytes());
         }
-        assert_eq!(bytes.len(), 120);
+        assert_eq!(bytes.len(), 128);
         bytes
     }
     fn send(self, host: &mut Host<NoData>) -> String {
@@ -150,6 +156,7 @@ fn boot_plan(plan: &[u8]) -> (Host<NoData>, Packet, String) {
         tokens: [0; 2],
         values: [320.25, 200.5, 320.25, 200.5, 0.0, 0.0],
         now: 0.0,
+        at: None,
     };
     (host, packet, batch)
 }
@@ -552,6 +559,7 @@ fn new_mapping_sequence_cancels_hold_even_with_unchanged_dimensions() {
         tokens: [0; 2],
         values: [320.25, 200.5, 320.25, 200.5, 0.0, 0.0],
         now: 110.0,
+        at: None,
     };
     accepted(&geometry.send(&mut host));
     assert!(p.tokens.into_iter().all(|token| !host.has_hold(token)));
@@ -664,12 +672,13 @@ fn apple_bridge_preserves_high_sequence_and_exact_packet_length() {
         tokens: [0; 2],
         values: [320.25, 200.5, 320.25, 200.5, 0.0, 0.0],
         now: 0.0,
+        at: None,
     };
     let bytes = p.bytes();
     bridge.input_write(&bytes);
     let n = bridge.transform_motion(bytes.len());
     accepted(std::str::from_utf8(bridge.output_bytes(n as usize)).unwrap());
-    for len in [0, 48, 119, 121] {
+    for len in [0, 48, 127, 129] {
         bridge.input_write(&bytes);
         let n = bridge.transform_motion(len);
         let out = std::str::from_utf8(bridge.output_bytes(n as usize)).unwrap();
@@ -681,7 +690,7 @@ fn apple_bridge_preserves_high_sequence_and_exact_packet_length() {
         ..p
     };
     bridge.input_write(&begin.bytes());
-    let n = bridge.transform_motion(120);
+    let n = bridge.transform_motion(128);
     let out = std::str::from_utf8(bridge.output_bytes(n as usize)).unwrap();
     accepted(out);
     assert_eq!(quoted(out, "geometrySequence"), 9007199254740993);
@@ -733,6 +742,7 @@ fn bridge_activity_reply(geometry: bool) {
         tokens: [0; 2],
         values: [320.25, 200.5, 320.25, 200.5, 0.0, 0.0],
         now: 0.0,
+        at: None,
     };
     let send = |bridge: &mut Bridge<NoData>, p: Packet| -> serde_json::Value {
         let n = bridge.input_write(&p.bytes());
@@ -919,7 +929,7 @@ fn rejected_packets_keep_unrelated_motion_and_timer_status() {
     host.hold_update(opacity, MotionValue::scalar(0.3), 0.);
     host.hold_end(opacity, HoldEnd::Cancel, 0.);
     let before = format!("{:?}", host.engine());
-    for bytes in [vec![], vec![0; 119], vec![0; 121], vec![0; 120]] {
+    for bytes in [vec![], vec![0; 127], vec![0; 129], vec![0; 128]] {
         let reply = host.transform_motion(&bytes).finish();
         assert!(reply.contains("\"motion\":true"), "{reply}");
         assert!(reply.contains("\"timers\":true"), "{reply}");

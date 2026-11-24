@@ -867,7 +867,7 @@ impl<D: DataSource> Bridge<D> {
                 decoded.map_err(|_| "malformed motion input".to_string())?;
             if op == 11 {
                 // The thresholds exact2 defines itself (LLP 1057.001 §3).
-                let [knee, resistance, edge, slop] = exact_motion::gesture::CONSTANTS;
+                let [knee, resistance, edge, slop, ..] = exact_motion::gesture::CONSTANTS;
                 return Ok(format!(
                     "{{\"knee\":{knee},\"resistance\":{resistance},\"edge\":{edge},\"slop\":{slop}}}"
                 ));

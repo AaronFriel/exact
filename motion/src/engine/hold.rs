@@ -179,13 +179,26 @@ impl Engine {
         now_s: f64,
         values: [Value; 2],
     ) -> Result<bool, EngineError> {
-        (self.links.update_transform_hold)(self, held, now_s, values)
+        (self.links.update_transform_hold)(self, held, now_s, now_s, values)
+    }
+
+    /// [`Engine::update_transform_hold`], the pair sampled at `at_s` on the
+    /// input's own timeline (see [`Engine::update_hold_at`]).
+    pub fn update_transform_hold_at(
+        &mut self,
+        held: TransformHold,
+        now_s: f64,
+        at_s: f64,
+        values: [Value; 2],
+    ) -> Result<bool, EngineError> {
+        (self.links.update_transform_hold)(self, held, now_s, at_s, values)
     }
 
     pub(super) fn update_transform_hold_full(
         &mut self,
         held: TransformHold,
         now_s: f64,
+        at_s: f64,
         values: [Value; 2],
     ) -> Result<bool, EngineError> {
         let starts = [held.translate, held.scale];
@@ -195,6 +208,9 @@ impl Engine {
         for (start, value) in starts.into_iter().zip(values) {
             validate_value(start.token.property, value)?;
         }
+        if !at_s.is_finite() {
+            return Err(EngineError::NonFinite);
+        }
         self.advance(now_s)?;
         for (start, value) in starts.into_iter().zip(values) {
             let key = (start.token.node, start.token.property);
@@ -203,7 +219,7 @@ impl Engine {
                 .expect("both live holds")
                 .set_presented(value);
             self.dirty.insert(key);
-            self.track(start.token, now_s, value);
+            self.track(start.token, at_s, value);
         }
         Ok(true)
     }
@@ -301,19 +317,40 @@ impl Engine {
         now_s: f64,
         value: Value,
     ) -> Result<bool, EngineError> {
-        (self.links.update_hold)(self, token, now_s, value)
+        (self.links.update_hold)(self, token, now_s, now_s, value)
+    }
+
+    /// [`Engine::update_hold`], the value sampled at `at_s`: the input's own
+    /// time, carried onto this clock from where the hold began. The clock
+    /// still advances to `now_s`; only [`Engine::hold_velocity`] reads `at_s`,
+    /// so a release asks it at the release's input time, and
+    /// [`Engine::track_hold`] records on the same timeline. A driver that
+    /// holds the clock still while a finger moves leaves the samples apart
+    /// (LLP 1057.001 §3).
+    pub fn update_hold_at(
+        &mut self,
+        token: HoldToken,
+        now_s: f64,
+        at_s: f64,
+        value: Value,
+    ) -> Result<bool, EngineError> {
+        (self.links.update_hold)(self, token, now_s, at_s, value)
     }
 
     pub(super) fn update_hold_full(
         &mut self,
         token: HoldToken,
         now_s: f64,
+        at_s: f64,
         value: Value,
     ) -> Result<bool, EngineError> {
         if !self.has_hold(token) {
             return Ok(false);
         }
         validate_value(token.property, value)?;
+        if !at_s.is_finite() {
+            return Err(EngineError::NonFinite);
+        }
         self.advance(now_s)?;
         let key = (token.node, token.property);
         self.slots
@@ -321,14 +358,15 @@ impl Engine {
             .expect("live hold")
             .set_presented(value);
         self.dirty.insert(key);
-        self.track(token, now_s, value);
+        self.track(token, at_s, value);
         Ok(true)
     }
 
     /// The held presentation's velocity at `now_s`, in property units per
-    /// second: `VelocityTracker` over every value this hold was given. For a
-    /// host whose platform measures none (LLP 1057.001 §3). `None` for a stale
-    /// token or a non-finite time.
+    /// second: `VelocityTracker` over every value this hold was given, at the
+    /// times it was sampled ([`Engine::update_hold_at`]). For a host whose
+    /// platform measures none (LLP 1057.001 §3). `None` for a stale token or
+    /// a non-finite time.
     pub fn hold_velocity(&self, token: HoldToken, now_s: f64) -> Option<Value> {
         (self.links.hold_velocity)(self, token, now_s)
     }

@@ -1,9 +1,11 @@
 //! One native primary contact; property-specific policy stays in its helper.
 use super::*;
+mod hold;
 mod mouse;
 use crate::host::press::Edge;
 use exact_kernel::{NodeKey, TransformDragBinding};
 use exact_motion::{HoldEnd, HoldStart, Value, VelocityTracker};
+pub(super) use hold::Hold;
 
 #[derive(Clone, Copy)]
 pub(super) enum Candidate {
@@ -53,11 +55,6 @@ pub(super) enum HeldKind {
         handle: NodeKey,
         target: NodeKey,
     },
-}
-pub(super) struct Hold {
-    pub(super) primary: HoldStart,
-    pub(super) velocity: VelocityTracker,
-    pub(super) kind: HeldKind,
 }
 pub(super) struct Contact {
     /// The geometric down hit; a control's expanded margin can have none.
@@ -1001,9 +998,11 @@ impl<D: DataSource> Presenter<D> {
                 Some(Candidate::Arrange(binding)) if dy.abs() > dx.abs() => {
                     self.begin_arrange(binding, now_ms)
                 }
-                Some(Candidate::Transform(binding)) => self.begin_transform_drag(binding, now_ms),
+                Some(Candidate::Transform(binding)) => {
+                    self.begin_transform_drag(binding, now_ms, event_ms)
+                }
                 Some(Candidate::Height { handle, target }) if dy.abs() > dx.abs() => {
-                    self.begin_height_drag(handle, target, now_ms)
+                    self.begin_height_drag(handle, target, now_ms, event_ms)
                 }
                 Some(Candidate::Swipe(key))
                     if dx.abs() > dy.abs()
@@ -1031,7 +1030,7 @@ impl<D: DataSource> Presenter<D> {
                             return Ok(false);
                         }
                     }
-                    self.begin_swipe(key, ways, now_ms)
+                    self.begin_swipe(key, ways, now_ms, event_ms)
                 }
                 _ => {
                     // A finger is the platform's to pan with past the slop,
@@ -1099,12 +1098,13 @@ impl<D: DataSource> Presenter<D> {
                     ..Value::ZERO
                 },
                 now_ms,
+                event_ms,
             ),
             HeldKind::Height { .. } => {
-                self.move_height_drag(held, contact.origin.1 as f64 - y as f64, now_ms)
+                self.move_height_drag(held, contact.origin.1 as f64 - y as f64, now_ms, event_ms)
             }
             HeldKind::Swipe { .. } => {
-                self.move_swipe(held, x as f64 - contact.origin.0 as f64, now_ms)
+                self.move_swipe(held, x as f64 - contact.origin.0 as f64, now_ms, event_ms)
             }
         };
         if self.contact_live(&contact) {
@@ -1158,6 +1158,9 @@ impl<D: DataSource> Presenter<D> {
         self.retire_pointer();
         if self.contact.is_some() {
             self.pointer_sample(x, y, now_ms)?;
+        }
+        if let Some(held) = self.contact.as_mut().and_then(|c| c.hold.as_mut()) {
+            held.lifting = true;
         }
         let accepted = match self.pointer_move_at(x, y, now_ms, event_ms) {
             Ok(accepted) => accepted,
@@ -1235,7 +1238,7 @@ impl<D: DataSource> Presenter<D> {
                                 error = error.or(self.after_commit());
                             }
                         }
-                        let velocity = held.velocity.estimate(now_ms / 1000.);
+                        let velocity = held.release_velocity();
                         let ended = self.end_swipe(&held, HoldEnd::Release { velocity }, now_ms);
                         error.map_or(ended.map(|_| true), Err)
                     }
