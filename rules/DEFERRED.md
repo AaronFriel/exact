@@ -598,6 +598,12 @@ started and a remote Play's later reports run as the app's. Both follow
 the hidden-page rule while hidden. An identified remote Play or Pause
 handler runs as an `action`.
 
+**Narrowed (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"; panel 3–1; LLP 1133.023 D7a).**
+The runner refuses a request to bring a hidden page forward when a tool
+call or background action caused it, including work it scheduled or
+registered. Device-caused and uncaused shows are the third known gap.
+Host relabelling and a request identity across hosts stay out.
+
 **Out (Charlie, 2026-11-24, "recs ok"; LLP 1133.023 D7a).** Carrying
 the initiating cause with every observed event.
 
