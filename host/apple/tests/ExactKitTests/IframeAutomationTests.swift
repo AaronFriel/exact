@@ -439,6 +439,11 @@ final class IframeAutomationTests: XCTestCase {
         let (handle, web) = mount(arm, seen)
         let controller = web.configuration.userContentController
         let baseline = controller.userScripts.count
+        let plain = try XCTUnwrap(run(arm, "addPreloadScript", ["sandbox": "plain", "channelSession": "plain session",
+            "functionDeclaration": "() => {}"])["script"] as? String)
+        XCTAssertNil(run(arm, "releaseScriptChannels", ["channelSession": "plain session"])["error"])
+        XCTAssertEqual(controller.userScripts.count, baseline)
+        XCTAssertEqual(run(arm, "removePreloadScript", ["script": plain])["error"] as? String, "NotFoundError")
         let channel: [String: Any] = ["type": "channel", "value": ["channel": "playback"]]
         func options(_ session: String, sandbox: String) -> [String: Any] {
             ["sandbox": sandbox, "channelSession": session, "arguments": [channel], "functionDeclaration": "post => {}"]

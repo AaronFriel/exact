@@ -37,7 +37,7 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
     var controller = "person"
         private set
 
-    private class Preload(val id: String, val source: String, val sandbox: String, val session: String?)
+    private class Preload(val id: String, val source: String, val sandbox: String, val session: String)
     private val preloads = ArrayList<Preload>()
     private class Recipient(val sandbox: String, val session: String, val channel: String, val send: (JSONObject) -> Unit) {
         var pending = 0
@@ -48,7 +48,6 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
     private fun capability(sandbox: String, session: String, channel: String, send: (JSONObject) -> Unit, reserved: MutableSet<String>): String {
         val key = recipients.entries.firstOrNull { (_, r) -> r.sandbox == sandbox && r.session == session && r.channel == channel }?.key
             ?: UUID.randomUUID().toString().also {
-                withChannels += this
                 recipients[it] = Recipient(sandbox, session, channel, send)
             }
         if (reserved.add(key)) recipients.getValue(key).pending++
@@ -61,6 +60,7 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
             handlers.remove(preload.id)?.remove()
             preloads.remove(preload)
         }
+        endAll("AbortError", "the package session ended", frameEnded = false) { it.channelSession != session }
     }
 
     /** What is installed on [view]: each preload's handler, each world, and each world's channel with the number of
@@ -99,7 +99,8 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
     private var nextId = 0
     /** Calls in flight: each one's answer, and the world it runs in (null: the page's). */
     private class Pending(val reply: (JSONObject) -> Unit, val world: String?, var takeAt: Long?,
-                          var checking: Boolean, val admitChannels: (() -> Unit)?, var realm: Realm? = null, var source: World? = null) {
+                          var checking: Boolean, val admitChannels: (() -> Unit)?, val channelSession: String?,
+                          var realm: Realm? = null, var source: World? = null) {
         var onReady: ((World) -> Unit)? = null
         var postingDocument: Document? = null
         var mayCrossCommit = false
@@ -108,7 +109,7 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
     private var personInput = 0L
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
 
-    init { live += this; attach() }
+    init { live += this; instances += this; attach() }
 
     // Lifetime
 
@@ -194,17 +195,16 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
 
     /** A partition change makes a new frame: its preload scripts go with it, as on Apple. */
     fun adopt(old: FrameAutomation) {
-        if (old.recipients.isNotEmpty()) withChannels += this
         recipients.putAll(old.recipients)
         preloads += old.preloads
         nextId = maxOf(nextId, old.nextId)
         view?.let { v -> if (ISOLATED) preloads.forEach { install(v, it) } }
     }
 
-    private fun endAll(error: String, message: String, keep: (Pending) -> Boolean = { false }) {
+    private fun endAll(error: String, message: String, frameEnded: Boolean = true, keep: (Pending) -> Boolean = { false }) {
         val ended = pending.filterValues { !keep(it) }
         pending.keys.removeAll(ended.keys)
-        ended.values.forEach { it.reply(if (it.checking) missingRealm() else failure(error, message)) }
+        ended.values.forEach { it.reply(if (frameEnded && it.checking) missingRealm() else failure(error, message)) }
     }
 
     private fun admitted(call: Pending) {
@@ -285,7 +285,7 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
         when (op) {
             "addPreloadScript" -> {
                 if (sandbox == null) return reply(failure("NotSupportedError", "addPreloadScript: Android's WebView runs a preload script in every frame of the page's world, and Exact puts nothing of its own there to keep it to the main one; name a sandbox"))
-                val p = Preload("script-${++nextId}", "(\n${args.optString("functionDeclaration")}\n)($argumentSource)", sandbox, session.takeIf { values.isNotEmpty() })
+                val p = Preload("script-${++nextId}", "(\n${args.optString("functionDeclaration")}\n)($argumentSource)", sandbox, session)
                 view?.let { name(it, sandbox); install(it, p) }
                 preloads += p
                 return reply(JSONObject().put("script", p.id))
@@ -316,10 +316,11 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
         // A call can end at navigation while its last post is still in transit. Acknowledge the
         // registration before giving the function to guest code, even if its result never settles.
         val arguments = if (admitChannels == null) argumentSource else """
-            ...(await new Promise(resolve => {
+            ...(await new Promise((resolve, reject) => {
               const bound = e => {
-                if (e.data !== 'bound:$number') return;
+                if (e.data !== 'bound:$number' && e.data !== 'closed:$number') return;
                 $CHANNEL.removeEventListener('message', bound);
+                if (e.data === 'closed:$number') return reject(new DOMException('The call ended', 'AbortError'));
                 resolve([$argumentSource]);
               };
               $CHANNEL.addEventListener('message', bound);
@@ -340,7 +341,8 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
         if (sandbox != null && target == null) {
             try { name(view, sandbox) } catch (e: RuntimeException) { return reply(failure("NotSupportedError", "$op: the WebView refused: $e")) }
         }
-        val call = Pending(reply, sandbox, personInput.takeIf { target != null && args.optBoolean("userActivation", false) }, target != null, admitChannels)
+        val call = Pending(reply, sandbox, personInput.takeIf { target != null && args.optBoolean("userActivation", false) }, target != null,
+            admitChannels, if (admitChannels != null) args.optString("channelSession") else null)
         pending[number] = call
         fun answer(result: JSONObject) { pending.remove(number)?.reply?.invoke(result) }
         fun identity(marker: String, origin: String, document: String = marker): Realm? {
@@ -526,7 +528,11 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
             }
             if (this.view !== view) return@addWebMessageListener
             val n = posted.optInt("n")
-            val call = pending[n] ?: return@addWebMessageListener
+            val call = pending[n]
+            if (call == null) {
+                if (posted.optBoolean("bind")) proxy.postMessage("closed:$n")
+                return@addWebMessageListener
+            }
             val realm = call.realm ?: return@addWebMessageListener
             val source = call.source ?: return@addWebMessageListener
             if (call.world != name || source.proxy !== proxy || realm.origin != serializedOrigin(origin) ||
@@ -547,8 +553,13 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
             })
         }
         val token = "Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('')"
-        WebViewCompat.addJavaScriptOnEvent(view, "${plant(token = token)}; if (window === top) $CHANNEL.postMessage('ready:' + $binding.token);",
-            WebViewCompat.INJECTION_EVENT_DOCUMENT_START, setOf("*"), world)
+        try {
+            WebViewCompat.addJavaScriptOnEvent(view, "${plant(token = token)}; if (window === top) $CHANNEL.postMessage('ready:' + $binding.token);",
+                WebViewCompat.INJECTION_EVENT_DOCUMENT_START, setOf("*"), world)
+        } catch (e: RuntimeException) {
+            WebViewCompat.removeWebMessageListener(view, world, CHANNEL)
+            throw e
+        }
         channels[name] = starts
     }
 
@@ -584,8 +595,8 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
         private val live = LinkedHashSet<FrameAutomation>()
 
         // A retired WebView can still deliver a post. Release the receiver there as well.
-        private val withChannels = java.util.Collections.newSetFromMap(java.util.WeakHashMap<FrameAutomation, Boolean>())
-        fun release(session: String) { withChannels.toList().forEach { it.releaseSession(session) } }
+        private val instances = java.util.Collections.newSetFromMap(java.util.WeakHashMap<FrameAutomation, Boolean>())
+        fun release(session: String) { instances.toList().forEach { it.releaseSession(session) } }
 
         /** The sandboxes the app has named, newest last, at most [KEPT], in its preferences across launches. */
         private var names: LinkedHashSet<String>? = null

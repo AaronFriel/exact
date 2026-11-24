@@ -27,7 +27,7 @@ export function watchPlayback() {
 
 | Operation | Arguments or delivery |
 | --- | --- |
-| `addPreloadScript` | Each `arguments` entry is a `ChannelValue`. The function receives the channels at document start. Each posts to the session that supplied it. Closing the session removes its channel preloads. On Android register the sandbox before navigating. |
+| `addPreloadScript` | Each `arguments` entry is a `ChannelValue`. The function receives the channels at document start. Each posts to the session that supplied it. Closing the session removes all its preloads, including those without arguments. On Android register the sandbox before navigating. |
 | `callFunction` | A top-level `ChannelValue` becomes a post function at that position among ordinary JSON arguments. A realm target selects its existing sandbox. |
 | `script.message` | The handler receives the channel name, JSON data and the posting world's realm, frame id (`context`) and host-supplied origin. A post survives navigation. Use `target: { realm }` for a wallet reply after approval. A reply to a replaced document answers `no such frame`. |
 | Admission | Only the host event calls the reserved `tools["script.message"]` receiver. The receiver needs `browser.automation` and runs with the runner’s `device` origin. A channel without a named sandbox, or on the web, answers `NotSupportedError`. |

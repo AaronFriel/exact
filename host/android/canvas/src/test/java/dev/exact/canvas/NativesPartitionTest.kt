@@ -89,6 +89,7 @@ class NativesPartitionTest {
             /** Each view's listeners and document-start scripts in an execution world, by world name. */
             val worldListeners = HashMap<WebView, HashMap<String, WebViewCompat.WebMessageListener>>()
             val worldScripts = HashMap<WebView, ArrayList<Pair<String, String>>>()
+            var refuseNextScript = false
 
             @JvmStatic @Implementation
             fun getExecutionWorld(web: WebView, name: String) = androidx.webkit.JavaScriptExecutionWorld(name, web).also { names[it] = name }
@@ -101,8 +102,17 @@ class NativesPartitionTest {
             }
 
             @JvmStatic @Implementation
+            fun removeWebMessageListener(web: WebView, world: androidx.webkit.JavaScriptExecutionWorld, name: String) {
+                worldListeners[web]?.remove(names.getValue(world))
+            }
+
+            @JvmStatic @Implementation
             fun addJavaScriptOnEvent(web: WebView, script: String, event: Int, origins: Set<String>,
                                      world: androidx.webkit.JavaScriptExecutionWorld): androidx.webkit.ScriptHandler {
+                if (refuseNextScript) {
+                    refuseNextScript = false
+                    throw IllegalStateException("document-start script refused")
+                }
                 val entry = names.getValue(world) to script
                 worldScripts.getOrPut(web) { ArrayList() } += entry
                 return androidx.webkit.ScriptHandler { worldScripts[web]?.remove(entry) }

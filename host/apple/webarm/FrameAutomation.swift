@@ -509,7 +509,7 @@ final class FrameAutomation {
             nextId += 1
             let script = WKUserScript(source: "(\n\(request["functionDeclaration"] as? String ?? "")\n)(\(arguments.source));", injectionTime: .atDocumentStart, forMainFrameOnly: true, in: world)
             let hasChannels = !(request["arguments"] as? [Any] ?? []).isEmpty
-            preload.append(("script-\(nextId)", script, hasChannels ? request["channelSession"] as? String : nil, hasChannels ? request["sandbox"] as? String : nil))
+            preload.append(("script-\(nextId)", script, request["channelSession"] as? String, hasChannels ? request["sandbox"] as? String : nil))
             web.configuration.userContentController.addUserScript(script)
             arm.ownScripts = web.configuration.userContentController.userScripts.count
             arguments.finish?(true)

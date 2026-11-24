@@ -67,7 +67,8 @@ class FrameAutomationTest {
     private class Proxy : JavaScriptReplyProxy() {
         val token = java.util.UUID.randomUUID().toString().replace("-", "")
         val scripts = ArrayList<Pair<String, WebViewOutcomeReceiver<String, JavaScriptExecutionException>>>()
-        override fun postMessage(message: String) {}
+        val acknowledgements = mutableListOf<String>()
+        override fun postMessage(message: String) { acknowledgements += message }
         override fun postMessage(message: ByteArray) {}
         override fun executeJavaScript(script: String, receiver: WebViewOutcomeReceiver<String, JavaScriptExecutionException>?) {
             scripts += script to receiver!!
@@ -375,6 +376,80 @@ class FrameAutomationTest {
         emit(otherKey, "5", current)
         assertEquals(1, messages.size)
         assertEquals("5", other.single().getString("json"))
+    }
+
+    @Test fun closingAPackageSessionRemovesItsPreloadWithoutArguments() {
+        val natives = natives()
+        natives.ensure(1, 1, 0, 0, props("tab"), 0)
+        val web = compat.last()
+        fun preload(session: String) = call("addPreloadScript", "sandbox" to "plain",
+            "channelSession" to session, "functionDeclaration" to "() => {}")[0]!!.getString("script")
+        val other = preload("kept")
+        val before = compat.worldScripts.getValue(web).size
+        val closing = preload("closing")
+        FrameAutomations.release("closing")
+        assertEquals(before, compat.worldScripts.getValue(web).size)
+        assertEquals("NotFoundError", call("removePreloadScript", "script" to closing).error())
+        assertNull(call("removePreloadScript", "script" to other).error())
+        val unnamed = call("addPreloadScript", "sandbox" to "plain", "functionDeclaration" to "() => {}")[0]!!.getString("script")
+        FrameAutomations.release("")
+        assertEquals("NotFoundError", call("removePreloadScript", "script" to unnamed).error())
+        natives.destroyAll()
+    }
+
+    @Test fun aRefusedWorldScriptLeavesNoListenerAndThePreloadCanBeRetried() {
+        val natives = natives()
+        natives.ensure(1, 1, 0, 0, props("tab"), 0)
+        val web = compat.last()
+        fun preload() = call("addPreloadScript", "sandbox" to "retry", "functionDeclaration" to "() => {}")
+        val before = compat.worldListeners[web].orEmpty().keys.toSet()
+        compat.refuseNextScript = true
+        assertEquals("NotSupportedError", preload().error())
+        assertEquals(before, compat.worldListeners[web].orEmpty().keys)
+        assertNotNull(preload()[0]?.getString("script"))
+        val installed = compat.worldListeners.getValue(web).getValue("retry")
+        compat.refuseNextScript = true
+        assertEquals("NotSupportedError", preload().error())
+        assertTrue(installed === compat.worldListeners.getValue(web)["retry"])
+        natives.destroyAll()
+    }
+
+    @Test fun closingASessionSettlesACallWaitingForItsChannelArguments() {
+        val natives = natives()
+        natives.ensure(1, 1, 0, 0, props("tab"), 0)
+        val web = compat.last()
+        val world = "waiting"
+        call("addPreloadScript", "sandbox" to world, "functionDeclaration" to "() => {}")
+        commit(web, "https://example.com/doc")
+        val proxy = Proxy()
+        post(web, world, "ready", proxy)
+        val current = call("evaluate", "sandbox" to world, "expression" to "1")
+        answer(web, proxy, world, "1")
+        val realm = current[0]!!.getString("realm")
+        val before = proxy.scripts.size
+        val args = JSONObject().put("id", "tab").put("sandbox", world).put("channelSession", "closing")
+            .put("functionDeclaration", "post => {}")
+            .put("arguments", JSONArray("""[{"type":"channel","value":{"channel":"status"}}]"""))
+        val replies = mutableListOf<JSONObject>()
+        FrameAutomations.run("callFunction", args, {}) { replies.add(it) }
+        val target = JSONObject(args.toString()).apply {
+            remove("id")
+            remove("sandbox")
+            put("target", JSONObject().put("realm", realm))
+            put("userActivation", true)
+        }
+        FrameAutomations.run("callFunction", JSONObject(target.toString()), {}) { replies.add(it) }
+        assertTrue(replies.isEmpty())
+        assertEquals(before + 2, proxy.scripts.size)
+        FrameAutomations.run("callFunction", target, {}) { replies.add(it) }
+        proxy.scripts.last().second.onResult("true")
+        assertEquals(before + 4, proxy.scripts.size)
+        val number = Regex("""n: (\d+)""").find(proxy.scripts.last().first)!!.groupValues[1].toInt()
+        FrameAutomations.release("closing")
+        assertEquals(listOf("AbortError", "AbortError", "AbortError"), replies.map { it.optString("error") })
+        post(web, world, JSONObject().put("n", number).put("bind", true).toString(), proxy)
+        assertEquals(listOf("closed:$number"), proxy.acknowledgements)
+        natives.destroyAll()
     }
 
     @Test fun rejectedPreloadsLeaveNoChannelRegistrations() {
