@@ -238,7 +238,7 @@ internal class Layers(
     private var snapshot: Map<Int, RenderNode>? = null
     fun nodes(): Map<Int, RenderNode> = snapshot ?: layers.mapValues { it.value.node }.also { snapshot = it }
 
-    /** Op 30 at [at] (after id and len, [len] words): the header, then the drawing 17 words on. */
+    /** Op 30 at [at] (after id and len, [len] words): the header, then the drawing. */
     fun set(id: Int, b: IntBuffer, at: Int, len: Int) {
         node(id)
         val l = layers[id]!!
@@ -252,9 +252,9 @@ internal class Layers(
         val dash = b.get(at + 16)
         val recolored = dash == -2
         l.dashAt = if (dash == -1 || recolored) -1 else dash
-        contents(l, b, at + 17, at + len)
+        contents(l, b, at + HEADER_WORDS, at + len)
         l.recordedScale = 1f
-        l.ops = IntArray(len - 17) { b.get(at + 17 + it) }
+        l.ops = IntArray(len - HEADER_WORDS) { b.get(at + HEADER_WORDS + it) }
         l.glyphColors = null; l.backgroundAt = -1; l.runs = null
         if (recolored) colors(l)
         l.memo = PathMemo()
@@ -465,6 +465,8 @@ internal class Layers(
     fun playing() = layers.values.any { it.tracks.isNotEmpty() }
 
     companion object {
+        const val HEADER_WORDS = 17
+
         private fun progress(e: Easing?, input: Double): Double {
             val x = input.coerceIn(0.0, 1.0)
             e ?: return x

@@ -1221,24 +1221,24 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
                     i += 2
                 }
                 30 -> {
-                    // A layer's drawing, after its matrix, pivot, base and dash phase index (16 words).
                     val id = b.get(i + 1); val len = b.get(i + 2)
                     if (!skipDefs) laterLayers[id]?.let { makeOne(it) }
+                    val body = i + 3 + Layers.HEADER_WORDS
                     layers.set(id, b, i + 3, len)
                     if (!skipDefs) layerDefs(b, i, len)
                     val node = layers.node(id)
                     // Its node only as big as its drawing (clipped to that): what HWUI damages as it moves and fades.
-                    if (layerBounds && bounds.measure(b, i + 20, i + 3 + len, measured)) {
+                    if (layerBounds && bounds.measure(b, body, i + 3 + len, measured)) {
                         measured.roundOut(placed); layers.place(id, placed)
                     } else layers.place(id, null)
                     // One shape has no text to rasterize again at each scale: it is scaled as it is drawn (a chart's
                     // pulse ring, in every row in view; flatalpha=0 to compare). The node's overlapping-rendering flag
                     // is left alone: a RenderNode's is off natively, and turning it on gave every fading layer an
                     // offscreen surface its own size (xheavy: 10 GB of graphics memory in bursts).
-                    layers.flat(id, flatAlpha && main.singleShape(b, i + 20, i + 3 + len))
+                    layers.flat(id, flatAlpha && main.singleShape(b, body, i + 3 + len))
                     slots.refill(Slots.layer(id))
                     val c = node.beginRecording()
-                    main.replayAt(c, b, i + 20, i + 3 + len, layers.originX(id), layers.originY(id), node)
+                    main.replayAt(c, b, body, i + 3 + len, layers.originX(id), layers.originY(id), node)
                     node.endRecording()
                     i += 3 + len
                 }
@@ -1492,7 +1492,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         val outerRow = ingestRow
         slotOwner = Slots.layer(id)
         ingestRow = layers.row(id)
-        val walk = { slots.again(slotOwner) { ingest(b, at + 20, at + 3 + len) } }
+        val walk = { slots.again(slotOwner) { ingest(b, at + 3 + Layers.HEADER_WORDS, at + 3 + len) } }
         natives?.layerAgain(id, walk) ?: walk()
         slotOwner = outer
         ingestRow = outerRow

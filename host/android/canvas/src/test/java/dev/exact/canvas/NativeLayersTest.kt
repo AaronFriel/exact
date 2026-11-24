@@ -8,6 +8,8 @@ import android.graphics.HardwareRenderer
 import android.graphics.RenderNode
 import android.view.View
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.IntBuffer
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -64,6 +66,13 @@ class NativeLayersTest {
             copy.recycle(); bitmap.recycle()
             return color
         }
+    }
+
+    @Test fun drawsTheLayerFromTheRustRecorder() {
+        val bytes = javaClass.getResourceAsStream("/red-layer.ops")!!.use { it.readBytes() }
+        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
+        val ops = IntArray(buffer.remaining()).also { buffer.get(it) }
+        assertEquals(Color.RED, Fixture().pixel(ops))
     }
 
     private val ref = intArrayOf(29, 7)

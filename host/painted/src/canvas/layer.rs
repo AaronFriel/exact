@@ -18,6 +18,7 @@ pub(super) const LAYER_REF: u32 = 29;
 /// offset unit), where its drawing's dash phase is (a word index into the
 /// ops, or `u32::MAX`), then its drawing.
 pub(super) const LAYER_SET: u32 = 30;
+pub(super) const HEADER_WORDS: usize = 17;
 /// `[31, id, len, words…]`: a layer's keyframes (`Host::layer_tracks`);
 /// none: it shows its base values.
 pub(crate) const TRACKS: u32 = 31;
@@ -82,7 +83,7 @@ impl Layers {
     pub(super) fn needs_world(&self) -> bool {
         self.sent
             .values()
-            .any(|ops| super::stream::needs_world(&ops[17..]))
+            .any(|ops| super::stream::needs_world(&ops[HEADER_WORDS..]))
     }
 
     pub(super) fn unlayered(&self) -> bool {
@@ -323,6 +324,29 @@ mod tests {
     }
 
     #[test]
+    fn android_draws_the_recorded_layer() {
+        let mut r = Recorder::new();
+        r.begin(64., 64., 1.);
+        let ts = Transform::identity();
+        assert!(r.layer_begin(1, ts, (0., 0.), (0., 0.), [0., 0., 1., 0., 1., 0., 0., 1.]));
+        r.fill(&Shape::rect((8., 8., 16., 16.)), [255, 0, 0, 255], ts);
+        r.layer_end();
+        assert!(!super::super::stream::needs_world(&r.ops));
+        assert!(!r.layers.needs_world());
+        let bytes: Vec<_> = r.ops.iter().flat_map(|word| word.to_le_bytes()).collect();
+        assert_eq!(
+            bytes,
+            include_bytes!("../../../android/canvas/src/test/resources/red-layer.ops")
+        );
+        r.begin(64., 64., 1.);
+        assert!(r.layer_begin(1, ts, (0., 0.), (0., 0.), [0., 0., 1., 0., 1., 0., 0., 1.]));
+        r.ops.extend([super::super::shared::DRAW, 1, 0]);
+        r.layer_end();
+        assert!(super::super::stream::needs_world(&r.ops));
+        assert!(r.layers.needs_world());
+    }
+
+    #[test]
     fn native_views_are_kept_inside_their_animated_ancestors() {
         use crate::presenter::{PainterChoice, Presenter};
         use exact_kernel::motion::motion_node;
@@ -378,7 +402,7 @@ component App
         while at < first.len() {
             let next = end(&first, at).unwrap();
             if first[at] == LAYER_SET {
-                let body = &first[at + 20..next];
+                let body = &first[at + 3 + HEADER_WORDS..next];
                 let mut i = 0;
                 while i < body.len() {
                     if body[i] == super::super::NATIVE {
@@ -428,7 +452,7 @@ component App
                 ROW_BEGIN => walk(&b[i + 6..j - 1], drawn, layers),
                 LAYER_SET => {
                     let mut body = Vec::new();
-                    walk(&b[i + 20..j], &mut body, layers);
+                    walk(&b[i + 3 + HEADER_WORDS..j], &mut body, layers);
                     layers.push(body);
                 }
                 op => drawn.push(op),
