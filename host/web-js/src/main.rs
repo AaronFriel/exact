@@ -25,6 +25,7 @@ mod emit_tests;
 mod events;
 mod faces;
 mod facts;
+mod hoist;
 #[cfg(test)]
 mod input_tests;
 mod inspect;

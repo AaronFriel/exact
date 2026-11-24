@@ -469,7 +469,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
     }
     em.out.clear();
     em.template_scope(true, |em| em.mount_node(sites.root, "$R", &top))?;
-    let view = std::mem::take(&mut em.out);
+    let view = crate::hoist::lift(&std::mem::take(&mut em.out), crate::hoist::MIN)?;
     if let Some(m) = &modes {
         body.push_str(&m.js(plan, &em.classes));
     }
