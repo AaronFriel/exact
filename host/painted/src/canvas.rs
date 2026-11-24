@@ -1251,7 +1251,9 @@ impl<D: DataSource + Default> CanvasHost<D> {
                 if !quick {
                     self.p.sync_surfaces();
                 }
-                self.surfaces = self.p.render_surfaces(now);
+                self.surfaces = self
+                    .p
+                    .render_surfaces(now, vsync || agent::clock(&self.p).is_some());
                 self.p.sync_canvas_views();
             }
         }
@@ -1325,7 +1327,8 @@ impl<D: DataSource + Default> CanvasHost<D> {
     /// Whether more work is wanted, or only work that must wait for vsync.
     pub fn animating(&self, vsync_only: bool) -> bool {
         if vsync_only {
-            return agent::clock(&self.p).is_none() && (self.surfaces || self.p.wants_frames());
+            return agent::clock(&self.p).is_none()
+                && (self.surfaces || self.p.wants_frames() || crate::surfaces::sensors::waiting());
         }
         self.p.dirty()
             || self.p.scroll_end_due().is_some_and(|due| due <= self.now())

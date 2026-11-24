@@ -148,11 +148,13 @@ impl Abi {
                 "gpu_children_mode",
                 "gpu_placement",
                 "gpu_unload",
-                "gpu_create_headless",
+                "gpu_create_painted",
                 "gpu_storage",
                 "gpu_bind_at",
                 "gpu_agent",
                 "gpu_input",
+                "gpu_frame_dirty",
+                "gpu_frame_pending",
                 "gpu_wants_input",
                 "gpu_presentation_flags",
                 "gpu_published",
@@ -270,6 +272,14 @@ impl Abi {
         // calls; `T` is pointer-sized (checked above) and the caller's
         // declared signature for it.
         unsafe { std::mem::transmute_copy::<usize, T>(&address) }
+    }
+    fn frame_pending(&self, id: u32) -> bool {
+        unsafe { self.symbol::<Read>(b"gpu_frame_pending")(id) != 0 }
+    }
+    fn frame_dirty(&self, id: u32, now: f64) -> bool {
+        unsafe {
+            self.symbol::<unsafe extern "C" fn(u32, f64) -> u32>(b"gpu_frame_dirty")(id, now) != 0
+        }
     }
     fn lifecycle(&self, id: u32, code: u32) {
         // Android loads its device in `android::load`, without `rendered`; its
@@ -532,6 +542,8 @@ pub(crate) struct Surfaces {
     attempted: BTreeSet<String>,
     canvases: BTreeMap<u32, Canvas>,
     defer_readback: bool,
+    drawn_sizes: BTreeMap<u32, (f32, f32)>,
+    rested_pixels: BTreeMap<u32, (u32, f32, f32, f32)>,
     performance_due: Option<std::time::Instant>,
     edits_admitted: bool,
     restore: Option<Result<Vec<u8>, String>>,
@@ -752,7 +764,7 @@ impl Surfaces {
             if !self.canvases.contains_key(&update.view) {
                 let id = unsafe {
                     abi.symbol::<unsafe extern "C" fn(*const u8, usize) -> u32>(
-                        b"gpu_create_headless",
+                        b"gpu_create_painted",
                     )(update.name.as_ptr(), update.name.len())
                 };
                 if id == 0 {

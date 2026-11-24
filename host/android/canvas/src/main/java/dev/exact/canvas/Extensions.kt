@@ -571,7 +571,7 @@ class SurfaceInput internal constructor(val surface: String) {
     fun end(sensor: String, at: Double) = write(sensor, DoubleArray(0), 0, at, true)
 
     private fun write(sensor: String, values: DoubleArray, dropped: Int, at: Double, ended: Boolean) {
-        if (Native.sensorInput(surface, sensor, values, dropped, at, ended)) Exact.wake()
+        if (Native.sensorInput(surface, sensor, values, dropped, at, ended)) Exact.sensorFrame()
     }
 }
 

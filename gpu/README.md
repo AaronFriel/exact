@@ -370,6 +370,11 @@ world's ticks. `gpu_max_fps(id)`
 (native) reports the cap, which the Apple host uses to lower its `CADisplayLink`'s
 preferred rate while nothing else on screen asks for more.
 
+A painted host mounts its canvas with `gpu_create_painted`. When the last
+complete picture still fits, `gpu_frame_dirty(id, now_ms)` lets the game tick
+input before drawing. Android uses `gpu_frame_pending(id)` to request a display
+callback while input waits for its fixed simulation tick.
+
 Before each frame `Surface::timing` receives a `FrameTiming`: the interval since
 the canvas's previous drawn frame (0 after a rest), the display period
 (`gpu_period`), the host's callback (`gpu_host_frame(raw_ms, callback_ms,
@@ -386,8 +391,8 @@ through `SHUTDOWN` critical. The device package reports moderate throttling as
 | web | yes | `gpu_due` in the `requestAnimationFrame` loop | callback times; thermal unknown |
 | iOS, tvOS, macOS | yes | capped `CADisplayLink` range and `gpu_due` per canvas | callback times, fastest period, thermal state |
 | Android | yes | `gpu_due` per canvas; the cap asked of the platform: `Surface.setFrameRate` with `DEFAULT` compatibility for a canvas with a window of its own (Android 11 and later), `View.setRequestedFrameRate` for one drawn from its buffers in the reader's window (Android 15 and later) | `gpu_period`: Choreographer's vsync spacing (Android 13 and later), else the display's refresh; callback times (Choreographer's frame time and when its callback began), the fastest mode's period at the current resolution, thermal state |
-| Linux (display) | no: a rendered canvas repaints every display frame | no | `gpu_period`: the DRM mode's pixel clock over its total pixels |
-| Linux headless, Windows (readback and window frame) | no: a rendered canvas repaints every display frame | no | none |
+| Linux (display) | the live canvas retains its picture between display frames | no | `gpu_period`: the DRM mode's pixel clock over its total pixels |
+| Linux headless, Windows (readback and window frame) | the live canvas retains its picture between display frames | no | none |
 
 Android canvas caps use an interactive-content vote: AOSP suppresses global touch boost when a
 `DEFAULT` vote is present and still favors refresh rates that are exact multiples of the requested rate.

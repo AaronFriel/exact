@@ -169,6 +169,7 @@ impl<D: DataSource> Presenter<D> {
                     )
                 };
                 if result == 0 {
+                    self.surfaces.drawn_sizes.insert(view, self.viewport());
                     self.surfaces.window_artifact = Some(canvas.artifact.clone());
                     self.surfaces.owe_records([view]);
                     return Ok(None);

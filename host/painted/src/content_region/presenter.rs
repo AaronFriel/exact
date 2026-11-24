@@ -173,6 +173,9 @@ impl<D: DataSource> Presenter<D> {
                 previous,
                 self.brush.window_canvas,
             );
+            if self.surfaces.has_rendered_canvas() {
+                self.brush.placements = self.surfaces.placements(&self.host, false);
+            }
         }
         // The hatches' overlays as published (LLP 1075.003.000.001 §2.2.1):
         // read here, at the start of the paint; the walk calls no hatch.

@@ -512,6 +512,11 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         handler.post(f)
     }
 
+    /** A canvas has samples for its next display callback. */
+    fun sensorFrame() = tell {
+        if (running && !turnPosted) choreographer?.let { turnPosted = true; turns.post(it) }
+    }
+
     /** Run [f] on the exact thread, then publish what it changed. */
     fun call(f: () -> Unit) {
         handler.post { f(); produce() }
@@ -926,7 +931,10 @@ internal object Exact {
     fun pressLive(id: Long): Boolean = owner?.sync(publish = false) { Native.pressLive(id) } ?: false
     /** A line for the session's journal, on exact2's thread, in order with what the extensions tell ([changed]). */
     fun journal(line: String) { val o = owner; if (o != null) o.hand(OwnerReplies.Handed.Journal(line)) else Native.journal(line) }
-    /** A turn on exact2's thread, which asks for a display frame while a canvas input's samples wait. */
+    private val sensorMain = Handler(Looper.getMainLooper())
+
+    fun sensorFrame() { owner?.sensorFrame() ?: sensorMain.post { mainThreadTurned() } }
+    /** A turn on exact2's thread for an asynchronous result. */
     fun wake() { owner?.call {} }
     fun presence(answer: String) { val o = owner; if (o != null) o.call { Native.presence(answer) } else Native.presence(answer) }
     /** A live activity's answer or list ([Activities]), on exact2's thread. */
