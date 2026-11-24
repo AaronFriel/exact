@@ -471,6 +471,27 @@ final class IframeAutomationTests: XCTestCase {
         }
     }
 
+    func testClosingASessionReleasesItsUnmountedReceiverBeforeTheFlush() throws {
+        let arm = try arm(), seen = Seen()
+        weak var retained: Seen?
+        autoreleasepool {
+            let (handle, web) = mount(arm, seen)
+            let receiver = Seen()
+            retained = receiver
+            let channel: [String: Any] = ["type": "channel", "value": ["channel": "playback"]]
+            let args: [String: Any] = ["sandbox": "player", "arguments": [channel], "channelSession": "closing",
+                                       "functionDeclaration": "post => { window.send = post }"]
+            XCTAssertNil(run(arm, "callFunction", args, message: { receiver.records.append(("post", $0 as! [String: Any])) })["error"])
+            web.removeFromSuperview()
+            arm.destroy(handle)
+        }
+        autoreleasepool {
+            XCTAssertNotNil(retained)
+            XCTAssertNil(run(arm, "releaseScriptChannels", ["channelSession": "closing"])["error"])
+        }
+        XCTAssertNil(retained)
+    }
+
     func testClosingSessionsRemovesTheirDocumentStartScripts() throws {
         let arm = try arm(), seen = Seen()
         let (handle, web) = mount(arm, seen)

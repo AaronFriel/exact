@@ -77,6 +77,7 @@ enum Automations {
         if request["op"] as? String == "releaseScriptChannels", let session = request["channelSession"] as? String,
            let owner = request["owner"] as? String, !owner.isEmpty {
             for arm in arms.allObjects where arm.owner == owner { arm.automation?.releaseChannels(session) }
+            FrameAutomation.releaseRetirements(owner: owner, session: session)
             return finish([:])
         }
         var options = request
@@ -144,6 +145,9 @@ final class FrameAutomation {
     }
     private var preload: [(id: String, script: WKUserScript, session: String?, seededWorld: String?)] = []
     private final class Messages: NSObject, WKScriptMessageHandlerWithReply {
+        let owner: String
+        let session: String
+        private var flushing: [ObjectIdentifier: WKWebView] = [:]
         let handler = "_message" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
         private struct Capability {
             let channel: String
@@ -173,7 +177,9 @@ final class FrameAutomation {
         private let views = NSMapTable<WKWebView, NSString>.weakToStrongObjects()
         private let controllers = NSHashTable<WKUserContentController>.weakObjects()
 
-        init(_ arm: WebArm, _ world: WKContentWorld, _ route: String, _ deliver: @escaping AutomationMessage) {
+        init(_ arm: WebArm, _ world: WKContentWorld, _ route: String, _ session: String, _ deliver: @escaping AutomationMessage) {
+            self.owner = arm.owner
+            self.session = session
             self.arm = arm
             self.world = world
             self.route = route
@@ -194,15 +200,22 @@ final class FrameAutomation {
             controllers.removeAllObjects()
             views.removeAllObjects()
             issued.removeAll()
+            flushing.removeAll()
             deliver = nil
         }
 
         func retire(_ view: WKWebView) {
             guard views.object(forKey: view) != nil else { return }
             views.setObject((arm?.element ?? "") as NSString, forKey: view)
-            // Give WebKit a turn in this world to deliver posts sent before the view was retired.
-            view.evaluateJavaScript("void 0", in: nil, in: world) { _ in
+            // WebKit discards even a queued post when its view dies. The session owns the view
+            // through the flush and can release it on close if the page never services the evaluation.
+            let id = ObjectIdentifier(view)
+            flushing[id] = view
+            FrameAutomation.retiring.add(self)
+            view.evaluateJavaScript("void 0", in: nil, in: world) { [weak self] _ in
+                guard let self, let view = self.flushing.removeValue(forKey: id) else { return }
                 self.views.removeObject(forKey: view)
+                if self.flushing.isEmpty { FrameAutomation.retiring.remove(self) }
                 let controller = view.configuration.userContentController
                 if self.controllers.contains(controller), !self.views.keyEnumerator().allObjects.contains(where: { ($0 as? WKWebView)?.configuration.userContentController === controller }) {
                     controller.removeScriptMessageHandler(forName: self.handler, contentWorld: self.world)
@@ -228,6 +241,15 @@ final class FrameAutomation {
             let context = arm?.built === view ? arm?.element ?? (saved as String) : saved as String
             let source = ["realm": FrameAutomation.realmId(route, parts[1], origin), "origin": origin, "context": context]
             deliver?(["channel": channel, "json": parts[2], "source": source])
+        }
+    }
+
+    nonisolated(unsafe) private static let retiring = NSHashTable<Messages>.weakObjects()
+
+    static func releaseRetirements(owner: String, session: String) {
+        for sink in retiring.allObjects where sink.owner == owner && sink.session == session {
+            sink.uninstall()
+            retiring.remove(sink)
         }
     }
 
@@ -588,7 +610,7 @@ final class FrameAutomation {
         var reserved: [String] = []
         let route = routes[name] ?? UUID().uuidString
         let destination = Destination(sandbox: name, session: request["channelSession"] as? String ?? "")
-        let sink = messages[destination] ?? Messages(arm, world, route, message)
+        let sink = messages[destination] ?? Messages(arm, world, route, destination.session, message)
         for (i, props) in properties.enumerated() {
             guard let channel = props?["channel"] as? String else { expressions.append("__exactArguments[\(i)]"); continue }
             let capability = sink.reserve(channel)
