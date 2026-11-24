@@ -563,7 +563,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
 
     func updateMaterial() {
         let requested = props["backgroundMaterial"]
-        defer { applyBackdrop(); syncGlassSlot(); syncGlassGroup(); syncMenuPanelScroll() }
+        defer { applyBackdrop(); syncGlassSlot(); syncGlassGroup(); syncScrollCorner() }
         let kind = requested ?? (needsSheetMaterial ? "sheet" : paintedMenuRadius != nil && !unevenCorners ? "glass" : nil)
         if materialKind != kind {
             releaseGlassIsolation()
@@ -1306,9 +1306,9 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         if let row = superview as? NodeView, row.style["appearance"] != nil { row.needsLayout = true } // its bezel (FormRowsMac.swift)
         if focusVisible { noteFocusRingMaskChanged() } // the ring follows the box
         layerPaintCache = nil
-        if hasBoxPaint || clipsToBounds || clipBox != nil { applyClipRadius() }
+        if hasBoxPaint || clipsToBounds || clipBox != nil || scroll != nil { applyClipRadius() } // a scroller's corner is its scroll view's
         syncEllipticalClip()
-        if materialView != nil { applyMaterialRadius(); syncMenuPanelScroll() }
+        if materialView != nil { applyMaterialRadius() }
         if !backdropOperations.isEmpty { applyBackdrop() }
         // Border, gradient and image sublayers follow the new size.
         if layerBoxEligible && (hasBoxPaint || kind == "image") { needsDisplay = true }

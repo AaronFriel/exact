@@ -416,6 +416,7 @@ extension NodeView {
             box.layer.cornerCurve = curve
         }
         if layer.cornerCurve != curve { layer.cornerCurve = curve }
+        syncScrollCorner()
         // A vibrant fill is its vibrancy view's (`VibrancyIOS.swift`).
         let bg = onLayer && !away && !cssVisibilityHidden && (vibrancyView == nil || isParagraph) ? fill : nil
         applyCornerFill(shapedRadii ? bg : nil)

@@ -46,8 +46,13 @@ package final class ChainingScrollView: NSScrollView {
             alphaValue = 0
         } else { super.removeFromSuperview() }
     }
+    /// What its padding edge cuts away (`clip(toPaddingEdge:inset:)`) is not there to hit: under its node's border
+    /// a point is this view's own, as its empty chrome is, and not a child's scrolled beneath the border.
     package override func hitTest(_ point: NSPoint) -> NSView? {
-        removeAfterMouseUp ? nil : super.hitTest(point)
+        guard !removeAfterMouseUp, let hit = super.hitTest(point) else { return nil }
+        // `point` is in the superview's coordinates, its node's, as the edge is.
+        if let edge = paddingClip?.path, !edge.contains(point) { return self }
+        return hit
     }
     package override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         pointerOwner?.acceptsFirstMouse(for: event) ?? super.acceptsFirstMouse(for: event)
@@ -78,6 +83,43 @@ package final class ChainingScrollView: NSScrollView {
     /// contained scroller moves on AppKit's scrolling thread and the main
     /// thread follows it (LLP 1002 D4; LLP 1044 F3).
     package override class var isCompatibleWithResponsiveScrolling: Bool { true }
+
+    /// How far inside this view its node's padding edge lies on each side, while that edge masks it
+    /// (`clip(toPaddingEdge:inset:)`). The scrollers, which the mask would cut where they lie over the border, keep
+    /// inside it (`insetScrollersFromChrome`), between the border and the padding edge, where
+    /// [CSS has a scrollbar](https://drafts.csswg.org/css-overflow-3/#scrollbar-gutter-property).
+    private(set) var clipInsets = NSEdgeInsetsZero {
+        didSet { if !NSEdgeInsetsEqual(clipInsets, oldValue) { insetScrollersFromChrome() } }
+    }
+    /// Its node's padding edge, in the node's coordinates, while a border puts that edge inside this view
+    /// (`NodeView.syncScrollCorner`), `inset` from its sides by the border's widths. It masks this view's own layer,
+    /// which stays where its node put it: AppKit scrolls the clip view inside it, on its own thread
+    /// (`isCompatibleWithResponsiveScrolling`), so nothing has to follow the scroll. This view stays its node's
+    /// subview, with its frame, its clip view, its document and its scroll range, and what finds its node from it
+    /// by `superview` (a drag, a snap, a wheel over a smooth scroll) still does.
+    private var paddingClip: CAShapeLayer?
+    func clip(toPaddingEdge edge: CGPath?, inset: NSEdgeInsets) {
+        guard let edge else {
+            if let clip = paddingClip, layer?.mask === clip { layer?.mask = nil }
+            paddingClip = nil
+            return clipInsets = NSEdgeInsetsZero
+        }
+        wantsLayer = true
+        let clip = paddingClip ?? CAShapeLayer()
+        if paddingClip == nil {
+            clip.anchorPoint = .zero
+            clip.fillColor = CGColor(gray: 1, alpha: 1)
+            // A layer no view owns would ease to a new edge.
+            clip.actions = ["position": NSNull(), "path": NSNull()]
+            paddingClip = clip
+        }
+        if clip.path != edge { clip.path = edge }
+        // The node's origin in this view's coordinates, which do not scroll.
+        let origin = CGPoint(x: bounds.minX - frame.minX, y: bounds.minY - frame.minY)
+        if clip.position != origin { clip.position = origin }
+        if layer?.mask !== clip { layer?.mask = clip }
+        clipInsets = inset
+    }
 
     private var styleObserver: NSObjectProtocol?
     package override init(frame: NSRect) {

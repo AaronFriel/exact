@@ -177,7 +177,6 @@ final class NodeExtras {
     var symbolRefusal: String?
     var listSymbol = false
     var listRow = false
-    var scrollCornered = false
     var focusRing: CAShapeLayer?
     var scrollEventQueued: Bool = false
     /// The last `scroll` event's values (`sendScrollEvent`).
@@ -475,8 +474,6 @@ extension NodeView {
             accessibilityTraits.insert(newValue ? .button : .link); accessibilityTraits.remove(newValue ? .link : .button)
         }
     }
-    /// Whether its scroll view holds a default surface's corner (`syncDefaultSurfaceScroll`).
-    var scrollCornered: Bool { get { extras?.scrollCornered ?? false } set { if newValue || extras != nil { more.scrollCornered = newValue } } }
     var focusRing: CAShapeLayer? { get { extras?.focusRing } set { if newValue != nil || extras != nil { more.focusRing = newValue } } }
     var scrollEventQueued: Bool { get { extras?.scrollEventQueued ?? false } set { if newValue || extras != nil { more.scrollEventQueued = newValue } } }
     var lastScrollEvent: [Double] { get { extras?.lastScrollEvent ?? [] } set { if !newValue.isEmpty || extras != nil { more.lastScrollEvent = newValue } } }

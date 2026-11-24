@@ -276,6 +276,11 @@ extension NSScrollView {
             insets.left = max(0, min(safe.minX, box.maxX) - box.minX)
             insets.right = max(0, box.maxX - max(safe.maxX, box.minX))
         }
+        // A `scroll` node's padding edge masks its scroll view: the scrollers keep inside that too.
+        if let clip = (self as? ChainingScrollView)?.clipInsets {
+            insets = NSEdgeInsets(top: max(insets.top, clip.top), left: max(insets.left, clip.left),
+                                  bottom: max(insets.bottom, clip.bottom), right: max(insets.right, clip.right))
+        }
         let now = scrollerInsets
         // Setting the insets tiles again, which asks here again: equal, it stops.
         if now.top != insets.top || now.left != insets.left || now.bottom != insets.bottom || now.right != insets.right {

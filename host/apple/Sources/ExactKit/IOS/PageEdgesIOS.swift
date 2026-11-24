@@ -224,6 +224,7 @@ extension NodeView {
         // A layout transition's surface that took the clip over keeps it until it ends (`endSurface`)
         if surface?.clippedSelf != true, clipsToBounds != clipsItself { clipsToBounds = clipsItself }
         sv.frame = scrollFrame
+        syncScrollCorner()
         // A list that keeps its end judges it, for the writer next, as it did before reach moved the frame
         (sv as? ScrollView)?.boundsGrew(by: sv.bounds.height - height)
         fitScroll()
@@ -246,6 +247,7 @@ extension NodeView {
         // A layout transition's surface that took the clip over keeps it until it ends (`endSurface`)
         if surface?.clippedSelf != true, clipsToBounds != clipsItself { clipsToBounds = clipsItself }
         sv.frame = scrollFrame
+        syncScrollCorner()
         var inset = sv.contentInset, bars = sv.verticalScrollIndicatorInsets
         inset.top += own.top - oldOwn.top; inset.bottom += own.bottom - oldOwn.bottom
         bars.top += own.top - oldOwn.top; bars.bottom += own.bottom - oldOwn.bottom
