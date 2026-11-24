@@ -92,7 +92,7 @@ internal class Requests(private val activity: ExactActivity) {
 
     /** The requests in [words]: for each its kind, its id, the count of words that follow, and those words. A kind
      * this reader does not know is skipped by its count. */
-    fun perform(words: IntArray) {
+    fun perform(words: IntArray, module: ModuleSession? = ModuleSession.current) {
         var i = 0
         while (i + 3 <= words.size) {
             val kind = words[i]; val id = words[i + 1]; val body = i + 3
@@ -121,7 +121,7 @@ internal class Requests(private val activity: ExactActivity) {
                     KEEP_SCREEN_ON -> view?.keepScreenOn = words[body] != 0
                     PICK -> pick(id, words, body)
                     HATCH -> activity.hatches()?.told(words, body, i)
-                    MODULE -> Extensions.call(id, string(words, body).first)
+                    MODULE -> Extensions.call(id, string(words, body).first, module)
                     PRESENCE -> Presence.check(string(words, body).first)
                     ACTIVITY -> Activities.request(string(words, body).first)
                     ORIENTATION -> orientation.told(words, body)
@@ -318,7 +318,7 @@ internal class Requests(private val activity: ExactActivity) {
     companion object {
         /** No activity can open UI, but process-owned waits still receive their cleanup, and the extensions, which
          * outlive the activity, still answer their calls: one that needs an activity says so in its answer. */
-        fun detached(words: IntArray) {
+        fun detached(words: IntArray, module: ModuleSession? = ModuleSession.current) {
             var i = 0
             while (i + 3 <= words.size) {
                 val kind = words[i]; val id = words[i + 1]; val body = i + 3
@@ -328,7 +328,7 @@ internal class Requests(private val activity: ExactActivity) {
                     FILES -> Exact.answer(id, "file picker: activity unavailable")
                     AUTH -> Exact.answer(id, "cancelled")
                     AUTH_END -> Auth.end(words[body])
-                    MODULE -> Extensions.call(id, string(words, body).first)
+                    MODULE -> Extensions.call(id, string(words, body).first, module)
                     PRESENCE -> Presence.check(string(words, body).first)
                     ACTIVITY -> Activities.request(string(words, body).first)
                 }

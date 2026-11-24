@@ -171,7 +171,7 @@ mod boot;
 mod clip;
 #[cfg(any(target_os = "android", test))]
 #[path = "canvas/clock.rs"]
-mod clock;
+pub(crate) mod clock;
 #[cfg(target_os = "android")]
 #[path = "canvas/codec.rs"]
 mod codec;

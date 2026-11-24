@@ -392,6 +392,10 @@ module artifact — with a photo-editor example as the consumer. Unblocks a
 platform widget without a host change or a new node type. Take: LLP 1024 §7's
 (§Components loses no line; `terminal` and friends stay out as built-in tags).
 
+**Expanded (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"; panel 4–0).**
+Pocket Lab can answer calls and announce watched topics from its own Kotlin in an Android
+app or game. The Canvas session owns its `ExactModule` across Activity recreation (LLP 1067.000).
+
 **Expanded (Charlie Cheever, 2026-10-01: asked for LLP 1075.003 implemented,
 its recommended rulings):** native platform control on Apple: hatches on an
 app's module that receive Exact's own UIKit objects, `data-*` attributes

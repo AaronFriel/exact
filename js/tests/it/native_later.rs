@@ -76,9 +76,9 @@ fn a_package_shell_reports_no_app_module_and_its_refusal_rejects() {
     for (has_module, synchronous) in [
         (
             false,
-            "NotSupportedError: no app native module is installed for native.call",
+            "NotSupportedError|NotSupportedError: no app native module is installed for native.call",
         ),
-        (true, "the app's module answers no native.call"),
+        (true, "Error|the app's module answers no native.call"),
     ] {
         let root = Root::new();
         let mut m = root.module();

@@ -381,7 +381,7 @@ open class ExactActivity : Activity() {
         val live = intent.getStringExtra("live").let { it == "1" || it == "true" }
         if (owner != null) {
             owner.chrome = { c -> chrome(c) }
-            owner.asked = { r -> requests.perform(r) }
+            owner.asked = requests::perform
             owner.rates = { r -> natives?.frameRates(r) }
             owner.displays(this)
             frameIdentity(owner)

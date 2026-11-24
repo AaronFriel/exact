@@ -5852,6 +5852,15 @@ Swift module loads that library with the app module. Under the agent,
 `state.extensions.<name>.implementation.loaded` reports whether it is mapped
 (LLP 1067.000.001).
 
+An app can answer its own data calls in Swift or Kotlin. On Apple, name the
+`ExactModule` subclass with `let exactModule` in `modules/apple`. On Android,
+define `class exact.app.Module : dev.exact.canvas.ExactModule()` in
+`modules/android`. The session owns one instance across Activity recreation.
+`native.call` runs a cheap query on main on Apple and on the caller's thread on Android. `native.later` starts on
+main and can reply from any thread. Use `context.after` for the session clock
+and `context.changed(topic)` for a source that reads `native.watch(topic)`.
+See the [native module recipe](recipes/native-module.md).
+
 Put vendor `.xcframework` bundles beside an Apple native module's Swift files
 (`modules/apple`, or its platform-local replacement). The Apple build selects
 by platform, device or simulator, and architecture from each bundle's `Info.plist`.

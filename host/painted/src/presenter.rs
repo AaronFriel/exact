@@ -200,6 +200,9 @@ pub use painter::{set_custom_painter, PainterChoice, PainterFactory, PainterInfo
 pub(crate) use palette::reported_accent;
 pub use palette::{material, ContrastPalette, Material, Palette, MATERIAL_ROLES};
 pub use pointer::PointerKind;
+#[cfg(target_os = "android")]
+#[doc(hidden)]
+pub use requests::android::attach as attach_android_module;
 pub use requests::{AgentTurn, Handed, Haptic, Pick, Request};
 pub use scrollers::{Scroller, Under, PAGE};
 pub use stage::SHEET_HANDLE;

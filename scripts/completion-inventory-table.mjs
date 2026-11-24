@@ -522,6 +522,11 @@ export const classifications = [
     ["web:host/web/src/abi/clock.rs", "exact_sensor_events exact_sensor_inputs"],
     ["web:host/web/src/abi/midi.rs", "exact_midi"],
   ]),
+  group("Android data module timers", ["subscription"], "Canvas session and its Kotlin module", "UI-owned",
+    "ModuleSession holds callbacks across Activity recreation and runner replacement. The session clock takes due timers; ending the session clears the callbacks.", [
+    ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_moduleAfter"],
+    ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::module_after"],
+  ]),
   group("module announcements", ["subscription"], "bound source/module and its active readers in this session", "UI-owned",
     "runner/src/runner/time.rs changed/apply_announced settle source watches; modules/events.rs raises events into the live module bindings. No durable outcome record is provided.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_app_changed exact_module_event"],
@@ -679,11 +684,12 @@ export const classifications = [
     ["apple:host/apple/src/abi/exports.rs", "exact_request_active"],
     ["painted:host/painted/src/canvas.rs", "CanvasHost::poll"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_poll Java_dev_exact_canvas_Native_requests"],
+    ["painted:host/painted/src/canvas/jni_start.rs", "Java_dev_exact_canvas_Native_endSession"],
     ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::requests"],
     ["painted:host/painted/src/host.rs", "Host::dispatch_work Host::has_ordered_request_refusals Host::has_request_refusals Host::native_work Host::refuse_request Host::release_work Host::take_request_refusal Host::take_requests"],
     ["painted:host/painted/src/presenter/commands.rs", "Presenter::run_commands"],
     ["painted:host/painted/src/presenter/requests.rs",
-      "Presenter::end_auth Presenter::end_packages Presenter::handle_modules Presenter::modules_replaced Presenter::orientation_applied Presenter::orientation_lock " +
+      "Presenter::end_auth Presenter::end_packages Presenter::install_shell_handlers Presenter::modules_replaced Presenter::orientation_applied Presenter::orientation_lock " +
       "Presenter::pick Presenter::serve_packages Presenter::serve_requests Presenter::take_requests Presenter::tell_shell Presenter::wakelock_moved"],
     ["painted:host/painted/src/teardown.rs", "finish"],
     ["render:host/render/src/executor.rs",
@@ -898,6 +904,7 @@ export const classifications = [
     ["painted:host/painted/src/canvas/frame_partitions.rs", "attach kept"],
     ["painted:host/painted/src/canvas/legacy.rs", "attach decode glyph"],
     ["painted:host/painted/src/canvas/presence.rs", "attach"],
+    ["painted:host/painted/src/presenter/requests/android.rs", "attach"],
     ["painted:host/painted/src/canvas/secrets.rs", "attach"],
     ["painted:host/painted/src/canvas/time.rs", "attach format"],
     ["painted:host/painted/src/com.rs", "ensure_mta ensure_sta"],

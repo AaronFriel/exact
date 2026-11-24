@@ -36,8 +36,9 @@ pub(super) fn extension_of(body: &[u8]) -> Option<String> {
 /// Whether a module call is a tell: one that names no `source` or `send`,
 /// so no request in flight stands for it.
 pub(super) fn told(body: &[u8]) -> bool {
-    serde_json::from_slice::<Json>(body)
-        .is_ok_and(|v| v.get("source").is_none() && v.get("send").is_none())
+    serde_json::from_slice::<Json>(body).is_ok_and(|v| {
+        v.get("extension").is_some() && v.get("source").is_none() && v.get("send").is_none()
+    })
 }
 
 impl Packages {

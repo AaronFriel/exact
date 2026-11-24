@@ -780,6 +780,7 @@
     try {
       return JSON.parse(host(6, "call", JSON.stringify(request)));
     } catch (e) {
+      if (e && /^NotSupportedError: /.test(e.message)) e.name = "NotSupportedError";
       // at bake, no module: storage's refusal (LLP 1067 D4)
       throw e && e.message === "bake"
         ? storageError("native.call() is unavailable during bake: the build links no native module", "bake")

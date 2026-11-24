@@ -82,10 +82,20 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         val picture: Long = 0L,
     )
 
+    @Volatile var module: ModuleSession? = null
+
     /** At the main thread's own priority, not above it ([priority]): its work is ahead of the frame the main thread
      * draws, never instead of it (THREAD_PRIORITY_DISPLAY let it preempt the main thread on a phone with few big cores:
      * heavy 12k/24k dropped to 113/108 fps). */
-    private val thread = HandlerThread("exact", priority).apply { start() }
+    @Volatile private var ended = false
+    private val thread = object : HandlerThread("exact", priority) {
+        override fun run() {
+            try { super.run() } finally {
+                ended = true
+                if (booted) Native.endSession()
+            }
+        }
+    }.apply { start() }
     private val handler = Handler(thread.looper)
     private val main = Handler(Looper.getMainLooper())
     private val mainNow = Handler.createAsync(Looper.getMainLooper())
@@ -103,7 +113,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
     val made = java.util.concurrent.ConcurrentHashMap<Int, android.graphics.Bitmap>()
     /** Called on the main thread with what exact2 asks of the platform ([Native.requests], LLP 1115.001 D5): the
      * view's activity that reads this owner now acts on them ([Requests]). */
-    @Volatile var asked: ((IntArray) -> Unit)? = null
+    @Volatile var asked: ((IntArray, ModuleSession?) -> Unit)? = null
 
     // The exact thread's own state.
     private var windowRead = 0
@@ -332,7 +342,12 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
      * acts on it. After every turn, and when exact2 wakes this thread for a request no frame follows (a haptic
      * changes no pixel); also while the activity is stopped, when no stream is made. */
     private fun requests(to: Handler = if (awaitingColdDraw) mainNow else main) {
-        Native.requests()?.let { r -> postMain(to) { asked?.invoke(r) ?: Requests.detached(r) } }
+        Native.requests()?.let { postRequests(it, to) }
+    }
+
+    private fun postRequests(words: IntArray, to: Handler) {
+        val module = this.module
+        postMain(to) { if (!ended) asked?.invoke(words, module) ?: Requests.detached(words, module) }
     }
 
     /** The window ([Native.window]): told before [boot] so the host is laid out in it from its first frame, and
@@ -522,15 +537,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         handler.post { f(); produce() }
     }
 
-    private val replies = OwnerReplies(::call) { h ->
-        when (h) {
-            is OwnerReplies.Handed.Answer -> Native.answer(h.id, h.value)
-            is OwnerReplies.Handed.Refused -> Native.refuseModule(h.id, h.error, h.message)
-            is OwnerReplies.Handed.Changed -> Native.changed(h.topic)
-            is OwnerReplies.Handed.Picture -> Native.pictureChanged(h.source, h.revoked)
-            is OwnerReplies.Handed.Journal -> Native.journal(h.line)
-        }
-    }
+    private val replies = OwnerReplies(::call, OwnerReplies::deliver)
 
     fun hand(handed: OwnerReplies.Handed) = replies.hand(handed)
 
@@ -539,9 +546,10 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
      * journal line as `{"journal"}` (`presenter::Handed`). */
     fun agentTurn(requests: IntArray?): String {
         check(Looper.myLooper() == thread.looper)
-        if (requests != null) postMain { asked?.invoke(requests) ?: Requests.detached(requests) }
+        if (requests != null) postRequests(requests, main)
         return org.json.JSONArray().apply {
             for (h in replies.take()) put(when (h) {
+                is OwnerReplies.Handed.After -> JSONObject().put("timer", h.timer).put("due", h.due)
                 is OwnerReplies.Handed.Answer -> org.json.JSONArray().put(h.id).put(h.value ?: org.json.JSONObject.NULL)
                 is OwnerReplies.Handed.Refused -> JSONObject().put("id", h.id).put("error", h.error).put("message", h.message)
                 is OwnerReplies.Handed.Changed -> h.topic

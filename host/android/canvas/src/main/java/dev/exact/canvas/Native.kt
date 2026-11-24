@@ -24,6 +24,8 @@ object Native {
      * reader that calls, which has none of the last one's rows, faces or pictures. `dir` is the app's files
      * directory; `store` its no-backup directory, where a library with an update store keeps it (LLP 1030.006 D3). */
     @JvmStatic external fun start(width: Int, height: Int, scale: Float, dir: String, store: String, live: Boolean): Boolean
+    /** The owning looper has ended. Release its host and session module on this thread. */
+    @JvmStatic external fun endSession()
     /** [start] on a thread of its own; [adopt] takes the host. Where a host already runs in this process nothing
      * boots, and [adopt] adopts that one as [start] does. */
     @JvmStatic external fun startAsync(width: Int, height: Int, scale: Float, dir: String, store: String, live: Boolean)
@@ -351,6 +353,7 @@ object Native {
     /** The frame clock, ms, retaining its monotonic origin across host turns ([ExtensionContext.now]). Under the
      * agent, held virtual time; during a capture lease, the display's live time. Any thread. */
     @JvmStatic external fun now(): Double
+    @JvmStatic external fun moduleAfter(timer: Int, due: Double)
 
     /** The file an `app:/data|cache|tmp/…` path names, or null (`ExtensionContext.file`). */
     @JvmStatic external fun appFile(path: String): String?

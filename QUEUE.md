@@ -4,6 +4,7 @@
 - Trace a warm return on iOS from touch delivery through route commit to presentation, and from HTTP arrival through resource settlement to presentation. Check which joins and cache or retained-answer facts survive export. The web trace matches a separately observed epoch to a frame callback (#1549).
 - Windows has no update store. A manifest declaring `host.windows` without `deploy.store.windows` bakes level A, which the window refuses at launch. Refuse it at bake time and name `deploy.store.windows: "0"`.
 - On Apple, call `native.later({ extension: "absent", op: "ping" })` beside a Swift module. ExactExtensions returns an error record as a successful reply when no package accepts the call.
+- With an app module installed, call `native.call({extension: "missing", sync: "read"})`. The runner returns `{"error":"NotSupportedError"}` as the synchronous answer for a missing package form.
 - Return `{"exact:answer":"true"}` from an Android package. Extensions.call decodes the string as the Boolean `true`.
 - Call a package through raw `native.later` with `admit: {status: "permission", field: "state"}` and a status of `prompt`. Apple and Android return a successful `person-required` record. The generated package binding rejects it as `NotAllowedError`.
 - Run `bun test scripts/completion-inventory.test.mjs` on `529c55c7f`. The inventory reports stale entries for `Presenter::agent_scroll_drag` and `Presenter::recognize_arrange_hold` although both methods exist.

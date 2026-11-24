@@ -23,6 +23,8 @@ use exact_runner::orientation::Session;
 use exact_runner::share::Share;
 use exact_runner::ControlValue;
 
+#[cfg(target_os = "android")]
+pub(super) mod android;
 mod packages;
 #[cfg(test)]
 mod packages_tests;
@@ -301,6 +303,8 @@ pub(super) struct State {
     packages: packages::Packages,
     /// Whether the native slot's handler is installed.
     handling: bool,
+    #[cfg(target_os = "android")]
+    pub(crate) app_module: android::Session,
     /// The target this host said and the extensions it bound (as in
     /// production, under the agent): what a replacement runner is told.
     target: Option<&'static str>,
@@ -438,6 +442,13 @@ pub enum Handed {
         /// The reason, when the package supplies one.
         message: Option<String>,
     },
+    /// A Kotlin callback due at an absolute session time.
+    After {
+        /// The callback number.
+        timer: i32,
+        /// The deadline in milliseconds.
+        due: f64,
+    },
     /// A topic an extension announced ([`exact_runner::Native::changed`]).
     Changed(String),
     /// A picture an extension changed or revoked
@@ -500,6 +511,10 @@ impl<D: DataSource> Presenter<D> {
                 Handed::Refused { id, error, message } => {
                     self.refuse_module(id, &error, message.as_deref());
                 }
+                #[cfg(target_os = "android")]
+                Handed::After { timer, due } => self.module_after(timer, due),
+                #[cfg(not(target_os = "android"))]
+                Handed::After { .. } => {}
                 Handed::Changed(topic) => self.host.runner().native_slot().changed(&topic),
                 Handed::Picture { picture, revoked } => self.picture_changed(&picture, revoked),
                 Handed::Journal { journal } => self.host.runner_mut().log(journal),
@@ -607,6 +622,10 @@ impl<D: DataSource> Presenter<D> {
         if std::mem::replace(&mut self.requests.handling, true) {
             return;
         }
+        self.install_shell_handlers();
+    }
+
+    pub(crate) fn install_shell_handlers(&self) {
         let (inbox, wake) = (self.requests.inbox.clone(), self.executor.waker());
         let handler: exact_runner::NativeHandler = std::sync::Arc::new(move |body, reply| {
             inbox
@@ -615,10 +634,13 @@ impl<D: DataSource> Presenter<D> {
                 .push((body, reply));
             wake();
         });
-        self.host
-            .runner()
-            .native_slot()
-            .host_packages(Some(handler));
+        let slot = self.host.runner().native_slot();
+        #[cfg(target_os = "android")]
+        if let Some(call) = self.requests.app_module.call() {
+            slot.host(Some(handler.clone()));
+            slot.host_call(Some(call));
+        }
+        slot.host_packages(Some(handler));
     }
 
     /// The module calls handed over since the last turn: a composed

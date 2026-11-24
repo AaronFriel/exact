@@ -180,7 +180,7 @@ async function work(_source:string, args:unknown[], store:Store, storage:Storage
   if (op === 'native-probe') {
     let sync: string;
     try { native!.call({op: 'ping'}); sync = 'answered'; }
-    catch (e: any) { sync = e.message; }
+    catch (e: any) { sync = e.name + '|' + e.message; }
     try { await native!.later({op: 'ping'}); return {text: 'resolved'}; }
     catch (e: any) { return {text: [native!.available, sync, e.name, e.message].join('|')}; }
   }

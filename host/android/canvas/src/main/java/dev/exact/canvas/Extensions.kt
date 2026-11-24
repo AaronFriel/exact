@@ -659,7 +659,7 @@ internal object Extensions {
      */
     fun clock() { for (extension in made.values.toList()) extension.clock() }
 
-    fun call(id: Int, body: String) {
+    fun call(id: Int, body: String, module: ModuleSession? = ModuleSession.current) {
         val answered = java.util.concurrent.atomic.AtomicBoolean()
         fun refuse(error: String = "NotSupportedError", message: String? = null) {
             if (answered.compareAndSet(false, true)) Exact.refuseModule(id, error, message)
@@ -677,8 +677,12 @@ internal object Extensions {
         }
         val request = try { JSONObject(body) } catch (e: org.json.JSONException) { return refuse(message = e.message) }
         try {
-            clock()
+            if (!request.has("extension")) {
+                if (module == null) return refuse()
+                return module.later(id, request)
+            }
             val name = request.opt("extension") as? String ?: return refuse()
+            clock()
             val extension = extension(name) ?: return refuse()
             val source = request.opt("source").takeUnless { it === JSONObject.NULL }
             val send = request.opt("send").takeUnless { it === JSONObject.NULL }

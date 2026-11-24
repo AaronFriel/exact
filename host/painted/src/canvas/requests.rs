@@ -68,6 +68,11 @@ impl<D: DataSource + Default> CanvasHost<D> {
         self.p.take_requests()
     }
 
+    /// A Kotlin module callback, registered between host turns.
+    pub fn module_after(&mut self, timer: i32, due: f64) {
+        self.p.module_after(timer, due);
+    }
+
     /// What the reader's hatches ask (`hatches::reader::act`), run at once,
     /// between turns: its answer, -1 when refused. A view hosted or let go
     /// paints again.

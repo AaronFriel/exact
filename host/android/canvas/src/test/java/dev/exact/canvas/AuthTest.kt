@@ -328,7 +328,7 @@ class AuthTest {
             .get(owner) as android.os.HandlerThread
         Exact.owner = owner
         owner.running(false)
-        owner.asked = { Requests(activity).perform(it) }
+        owner.asked = Requests(activity)::perform
         try {
             controller.pause().stop().destroy()
             assertNull(Exact.reader)
@@ -358,7 +358,7 @@ class AuthTest {
             .get(owner) as android.os.HandlerThread
         Exact.owner = owner
         owner.running(false)
-        owner.asked = { Requests(activity).perform(it) }
+        owner.asked = Requests(activity)::perform
         try {
             controller.pause().stop().destroy()
             assertNull(Exact.reader)
