@@ -2044,6 +2044,5 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - Building a web JS box with `transition="translate -exact-spring()"` warns that the transition row was skipped even though the browser plays it (#1529). Report only transitions the host actually skips.
 - `contract vocab` prints a drag example that `docs/card.md` omits. The printed card is 12,330 bytes against its 12,288-byte limit. Run `cargo test -p contract --bin contract vocab::card`.
 - The rendered link and icon test times out waiting for the adoption journal entry after the first button click. Run `bun test host/web-js/dom.test.mjs -t "Bun-rendered links and icons"`.
-- The app-frame test for retaining a guest document fails in `tree.js` with `Hooks.frame is not a function`. Run `bun test host/web/tests/app-frame.test.mjs -t "an unchanged app source"`.
 - The form keyboard fixture returns HTTP 404 for `drag-in.js`. Run `bun test host/web/tests/form-chrome.test.mjs -t "cancelling a prompt Return at window keydown"`.
 - The placement opacity test paints its second child at about 0.25 opacity where it expects 0.1625. Run `bun test host/web/tests/placement.test.mjs -t "placement opacity multiplies classes"`.
