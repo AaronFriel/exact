@@ -56,10 +56,8 @@ pub fn bake(platform: &str, app_dir: &str) {
     bake_source(platform, app_dir, (), "()", "Default::default()", false);
 }
 
-/// A game's host crates: the manifest its GPU build resolved into `.shells/`, the Rust replacement off, the packages
-/// composed without hatches, and the plain Apple host.
-const GAME: Shape<'static> = Shape {
-    manifest: ".shells",
+/// A game's host crates: the Rust replacement off, the packages composed without hatches, and the plain Apple host.
+const GAME: Shape = Shape {
     replacement: false,
     composed: false,
     apple_linked: false,

@@ -6,10 +6,7 @@ use contract::DataSource;
 use std::{env, fs, path::Path, path::PathBuf};
 
 /// What differs between the two generators' host crates.
-pub struct Shape<'a> {
-    /// The directory, relative to the app, whose app.json the bake reads: the app's own (`.`), or the copy a game's
-    /// bake resolves into `.shells/`.
-    pub manifest: &'a str,
+pub struct Shape {
     /// Whether the entry takes the manifest's Rust replacement mode (an app). A game's generated hosts require it off.
     pub replacement: bool,
     /// Whether the desktop hosts compose the app's packages and Rust hatches from `packages.rs` and `hatches.rs`,
@@ -23,10 +20,9 @@ pub struct Shape<'a> {
     pub shortcuts: bool,
 }
 
-impl Shape<'_> {
+impl Shape {
     /// An app's host crate (LLP 1153.003 D2).
-    pub const APP: Shape<'static> = Shape {
-        manifest: ".",
+    pub const APP: Shape = Shape {
         replacement: true,
         composed: true,
         apple_linked: true,
@@ -101,12 +97,17 @@ pub fn bake<D: DataSource>(
         return;
     }
     let app = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).join(app_dir);
-    let manifest_dir = app.join(shape.manifest);
     println!("cargo:rerun-if-env-changed=EXACT_ASSET_ROOTS");
-    for path in ["app.json", "assets", "deck", "gpu/shaders"]
-        .iter()
-        .map(|path| app.join(path))
-        .chain([manifest_dir.join("app.json")])
+    // The manifest is a game's resolved `.shells/app.json` where it has one (`Manifest::read`).
+    for path in [
+        "app.json",
+        ".shells/app.json",
+        "assets",
+        "deck",
+        "gpu/shaders",
+    ]
+    .iter()
+    .map(|path| app.join(path))
     {
         // A nonexistent watch path makes Cargo rebuild every invocation.
         if path.exists() {
@@ -117,8 +118,7 @@ pub fn bake<D: DataSource>(
     // Cargo's build-script fingerprint aligned with the compiler's imports so
     // an edit to a component file reruns this bake.
     contract::rerun_if_changed(&app.join("app.contract"));
-    let manifest =
-        contract::Manifest::read(&manifest_dir).unwrap_or_else(|e| panic!("app.json: {e}"));
+    let manifest = contract::Manifest::read(&app).unwrap_or_else(|e| panic!("app.json: {e}"));
     let mut plan = contract::compile_path(&app.join("app.contract"))
         .unwrap_or_else(|e| panic!("app.contract: {e}"));
     if shape.shortcuts {

@@ -22,7 +22,10 @@ val widgets = providers.gradleProperty("widgets").orNull == "1"
 
 val app = providers.gradleProperty("app").get()
 val appDir = providers.gradleProperty("appDir").orNull?.let { file(it) } ?: rootDir.resolve("../../apps/$app")
-val manifest = JsonSlurper().parse(appDir.resolve("app.json")) as Map<*, *>
+// A game's manifest is the one its shells were generated with (`-PappManifest`, its `.shells/app.json`), which has
+// its `app` identity; the rest of the app (`modules/android`, `.exact/`) is in its directory.
+val manifestFile = providers.gradleProperty("appManifest").orNull?.let { file(it) } ?: appDir.resolve("app.json")
+val manifest = JsonSlurper().parse(manifestFile) as Map<*, *>
 val androidHost = (manifest["host"] as Map<*, *>?)?.get("android") as Map<*, *>?
 val packageId = providers.gradleProperty("applicationId").get()
 val backgroundPlayback = video && manifest["audio_session"] == "playback"
