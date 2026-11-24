@@ -792,6 +792,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     /// route hatch hears `routeEnded` (LLP 1075.003 §3.2).
     private func end(_ c: RouteController) {
         #if os(iOS)
+        projectBottomToolbar(c, in: nil)
         barHosted.show([], in: c)
         barHosted.ended(c)
         #endif

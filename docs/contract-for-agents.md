@@ -4718,6 +4718,34 @@ different one with `navigationScroll`, by its `id`. The compiler refuses a liter
 name that no element of the route carries, or one whose element is a box that never
 scrolls on y (`lower-route-scroll`).
 
+For a route's bottom actions, put the scroller and then one toolbar row directly
+in the route's column. Give the scroller the remaining space.
+
+```text
+column navigationKey=`${e.id}` position="absolute" inset=0
+  scroll flex=1 min-height=0
+    …
+  row role="toolbar" toolbarPlacement="bottom"
+    button press=reshape
+      text "Reshape"
+    spacer
+    button press=openWidget
+      text "Widget"
+```
+
+On iOS and iPadOS the source row leaves the page. Its buttons become the
+route's native toolbar items and each spacer becomes a flexible space. The
+toolbar follows the route through navigation. UIKit includes it in the safe
+area, so the scroller's last row can scroll clear. Every other host lays out
+each live row where the author put it.
+
+A bottom toolbar must be a direct child of the route's column. An app that
+ships iOS can put only buttons and spacers in it. The compiler refuses two
+unconditional bottom toolbar rows and warns when an unconditional sibling
+follows a toolbar. If conditions or a loop emit several, UIKit uses the first
+in document order, leaves all source rows out of the page and writes one
+journal entry naming the route.
+
 ## Tabs and stacks
 
 On iOS, `overflow="auto"` or `"scroll"` on the navigation root keeps the native
