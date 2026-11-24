@@ -14,7 +14,6 @@
 - Reconcile the current LLP count with its ceiling. On main, `bun scripts/gate.mjs` reports 16 current LLPs against a cap of 15.
 - Check hyphens before digits in authored data attributes against LLP 1075.003 §3.3. Building a text node with `data-v-2="x"` reports `syntax-expected-expression`.
 - Supply the host clock in the Wasm body-to fixture. On the parent of the OPFS change, `bun test ./host/web/body-to.test.mjs -t 'a wasm request uses'` fails with `now is not defined`.
-- Restore the worker environment in the storage lease recovery fixture. On the parent of the OPFS change, `bun test --isolate ./host/web/module-storage-recovery.test.mjs` reports unhandled rejections from `prepareWorker` reading `document.baseURI`.
 - Decide whether a settings list may spell `listStyle="inset-grouped"` alone when it has no drop handler. Removing only `reorderdrop` from the eight-row fixture with that spelling makes the compiler require `appearance="auto"` (LLP 1084 D1).
 - Give a grouped list with `reorderGroup` a diagnostic that names the cross-list restriction. Compile `list id="settings" appearance="auto" reorderdrop=drop reorderGroup="board"` inside the eight-row fixture for #1409. The compiler suggests `virtualized=true`, which the grouped list also refuses.
 - Give authors readable errors for rejected plan inputs and first frames. The web static-tree builder, snapshot commands and bake still print Rust Debug representations of bridge, decoding and layout errors.
