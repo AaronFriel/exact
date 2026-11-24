@@ -108,6 +108,13 @@ public struct Batch {
     /// runtime holds later (LLP 1072 §3.5). Nil for a batch the runtime did
     /// not make: what it may change is read again from the runtime.
     package var controlReads: [UInt32: ControlRead]?
+    /// The split rule of the stack main last asked about, read on the owner
+    /// as the runtime made this batch, which can change it (`Runtime.splitAsked`).
+    package var split: SplitRead?
+    /// With a router op, its top visit and the location of the visit beneath
+    /// it (`exact_location_beneath`, empty at a stack's root), read on the
+    /// owner as the runtime made this batch.
+    package var beneath: (visit: UInt64, location: String)?
     package enum ClockWork { case tick, advance }
     package func made(by clock: ClockWork) -> Batch {
         var batch = self
@@ -149,6 +156,17 @@ package struct ControlRead: Equatable {
     package init(face: Data? = nil, select: Data? = nil, radio: Data? = nil) { self.face = face; self.select = select; self.radio = radio }
     /// The parts it has, as a batch's footprint names them.
     package var parts: Set<String> { Set([face.map { _ in "face" }, select.map { _ in "select" }, radio.map { _ in "radio" }].compactMap { $0 }) }
+}
+
+/// The runner's split rule for one navigation stack (`exact_stack_split`,
+/// LLP 1127 D2) as the owner read it: the stack's root route, the list the
+/// host retains (0 for none), the answer's JSON (`null` for a stack that
+/// pushes), and the newest batch the runtime had made when it was read.
+package struct SplitRead {
+    package let view: UInt32, retained: UInt32, json: Data, sequence: UInt64
+    package init(view: UInt32, retained: UInt32, json: Data, sequence: UInt64) {
+        (self.view, self.retained, self.json, self.sequence) = (view, retained, json, sequence)
+    }
 }
 
 /// Immutable composition services, installed before the runtime can serve a turn.
@@ -200,6 +218,9 @@ package final class Runtime {
     /// On the owner, each native control's `type` and its state as the last
     /// batch read gave it (`Batch.controlReads`): a batch carries what changed.
     package var controlTypes: [UInt32: String] = [:], controlsRead: [UInt32: ControlRead] = [:]
+    /// On the owner, the stack whose split rule a batch that can change it
+    /// carries (`Batch.split`): the one main last asked the runtime about.
+    package var splitAsked: (view: UInt32, retained: UInt32)?
     package init(hooks: RuntimeHooks = .headless) {
         self.hooks = hooks
         rt = Owner.shared.sync {
@@ -468,7 +489,11 @@ package final class Runtime {
     package func dataReady() -> Batch { on { read(exact_data_ready(rt)) } }
     package func storeChanged(retryOnly: Bool = false) -> Batch { on { read(exact_store_changed(rt, retryOnly ? 1 : 0)) } }
     package func discardPlan() { on { exact_discard_plan(rt) } }
-    package func trim() { on { exact_trim(rt) } }
+    /// Gives back the tree's cold storage, after the jobs queued before it
+    /// and never waited for: it changes nothing shown, so main does not wait
+    /// out a long owner job for it (LLP 1072 T3). A runtime destroyed
+    /// meanwhile refuses it by name.
+    package func trim() { Owner.shared.post { [rt] in exact_trim(rt) } }
 
     /// Every queued reply into the runner: the batch of their commits.
     package func pump(now: Double) -> Batch { on { read(exact_pump(rt, now)) } }

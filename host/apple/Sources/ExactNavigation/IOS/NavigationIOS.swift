@@ -33,6 +33,8 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     /// The runner could not say whether the stack splits (`reshape`), and
     /// asks again on the main queue's next turn.
     var splitAskOwed = false
+    /// The split rule main last heard (`splitRule`).
+    var heardSplit: HeardSplit?
     private(set) var presentedNavigations: [UINavigationController] = []
     func isPresented(_ nav: UINavigationController?) -> Bool { presentedNavigations.contains { $0 === nav } }
     /// The theme's title ink each bar was last given (`titleInk`), held no
@@ -474,7 +476,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
 
     /// The runtime restarts (`Presenter.reset`): its next boot covers the
     /// tablist again, for its first batch to adopt or give back.
-    func rebooting() { bootCoverSeen = false }
+    func rebooting() { bootCoverSeen = false; heardSplit = nil }
 
     /// A native primary container coming or going changes the view the
     /// session takes (ExactViewIOS `fit`, LLP 1123 D1), whatever its bars
@@ -1230,6 +1232,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         tabAccessoryNoted = []
         #endif
         retireSplit()
+        heardSplit = nil
         if let primaryNavigation { retireStack(primaryNavigation) }
         // An open dialog's header its sheet's bar stands for stays covered (DialogBarIOS.swift), and a pane a native
         // arrangement hides.

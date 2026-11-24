@@ -62,6 +62,17 @@ package struct RoutePart {
     }
 }
 
+extension ExactSession {
+    /// The entrance (`exit` false) or exit `route` declares, posed for a box
+    /// `size` large (`Runtime.routePart`). The runner is asked only for a
+    /// part the route's style declares, so main does not wait on the owner
+    /// to learn that a route declares none, as most do (LLP 1072 T2).
+    package func routePart(_ route: NodeView, exit: Bool, size: CGSize) -> RoutePart? {
+        guard route.style[exit ? "view_transition_old" : "view_transition_new"] != nil else { return nil }
+        return runtime.routePart(route.id, exit: exit, size: size)
+    }
+}
+
 extension Runtime {
     /// The entrance (`exit` false) or exit route `view` declares, posed for
     /// a box `size` large; nil where it declares none or may play none (a

@@ -161,6 +161,7 @@ extension NavigationHost {
         // without projecting its batch
         foldChildren(batch)
         #if os(iOS)
+        hearSplit(batch)
         freezeTabAccessory(for: batch)
         #endif
         // Keep a route removed while its view is on screen for the transition that takes it away, UIKit's own pop,

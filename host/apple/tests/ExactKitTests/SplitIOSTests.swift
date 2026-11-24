@@ -157,25 +157,22 @@ final class SplitIOSTests: XCTestCase {
         until("a row pushes") { navigation.primaryNavigation?.viewControllers.count == 2 && !agent.nativeInFlight() }
     }
 
-    /// Inside a callback the runtime waits on, the runner cannot say whether
-    /// the stack splits (`Runtime.stackSplitAnswer`): a sync there keeps the
-    /// split, and the stack is asked again on the main queue's next turn,
-    /// which `clock settle` waits for.
-    func testASyncTheRunnerCannotAnswerKeepsTheSplit() throws {
+    /// Inside a callback the runtime waits on, no runtime call runs, and a
+    /// sync there keeps the split by the rule the last batch carried
+    /// (`Batch.split`, LLP 1072 T2), asking the runner nothing.
+    func testASyncInsideARunnerCallbackKeepsTheSplitItHeard() throws {
         let session = try boot()
-        let navigation = session.presenter.navigationHost, agent = Agent(session: session)
+        let navigation = session.presenter.navigationHost
         let split = try split(session)
-        var owed = false
+        var owed = true
         Owner.shared.sync {
             Owner.shared.callMain {
                 navigation.resync()
-                owed = navigation.splitAskOwed && agent.nativeInFlight()
+                owed = navigation.splitAskOwed
             }
         }
         XCTAssertTrue(navigation.split === split, "the split stays")
-        XCTAssertTrue(owed, "the stack is asked again, and settling waits for it")
-        until("asked again") { !navigation.splitAskOwed && !agent.nativeInFlight() }
-        XCTAssertTrue(navigation.split === split, "the stack still splits")
+        XCTAssertFalse(owed, "the rule the last batch carried answers")
     }
 
     /// A runner that cannot say at install whether the stack splits (a call

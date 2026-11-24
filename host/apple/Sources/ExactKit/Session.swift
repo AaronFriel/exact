@@ -934,7 +934,7 @@ public final class ExactSession {
         if batch.error == nil {
             sampler?.reset(); frameHealth.reset() // a new runner numbers its transactions afresh (LLP 1079 D3)
             // A fresh boot over a running app (the dev menu's reload from the baked plan) starts the views over; the library already replaced its host.
-            routerOp = nil
+            routerOp = nil; routerBeneath = nil
             notificationHost.replaceBackgroundActions(self)
             if booted { awaitingTree = true; resetHeld(); viewsEpoch += 1; forgetAppearances(); presenter.launchAutofocusReleased = false } // a fresh boot's autofocus waits again
             booted = true; app.buildSessionBooted(self)
@@ -1026,7 +1026,7 @@ public final class ExactSession {
 
     func presentCommitted(_ batch: Batch, label: String, assetChanges: [UInt32: Set<String>] = [:]) {
         showBudgetWarning(nil)
-        routerOp = nil
+        routerOp = nil; routerBeneath = nil
         let restart = booted, kept = keptFocus
         keptFocus = nil
         awaitingTree = true // the tint a reset gives back is reported with the new tree
@@ -1069,6 +1069,7 @@ public final class ExactSession {
     /// commands go to the delegate after it.
     /// @ref LLP 1038 D7/D11 — observation only; Swift never interprets slots.
     private(set) var routerOp: [String: Any]?
+    var routerBeneath: (visit: UInt64, location: String)? // the router's top and where Back goes from it (`locationBeneath`)
 
     /// Run `work` in the chain of covers corrections `cause` (`coversCause`)
     package func inCoversChain(_ cause: AnyObject?, _ work: () -> Void) { let outer = coversCause; coversCause = cause; defer { coversCause = outer }; work() }
@@ -1194,6 +1195,7 @@ public final class ExactSession {
         if let must = batch.mustFinish { finishHold.moved(must) }
         HostLog.capabilities(self, batch)
         let outputs = SessionBatchOps(batch.ops)
+        if let beneath = batch.beneath { routerBeneath = beneath }
         for op in outputs.routers { routerOp = op.payload; presenter.armFragment(op.payload["activation"]); NavigationMarks.shared.routerChanged(self, payload: op.payload, input: batch.input) } // a scroll to its fragment, which the runner's `scrollToFragment` makes (LLP 1153 D5)
         // @ref LLP 1048.003 D1 — the head's title, for the app that owns the chrome.
         for op in outputs.titles {

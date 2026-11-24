@@ -5,19 +5,48 @@
 import UIKit
 import ExactKit
 
+/// A split rule the owner read (`SplitRead`), decoded.
+struct HeardSplit {
+    let read: SplitRead
+    let rule: StackSplit?
+    init(_ read: SplitRead, rule: StackSplit?? = nil) {
+        self.read = read
+        self.rule = rule ?? StackSplit(json: read.json)
+    }
+}
+
 extension NavigationHost {
     /// The runner's rule for the stack whose first route is `root`
     /// (`Runtime.stackSplit`): nil for one that pushes, under the agent's own
-    /// chrome too; `.none` while the runner is busy and cannot answer.
+    /// chrome too; `.none` while the runner is busy and cannot answer. It is
+    /// the answer the last applied batch that could change it carried
+    /// (`Batch.split`), so main does not wait on the owner for it, as at a
+    /// transition's end while a reply's pump builds a page (LLP 1072 T2). A
+    /// stack no batch has answered for yet (one being installed, a new root
+    /// route, another list retained) is asked of the runner, and the batches
+    /// after answer for it.
     func splitRule(_ root: RouteController?) -> StackSplit?? {
         // tvOS takes the split once a hand-built one is measured with the focus engine (LLP 1127 §4).
         #if os(tvOS)
         return .some(nil)
         #else
         guard !ExactEnv.authoredChrome, let root, let session = presenter.session else { return .some(nil) }
-        return session.runtime.stackSplitAnswer(root.node.id, retaining: split?.listNode)
+        let retained = split?.listNode ?? 0
+        if let heard = heardSplit, heard.read.view == root.node.id, heard.read.retained == retained { return .some(heard.rule) }
+        guard let read = session.runtime.on(busy: nil, { session.runtime.readSplit(root.node.id, retained: retained, sequence: session.runtime.sequence.newest) }) else { return nil }
+        heardSplit = HeardSplit(read)
+        return .some(heardSplit?.rule)
         #endif
     }
+
+    #if os(iOS)
+    /// A batch's split rule (`Batch.split`), as it prepares: the newest the
+    /// runtime made is the one main keeps.
+    func hearSplit(_ batch: Batch) {
+        guard let read = batch.split, read.sequence > heardSplit?.read.sequence ?? 0 else { return }
+        heardSplit = heardSplit?.read.json == read.json ? heardSplit.map { HeardSplit(read, rule: $0.rule) } : HeardSplit(read)
+    }
+    #endif
 
     /// Whether the stack whose first route is `root` splits; nil while the runner is busy.
     func splits(_ root: RouteController?) -> Bool? { splitRule(root).map { $0 != nil } }
@@ -198,11 +227,11 @@ extension NavigationHost {
         return split?.presses.isEmpty == false ? nil : detailRow
     }
 
-    /// `detailRow(in:)` by the runner's rule now; nil while the runner
-    /// cannot say (`stackSplitAnswer`).
+    /// `detailRow(in:)` by the runner's rule; nil while the runner cannot
+    /// say (`splitRule`).
     var detailRow: UInt32?? {
-        guard let split, let root = split.list.stackRoutes.first as? RouteController, let session = presenter.session else { return .some(nil) }
-        guard let rule = session.runtime.stackSplitAnswer(root.node.id, retaining: split.listNode) else { return nil }
+        guard let split, let root = split.list.stackRoutes.first as? RouteController else { return .some(nil) }
+        guard let rule = splitRule(root) else { return nil }
         return .some(detailRow(in: rule))
     }
 

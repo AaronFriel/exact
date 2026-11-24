@@ -448,8 +448,16 @@ pub(crate) fn style_json_rows(
             | RowValue::DashArray(_)
             | RowValue::Transform(_)
             | RowValue::PaintOrder(_)
-            | RowValue::Marker(_)
-            | RowValue::Animations(_) => false,
+            | RowValue::Marker(_) => false,
+            // A route's own entrance or exit (LLP 1013.001): only that it
+            // declares one, so the host asks the runner to pose it only then.
+            RowValue::Animations(_)
+                if matches!(id, StyleId::ViewTransitionNew | StyleId::ViewTransitionOld) =>
+            {
+                out.push_str("true");
+                true
+            }
+            RowValue::Animations(_) => false,
             // @ref LLP 1055.000 D14 — CSS `filter` on a box: its chain over a
             // box of no size (the region is how far past the box it reaches)
             // and how far it reads; the presenter adds the box's size.

@@ -573,10 +573,10 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
             zoomGuard = controller
         }
         // A full-screen route that declares its own entrance or exit plays it (LLP 1013.001 D2).
-        if layer.kind == "fullscreen", let runtime = presenter.session?.runtime {
+        if layer.kind == "fullscreen", let session = presenter.session {
             let size = owner.view.bounds.size
-            controller.routeTransitions = RoutePresenting(entrance: runtime.routePart(route.id, exit: false, size: size),
-                                                          exit: runtime.routePart(route.id, exit: true, size: size))
+            controller.routeTransitions = RoutePresenting(entrance: session.routePart(route, exit: false, size: size),
+                                                          exit: session.routePart(route, exit: true, size: size))
         }
         layers.append(layer)
         controller.isModalInPresentation = refusesDismissal(of: route)
