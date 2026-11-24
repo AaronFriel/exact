@@ -585,6 +585,18 @@ intents; the web's Launch Handler; Windows' and Linux's system search and
 Windows App Actions; a content index larger than 5,000 entries; and remote
 icons.
 
+**Standing rule (Charlie, 2026-11-24, "recs ok"; LLP 1133.023 D7a).**
+Host observations of a showing page run as the app's, including a warm
+relaunch reported only as a showing. On a hidden page they keep the
+installed cause, with no cause or grant outside other work. Two gaps
+remain while the page shows. Later events from media a restricted call
+started and a remote Play's later reports run as the app's. Both follow
+the hidden-page rule while hidden. An identified remote Play or Pause
+handler runs as an `action`.
+
+**Out (Charlie, 2026-11-24, "recs ok"; LLP 1133.023 D7a).** Carrying
+the initiating cause with every observed event.
+
 **Expanded (Charlie, 2026-11-12, #212; LLP 1126 and LLP 1133.023):**
 Apple widgets declare fixed enum parameters for Edit Widget and watchOS
 complication recommendations. Each placement's choices reach only its snapshot
