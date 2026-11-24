@@ -2555,3 +2555,24 @@ observation, along and across their edges, two panes whose bars hold
 wrapping text, a positioned parent's bar in a scroller's content, a bar its
 host replaces, and the boxes that are no bars; `contract/cli/tests/it/duo_lab.rs`'s
 bars screen.
+
+## Patch 82: a form control's natural size is not scrollable overflow — Exact only
+
+`Style::item_is_form_control` (`CoreStyle::is_form_control`), which the
+kernel sets for its text fields and native controls, gives a leaf the
+scrollable overflow patch 5 gives a replaced element: its used padding box.
+A control's measure answers its natural size (a determinate `progress` is
+`10em` by `1em`, a fixed field twenty characters) whatever its box, and the
+leaf built its overflow rect from that answer, so a control that flex,
+`width` or `max-width` made narrower than its natural width gave its
+scroller a range past every box. CSS Overflow 3 §2.1: a form control's
+content is not scrollable overflow; its parent adds its border box, as for
+any box. Nothing else reads the flag: a control is not a replaced element to
+the ratio table, the automatic minimum, stretch or absolute insets, and it
+keeps the table marker's block sizing (patch 21).
+
+**Held by** `kernel/tests/it/browser_scroll_padding.rs::a_form_controls_natural_width_does_not_widen_its_scroller`:
+a `progress`, a text field and a textarea at a 60px font in a 200px
+scroller, at `width: 100%` and narrower, against Chrome 159's
+`scrollWidth`. Before the repair the scroller's width was 610 or 730 where
+Chrome's is 220.
