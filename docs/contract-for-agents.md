@@ -4118,6 +4118,10 @@ SwiftPM verifies binary targets by checksum. One shared dynamic library links
 all declared products used by the app's Swift and its bound implementations,
 so SDK singletons and configuration are shared across consumers. It loads with
 the first consumer that needs it; an unused implementation stays unloaded.
+A dynamic framework a package brings, such as `Sparkle.framework`, goes into
+the Mac app's `Contents/Frameworks` whole, with its helpers and XPC services;
+`exact release` signs each inside out with the Developer ID and the hardened
+runtime ([Mac binary updates](recipes/mac-binary-updates.md)).
 App-local `.xcframework`s remain supported. Package resources ship with the
 app and are available through `Bundle.module`. SDK privacy manifests and the
 requesting implementations' declarations accompany the shared library and
