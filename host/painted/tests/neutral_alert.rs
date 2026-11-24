@@ -172,10 +172,13 @@ fn confirmation(scheme: &str, width: f32, opener: &str) {
         .find(|node| node.view == dialog)
         .expect("the painted sheet is in the accessibility tree");
     assert_eq!(accessible.rect, [rect.0, rect.1, rect.2, rect.3]);
-    // A named group, as a `group` or `region` is: what a reader announces on entering it.
     assert_eq!(
         accessible.role,
-        exact_painted::presenter::access::role::GROUP
+        exact_painted::presenter::access::role::ALERT_DIALOG
+    );
+    assert_ne!(
+        accessible.flags & exact_painted::presenter::access::flag::MODAL,
+        0
     );
     assert_eq!(accessible.name, "Clear the count?");
     assert_eq!(rect.2, if width == 320. { 282. } else { 416. });
