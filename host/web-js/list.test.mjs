@@ -415,6 +415,43 @@ test('bordered element scrollports resolve percentage padding inside the border'
   expect(result.end).toEqual([right, Math.round(450 - height * 0.75)]);
 }, 60_000);
 
+test('bordered snap and element alignment use the same scrollport on either axis', async () => {
+  const rows = await evaluate(`(() => {
+    const rows = [];
+    for (const vertical of [false, true]) {
+      const port = document.createElement('div'), axis = vertical ? 'y' : 'x', side = vertical ? 'top' : 'left';
+      const last = vertical ? 'bottom' : 'right', size = vertical ? 'height' : 'width', offset = vertical ? 'scrollTop' : 'scrollLeft';
+      port.style.cssText = 'position:relative;width:300px;height:300px;box-sizing:border-box;overflow:hidden;border:0 solid';
+      port.style.setProperty('border-' + side + '-width', '8px');
+      port.style.setProperty('border-' + last + '-width', '12px');
+      const track = document.createElement('div');
+      track.style[size] = '1200px'; port.append(track);
+      for (const [i, align] of ['start', 'center', 'end'].entries()) {
+        const marker = document.createElement('div');
+        marker.style.cssText = 'position:absolute;width:80px;height:80px;scroll-snap-align:' + align;
+        marker.style[side] = (88 + 300 * i) + 'px'; track.append(marker);
+      }
+      document.body.append(port);
+      for (const trailing of ['10%', '6px']) {
+        port.style.setProperty('scroll-padding-' + side, '10%');
+        port.style.setProperty('scroll-padding-' + last, trailing);
+        port.style.scrollSnapType = axis + ' mandatory';
+        const snaps = [50, 300, 510].map(n => { port[offset] = n; return port[offset]; });
+        port.style.scrollSnapType = 'none';
+        const jumps = ['start', 'end'].map(align => {
+          track.children[1].scrollIntoView({block:align, inline:align, behavior:'instant'});
+          return port[offset];
+        });
+        rows.push([...snaps, ...jumps]);
+      }
+      port.remove();
+    }
+    return rows;
+  })()`);
+  const pure = [60, 288, 516, 360, 216], mixed = [60, 277, 494, 360, 194];
+  expect(rows).toEqual([pure, mixed, pure, mixed]);
+});
+
 test('a horizontal wheel leaves a vertical Chrome jump running to one scrollend', async () => {
   const point = await evaluate(`(async () => {
     const port = document.createElement('div');
