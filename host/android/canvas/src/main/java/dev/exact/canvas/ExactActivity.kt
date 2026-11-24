@@ -45,9 +45,9 @@ open class ExactActivity : Activity() {
     private var moduleOwners: ModuleOwners? = null
     private var retainedModules: Any? = null
     private var moduleState: Bundle? = null
-    // Primitive lifecycle facts keep AndroidX off the path of apps without module views.
+    // Primitive lifecycle facts keep AndroidX off the path of apps without module or hatch views.
     private var modulePhase = 1
-    internal fun prepareModuleView() {
+    internal fun prepareHostedView() {
         if (moduleOwners == null) {
             moduleOwners = ModuleOwners(root, moduleState, retainedModules).also { it.move(modulePhase) }
             moduleState = null

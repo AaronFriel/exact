@@ -364,8 +364,7 @@ class Natives(
     private val modulePool = (context as? android.app.Activity)?.intent?.getStringExtra("modpool")?.toIntOrNull() ?: MODULE_POOL
     private val webs = (context as? android.app.Activity)?.intent?.getStringExtra("webpool") != "0"
     private var scheduled = false
-    /** Asked to draw a frame after nodes were recorded again (no new stream). */
-    var frame: () -> Unit = {}
+    var frame: () -> Unit = {} // Draw again after nodes were recorded without a new stream.
 
     init {
         FrameAutomations.readers += this
@@ -968,7 +967,10 @@ class Natives(
         }
     }
     private fun obtain(kind: Int, json: JSONObject, id: Int = 0): View? = when (kind) {
-        5 -> hatched?.invoke(id, context)?.also { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        5 -> hatched?.invoke(id, context)?.also {
+            (context as? ExactActivity)?.prepareHostedView()
+            (it.parent as? ViewGroup)?.removeView(it)
+        }
         3 -> if (buffered && !refused) View(context) else TextureView(context).apply { isOpaque = false }
         0 -> if (json.optBoolean("audio")) {
             val loan = BackgroundAudio.take(MediaAllocation(id, json))
@@ -987,7 +989,7 @@ class Natives(
             val module = modules[name]
             if (module == null) { android.util.Log.w("exact", "no native module $name"); null }
             else {
-                (context as? ExactActivity)?.prepareModuleView()
+                (context as? ExactActivity)?.prepareHostedView()
                 val key = "$name:$id:${json.optInt("slot")}:${json.optInt("generation")}"
                 val borrowed = if (lifecycle.awaiting(key)) null else pool[name]?.removeLastOrNull()
                 borrowed ?: module.create(context, moduleProps(json), id)
@@ -1326,7 +1328,6 @@ class Natives(
                     e.browser?.command(op) ?: refuseCommand(e, op.optString(1), json)
                 }
             }
-            // A hatch gave the node another view.
             5 -> if (old != null && old.optInt("gen") != json.optInt("gen")) {
                 val view = obtain(5, json, e.id) ?: return
                 byView.remove(e.view); removeView(e.view)
@@ -1424,7 +1425,6 @@ class Natives(
         e.node.discardDisplayList()
     }
 
-    /** [e]'s view is kept for the next element of its kind, or goes. */
     private fun retire(e: Element, reuse: Boolean = true) {
         if (e.kind == 1 || e.kind == 2) retiring?.invoke(e.view)
         if (e === focusedFrame) frameFocused(e, false)

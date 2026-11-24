@@ -98,7 +98,7 @@ class ComposeModuleTest {
         Exact.owner = null; Exact.reader = null; Exact.live = false; Exact.unshown = false
     }
 
-    @Test fun noModuleViewLeavesTheRootWithoutAndroidXOwners() {
+    @Test fun noModuleOrHatchViewLeavesTheRootWithoutAndroidXOwners() {
         val root = activity.content
         assertEquals(android.app.Activity::class.java, ExactActivity::class.java.superclass)
         assertNull(root.findViewTreeLifecycleOwner())
@@ -106,6 +106,28 @@ class ComposeModuleTest {
         assertNull(root.findViewTreeViewModelStoreOwner())
         controller.pause().stop().start().resume()
         assertNull(root.findViewTreeLifecycleOwner())
+    }
+
+    @Test fun aHatchCanComposeBeforeTheFirstModuleView() {
+        val root = activity.content
+        val hosted = root.getChildAt(0) as Natives
+        var composed = false
+        hosted.hatched = { _, context -> ComposeView(context).apply {
+            setContent { BasicText("dial"); SideEffect { composed = true } }
+        } }
+        hosted.ensure(6, 5, 48, 48, "{}", 0)
+        settle()
+        assertTrue(composed)
+        val owner = root.findViewTreeLifecycleOwner()
+        assertNotNull(owner)
+        assertSame(owner, root.findViewTreeSavedStateRegistryOwner())
+        assertSame(owner, root.findViewTreeViewModelStoreOwner())
+        activity.mount()
+        settle()
+        val view = activity.module.view
+        assertSame(owner, view.findViewTreeLifecycleOwner())
+        assertSame(owner, view.findViewTreeSavedStateRegistryOwner())
+        assertSame(owner, view.findViewTreeViewModelStoreOwner())
     }
 
     @Test fun aPlainComposeModuleInheritsLazyOwnersAndIsRecreatedAfterAStop() {

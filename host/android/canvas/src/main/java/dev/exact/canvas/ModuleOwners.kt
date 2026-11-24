@@ -12,7 +12,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
-/** Made at the first module view, never at launch (LLP 1115.001.000 D2). */
+/** Made at the first module or hatch view, never at launch (LLP 1115.001.000 D2). */
 internal class ModuleOwners(root: View, state: Bundle?, retained: Any?) : SavedStateRegistryOwner, ViewModelStoreOwner {
     private val registry = LifecycleRegistry(this)
     private val saved = SavedStateRegistryController.create(this)
@@ -23,7 +23,7 @@ internal class ModuleOwners(root: View, state: Bundle?, retained: Any?) : SavedS
     init {
         saved.performAttach()
         saved.performRestore(state)
-        // Compose's window recomposer reads the content child, rather than the requesting module view.
+        // Compose's window recomposer reads the content child, rather than the requesting view.
         root.setViewTreeLifecycleOwner(this)
         root.setViewTreeSavedStateRegistryOwner(this)
         root.setViewTreeViewModelStoreOwner(this)
