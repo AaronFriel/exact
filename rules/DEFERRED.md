@@ -1214,6 +1214,11 @@ reading. Nothing that isn't HTML is added by it.
   running the script, so an approval cannot land in a replacement document.
   The web keeps same-origin frame evaluation and reports realm targeting unsupported.
   An Android provider without document-start injection keeps plain page-world results.
+- **Sandbox messages (Charlie, 2026-11-24, "recs ok").** LLP 1020.002 D9
+  unblocks Float’s playback transitions and the wallet’s requests. Data code
+  holding `browser.automation` receives bounded `script.message` events from
+  a named sandbox with the posting document’s realm and host-supplied origin.
+  A posted event survives navigation and runs with the device’s authority.
 - **Expanded (LLP 1096; admitted by the orchestrator under Charlie's
   2026-10-04 delegation, "make decisions without me"):** short sounds an
   action can schedule: a `sound` declaration (a WAV in `assets/`, at most 10
