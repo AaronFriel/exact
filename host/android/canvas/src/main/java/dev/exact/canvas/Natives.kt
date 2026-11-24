@@ -967,7 +967,6 @@ class Natives(
             if (e.directRows.isEmpty() && e.layers.isEmpty()) releaseUnpainted(e)
         }
     }
-
     private fun obtain(kind: Int, json: JSONObject, id: Int = 0): View? = when (kind) {
         5 -> hatched?.invoke(id, context)?.also { (it.parent as? android.view.ViewGroup)?.removeView(it) }
         3 -> if (buffered && !refused) View(context) else TextureView(context).apply { isOpaque = false }
@@ -988,6 +987,7 @@ class Natives(
             val module = modules[name]
             if (module == null) { android.util.Log.w("exact", "no native module $name"); null }
             else {
+                (context as? ExactActivity)?.prepareModuleView()
                 val key = "$name:$id:${json.optInt("slot")}:${json.optInt("generation")}"
                 val borrowed = if (lifecycle.awaiting(key)) null else pool[name]?.removeLastOrNull()
                 borrowed ?: module.create(context, moduleProps(json), id)

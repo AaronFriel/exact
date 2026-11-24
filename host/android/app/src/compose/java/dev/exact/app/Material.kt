@@ -74,8 +74,8 @@ internal val materialPickers: Pickers? = MaterialPickers
  * `datetime-local` asks for the day, then the time.
  */
 private object MaterialPickers : Pickers {
-    /** The reader's activity is a plain Activity: Compose looks for a lifecycle and a saved state on the view tree.
-     * One for each picker, on its own view: resumed while it is up, destroyed as it closes, which disposes it. */
+    /** Each picker has its own content child and owner: resumed while it is up, destroyed as it closes,
+     * which disposes its composition independently of the page's module views. */
     private class Owner : SavedStateRegistryOwner {
         private val registry = LifecycleRegistry(this)
         private val saved = SavedStateRegistryController.create(this)

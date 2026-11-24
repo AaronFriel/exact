@@ -42,6 +42,21 @@ open class ExactActivity : Activity() {
         val start = stops
         view.viewTreeObserver.registerFrameCommitCallback { if (start == stops) { drawn = true; Controls.ready(this) } }
     }
+    private var moduleOwners: ModuleOwners? = null
+    private var retainedModules: Any? = null
+    private var moduleState: Bundle? = null
+    // Primitive lifecycle facts keep AndroidX off the path of apps without module views.
+    private var modulePhase = 1
+    internal fun prepareModuleView() {
+        if (moduleOwners == null) {
+            moduleOwners = ModuleOwners(root, moduleState, retainedModules).also { it.move(modulePhase) }
+            moduleState = null
+            retainedModules = null
+        }
+    }
+
+    final override fun onRetainNonConfigurationInstance(): Any? = moduleOwners?.viewModelStore ?: retainedModules
+
     private var nativeState: Bundle? = null
     private var nativeStarted = false
     private var nativeResumed = false
@@ -106,6 +121,9 @@ open class ExactActivity : Activity() {
         take()
         super.onCreate(state)
         nativeState = state?.getBundle("exact.hosted")
+        moduleState = state?.getBundle("exact.moduleOwners")
+        // Activity releases its non-configuration instance on resume; module owners stay lazy beyond it.
+        retainedModules = lastNonConfigurationInstance
         hatchReader?.activity = this
         // The starting window goes the moment the first frame is drawn, not after its exit fade (splashfade=1: the
         // platform's fade, to compare): the first frame is what shows.
@@ -616,6 +634,7 @@ open class ExactActivity : Activity() {
     override fun onStart() {
         super.onStart()
         nativeStarted = true
+        modulePhase = 2; moduleOwners?.move(modulePhase)
         if (stopped) { stopped = false; take(); read() }
         contentResolver.registerContentObserver(android.provider.Settings.Global.getUriFor(android.provider.Settings.Global.ANIMATOR_DURATION_SCALE), false, settings)
         contentResolver.registerContentObserver(android.provider.Settings.System.getUriFor(android.provider.Settings.System.TIME_12_24), false, settings)
@@ -661,6 +680,7 @@ open class ExactActivity : Activity() {
         Controls.stopped(this)
         Exact.owner?.windowFrames?.detach(window)
         nativeStarted = false
+        modulePhase = 1; moduleOwners?.move(modulePhase)
         requests.foreground(false)
         if (reads()) Auth.stopped()
         // A replaced activity's stop can come after its successor's start: the page is the successor's to hide.
@@ -701,6 +721,7 @@ open class ExactActivity : Activity() {
         super.onResume()
         configure()
         nativeResumed = true
+        modulePhase = 3; moduleOwners?.move(modulePhase)
         natives?.lifecycle?.event(ViewLifecycle.RESUME)
         Auth.resumed()
         requests.resumed()
@@ -711,6 +732,7 @@ open class ExactActivity : Activity() {
 
     override fun onPause() {
         nativeResumed = false
+        modulePhase = 2; moduleOwners?.move(modulePhase)
         natives?.lifecycle?.event(ViewLifecycle.PAUSE)
         // Everything committed before the pause is on disk (exact2 writes the store on a thread of its own).
         if (!Exact.drainStore()) android.util.Log.w("exact", "the store's writes did not finish before the pause")
@@ -734,6 +756,8 @@ open class ExactActivity : Activity() {
     }
 
     override fun onSaveInstanceState(state: Bundle) {
+        modulePhase = 1
+        (moduleOwners?.save() ?: moduleState)?.let { state.putBundle("exact.moduleOwners", it) }
         natives?.lifecycle?.save()?.let { state.putBundle("exact.hosted", it) }
         super.onSaveInstanceState(state)
     }
@@ -748,6 +772,9 @@ open class ExactActivity : Activity() {
         accessibility.removeAccessibilityStateChangeListener(accessWatch)
         requests.destroy()
         release()
+        moduleOwners?.destroy(isChangingConfigurations)
+        // A recreated activity can finish before mounting its first module view.
+        if (moduleOwners == null && !isChangingConfigurations) retainedModules?.let { ModuleOwners.clear(it) }
         super.onDestroy()
     }
 

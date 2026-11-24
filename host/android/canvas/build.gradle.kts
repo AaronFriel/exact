@@ -1,4 +1,12 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.config.KotlinCompilerVersion
+
 plugins { id("com.android.library") }
+// Compile the hosted ComposeView regression without transforming the reader's classes.
+val composeCompilerForTests = configurations.create("composeCompilerForTests")
+tasks.withType<KotlinCompile>().configureEach {
+    if (name.contains("UnitTest")) pluginClasspath.from(composeCompilerForTests)
+}
 // An app's build gives the reader a build directory of its own (`-PcanvasBuildDir`, agent-android.mjs).
 providers.gradleProperty("canvasBuildDir").orNull?.let { layout.buildDirectory = file(it) }
 android {
@@ -6,10 +14,11 @@ android {
     compileSdk { version = release(37) { minorApiLevel = 2 } }
     defaultConfig { minSdk = 29; consumerProguardFiles("proguard-rules.pro") }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    // A package's unit tests compile its Kotlin into this module's tests; the reader links none of it.
+    // Package tests and the shell's Compose pickers compile here; the reader links none of them.
     sourceSets {
         getByName("main").kotlin.directories.add("../../../vendor/ibex/crates/ibex2/android")
         getByName("test").kotlin.directories.addAll(listOf(
+            "../app/src/compose/java",
             "../../../packages/age-range/android", "../../../packages/age-range/test",
             "../../../packages/store-update/android", "../../../packages/store-update/test",
             "../../../packages/barcode-detection/android", "../../../packages/barcode-detection/test",
@@ -42,10 +51,18 @@ android {
     }
     // Robolectric keeps a sandbox for each SDK level and shadow set the tests name, more than
     // Gradle's default 512 MB worker holds.
-    testOptions { unitTests.all { it.maxHeapSize = "1g" } }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { it.maxHeapSize = "1g" }
+    }
 }
 
 dependencies {
+    composeCompilerForTests("org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable:${KotlinCompilerVersion.VERSION}")
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.material3)
+    testImplementation(libs.compose.test.junit4)
+    testImplementation("androidx.core:core:1.16.0")
     testImplementation("com.google.firebase:firebase-messaging:26.0.1")
     testImplementation("com.google.android.gms:play-services-base:18.9.0")
     implementation("androidx.browser:browser:1.9.0")

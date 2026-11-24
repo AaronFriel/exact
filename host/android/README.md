@@ -794,9 +794,9 @@ request kind 9 (above). The reader asks the node's hatch first, then shows `Exac
 device's dynamic colours where available, else Material's baseline scheme, in a `ComposeView` added for as long as
 the dialog is up) when the APK links Compose, and the framework's `DatePickerDialog` and `TimePickerDialog`
 (`FrameworkPickers`) when it does not. `datetime-local` asks
-for the day, then the time. The APK links Compose only when the plan has such a control: `agent-android.mjs` reads
-the plan's uses and passes `-Pcompose=1`. The activity stays a plain `Activity`; the Compose picker brings the
-lifecycle and saved-state owners a `ComposeView` looks for. Both pickers offer Clear while the control holds a value
+for the day, then the time. The build selects the shell's Compose pickers when the plan has such a control: `agent-android.mjs` reads
+the plan's uses and passes `-Pcompose=1`. Each picker has its own lifecycle and saved-state owners, destroyed when
+it closes. Both pickers offer Clear while the control holds a value
 (the string is the reader's, `res/values*/strings.xml`), and Material's is in the control's `accent-color` where it
 has one, its primary roles that colour's tones, including on Android 10 and 11. Under the agent a press holds the
 picker instead (`type @date 2026-10-23`, `tap @date clear`, `tap @date cancel`). `x_log_requests=1` logs each picker's
@@ -834,6 +834,48 @@ the APK resolves it only at the first module view. Each module creates and updat
 a string value, `emit("message", payload)` with the guest message, `emit("load", "")`, or `emit("press", "")`.
 A view reports focus with `emit("focus", "")` and blur with `emit("blur", "")`. A live, eligible view can take or release focus even
 without a handler. Other events need a handler on the node. Retired bindings and events for an old node allocation are ignored.
+
+### Compose module views
+
+A module may return a plain `ComposeView` with `setContent`. `ExactActivity` stays a plain `Activity`.
+The first module view creates lifecycle, saved-state registry and ViewModel store owners on the reader's `Root`,
+before the view attaches. Apps without module views create none of these owners. Compose's window recomposer
+follows the activity's start and stop. Material pickers keep their separate owners.
+
+```kotlin
+object HelloCompose : NativeModule {
+    override fun create(context: Context, props: JSONObject): View = ComposeView(context).apply {
+        setContent { Text("hello") }
+    }
+    override fun update(view: View, props: JSONObject) {}
+    override fun destroy(view: View) { (view as ComposeView).disposeComposition() }
+}
+```
+
+Register it as `"hello-compose"` in `exact.app.Modules.modules` and app.json's `modules`, then write
+`hello-compose width="100%" height=48` in Contract. The shell enables the Compose compiler and links Material 3
+with `-Pcompose=1` when the plan uses a date or time control; a Compose-only module build also needs
+`ORG_GRADLE_PROJECT_compose=1`. Only further Compose libraries go under `host.android.maven`; the
+[Maven instructions](#maven-libraries-one-locked-verified-gradle-graph-llp-1133008-d8-item-5) cover the lock and
+verification files. The owners are a module view's: a hatch's `host` view does not get them. Give each ComposeView a stable,
+unique Android view ID when using `rememberSaveable` across activity recreation. Dispose its composition in
+`destroy`, since a module's lifetime can end before the activity's.
+
+After a stop, the reader recreates its module views on return (`read()` calls `destroyAll`; `NativeModule.reset`
+returns false by default). Their `remember` state is lost. Keep state that must survive in a ViewModel or in the
+module's lifecycle saved bundle. All module views share one ViewModelStore, retained across configuration
+recreation with `Activity.onRetainNonConfigurationInstance` and cleared on any destroy that is not a configuration change. Use distinct
+ViewModel keys for independent views. Saved-state providers are written through the activity's saved bundle;
+`rememberSaveable` can restore after activity recreation, but does not preserve a removed composition on an
+ordinary stop and return.
+
+`Root` supplies no `OnBackPressedDispatcherOwner`, so Compose `BackHandler` needs an owner supplied by the module.
+That dispatcher's callbacks run in reverse registration order; it is not connected to Exact's system Back callback.
+Exact handles system Back for its routes (on Android 13+, at `PRIORITY_DEFAULT`); a module that registers a separate
+platform callback at the same priority competes by registration order, with the most recently registered called
+first. Emit an app event for navigation through Exact's routes.
+
+### Hosted input and lifecycle
 
 A hosted view receives `dispatchTouchEvent` in its current painted content coordinates, inside its CSS border and padding
 (LLP 1133.008 D8). The inverse of the allocation's full transform maps every pointer into the view, including through

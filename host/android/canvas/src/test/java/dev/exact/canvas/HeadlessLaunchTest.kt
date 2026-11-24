@@ -354,9 +354,15 @@ class HeadlessLaunchTest {
         assertNull(DevLoop.atLaunch(app, Intent(Intent.ACTION_MAIN)))
     }
 
-    @Test fun aDriverLaunchTransfersItsEnvironmentBeforeBoot() {
+    private fun development(on: Boolean) {
         val app = RuntimeEnvironment.getApplication()
-        app.applicationInfo.metaData = Bundle().apply { putBoolean("dev.exact.development", true) }
+        // With Android resources, ApplicationInfo is a copy; Setup reads the package manager's manifest metadata.
+        val info = shadowOf(app.packageManager).getInternalMutablePackageInfo(app.packageName).applicationInfo!!
+        info.metaData = Bundle().apply { putBoolean("dev.exact.development", on) }
+    }
+
+    @Test fun aDriverLaunchTransfersItsEnvironmentBeforeBoot() {
+        development(true)
         val stored = """[["pace","\"2:15\""]]"""
         activity(Intent(Intent.ACTION_MAIN).putExtra("x_agent", "1")
             .putExtra("x_agent_storage", "a=b é").putExtra("x_agent_stored", stored)
@@ -369,8 +375,7 @@ class HeadlessLaunchTest {
     }
 
     @Test fun aProductionLaunchDoesNotTransferDriverExtras() {
-        val app = RuntimeEnvironment.getApplication()
-        app.applicationInfo.metaData = Bundle().apply { putBoolean("dev.exact.development", false) }
+        development(false)
         activity(Intent(Intent.ACTION_MAIN).putExtra("x_agent", "1").putExtra("x_agent_storage", "private"))
         assertFalse(Host.environment.containsKey("EXACT_AGENT"))
         assertFalse(Host.environment.containsKey("EXACT_AGENT_STORAGE"))
