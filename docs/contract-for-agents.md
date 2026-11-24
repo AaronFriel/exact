@@ -7437,15 +7437,26 @@ draw the system blur approximation described in LLP 1053.000 §3.
 `-exact-glass-tint` tints the glass of a box with `backgroundMaterial="glass"` or
 `"glass-clear"`: `-exact-glass-tint="rgba(232,192,99,0.9)"` is a gold button,
 `"rgba(10,12,16,0.55)"` a dark panel. It is a colour resolved in the box's colour
-scheme (`light-dark()` and the platform colours work); unset, the glass is untinted. iOS and tvOS 26 set it as `UIGlassEffect`'s
-`tintColor` and macOS 26 as `NSGlassEffectView`'s, so the glass itself takes the
-colour; a `background-color` is painted behind the glass, not into it. The web and
-Linux draw it as the material's background colour in place of the table's; Android
-and Windows draw no glass and ignore it. Glass reacts to a touch (iOS's interactive
-glass) when its box has a `press` and is not disabled; `glassInteractive=false` turns
-that off on a pressable box and `glassInteractive=true` turns it on for one without
-a press. Only iOS and tvOS 26 have interactive glass; other hosts ignore it. Neither
-applies to a native button, whose glass is its `buttonStyle`'s.
+scheme (`light-dark()` and the platform colours work). iOS and tvOS 26 set it as
+`UIGlassEffect`'s `tintColor` and macOS 26 as `NSGlassEffectView`'s; unset, these
+hosts leave the glass untinted. A `background-color` is painted behind their glass,
+not into it.
+
+The painted hosts (Android, Windows and Linux) draw the material's tint plus a
+backdrop blur, without Liquid Glass refraction or specular highlights. With no
+background colour, `"glass"` uses `#ffffffb3` in light appearance and `#262629b3`
+in dark, with a 20 px blur; `"glass-clear"` uses its lighter table tint and a 10 px
+blur. `-exact-glass-tint` replaces the table's tint. An authored nontransparent
+`background-color` replaces that tint instead; the blur remains. Android before
+12 draws the tint without the backdrop blur. The web also draws a tint and blur,
+with `-exact-glass-tint` in place of the table's tint unless a `background-color`
+overrides it.
+
+On iOS and tvOS 26, glass reacts to a touch when its box has a `press` and is not
+disabled; `glassInteractive=false` turns that off on a pressable box and
+`glassInteractive=true` turns it on for one without a press. Other hosts ignore
+`glassInteractive`. Neither it nor `-exact-glass-tint` applies to a native button,
+whose glass is its `buttonStyle`'s.
 
 `flex` accepts CSS `none`, `auto`, `initial`, `unset`, a basis, or
 `<grow> [<shrink>] [<basis>]` (including `flex="0 1 auto"`). Numeric bindings
