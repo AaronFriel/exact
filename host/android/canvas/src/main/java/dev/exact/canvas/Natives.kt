@@ -366,6 +366,7 @@ class Natives(
     var frame: () -> Unit = {}
 
     init {
+        FrameAutomations.readers += this
         clipChildren = false
         // Laid out, attached and "visible" to themselves, but drawn only through their nodes.
         setWillNotDraw(true)
@@ -613,6 +614,8 @@ class Natives(
         if (e == null || e.kind != kind || e.audio != audio || (json != null &&
                 (e.generation != generation || e.slot != slot || e.module != module || e.session != session ||
                     kind == 1 && (e.partition != json.partition() || e.profile != Partitions.profile(json))))) {
+            // A changed partition keeps the frame's preload scripts (D9).
+            val carried = e?.takeIf { it.kind == 1 && it.generation == generation && it.slot == slot && it.session == session }?.browser?.automation
             e?.let { release(it) }
             val lazyMedia = kind == 0 && videos != null && lazyVideo &&
                 (!audio || w > 0 && h > 0 && !BackgroundAudio.contains(MediaAllocation(id, slot, generation, session)))
@@ -627,7 +630,7 @@ class Natives(
             created.slot = slot
             created.session = session
             if (kind == 1) { created.partition = json!!.partition(); created.profile = Partitions.profile(json) }
-            if (created.profile != null) created.browser = browser(created)
+            if (created.profile != null) created.browser = browser(created).also { b -> carried?.let(b.automation::adopt) }
             e = created
             elements[id] = e
             nodes = null
@@ -877,6 +880,7 @@ class Natives(
         if (pooled(e)) held++
         byView[view] = e
         if (e.kind == 2) bindEvents(e)
+        e.browser?.automation?.attach()
         if (e.w > 0 && e.h > 0) place(e)
         // Its page is loaded afresh from `src`: what was asked of it meanwhile moved nothing.
         if (e.kind == 1) JSONObject(e.wanted).let { json ->
@@ -932,6 +936,10 @@ class Natives(
             }
         }
     }
+
+    /** The automation of each iframe of this reader with this `id`: null for one without a kept partition. */
+    internal fun automations(id: String): List<FrameAutomation?> = elements.values
+        .filter { it.kind == 1 && JSONObject(it.wanted.ifEmpty { "{}" }).text("id") == id }.map { it.browser?.automation }
 
     /** The profiles the frames shown now were made in ([Partitions.flush]). */
     fun profiles(): Set<String> = elements.values.mapNotNullTo(HashSet()) { it.profile }

@@ -57,14 +57,18 @@ internal class FrameBrowser(
     private var errorPage = false
     private var closed = false
     private val main = Handler(Looper.getMainLooper())
+    /** `@exact/browser-automation` on this frame (D9); a change of its controller is a `currententrychange`. */
+    val automation = FrameAutomation(web) { send("currententrychange") }
 
     /** The frame's view is gone ([reason]): a navigation in flight ends in `AbortError`, as a superseded one does. */
     fun end(reason: String) {
         cancelRecovery()
+        automation.detached()
         flight?.let { flight = null; send("navigateerror", it, "AbortError", reason) }
     }
 
     fun close() {
+        automation.close()
         end("the frame was removed or its partition changed")
         closed = true
     }
@@ -85,7 +89,7 @@ internal class FrameBrowser(
             .put("canGoForward", view?.canGoForward() ?: false)
             .put("loading", ending == null && flight != null)
             .put("partitioned", true)
-            .put("controller", "person")
+            .put("controller", automation.controller)
             .put("error", error)
             .put("message", message)
             .put("recovering", recovering)
@@ -145,6 +149,7 @@ internal class FrameBrowser(
 
     fun started(navigation: Navigation) {
         if (closed || navigation.isSameDocument) return
+        automation.starting()
         cancelRecovery()
         val reload = reloading && !navigation.wasInitiatedByPage()
         reloading = false
@@ -165,6 +170,7 @@ internal class FrameBrowser(
     fun completed(navigation: Navigation) {
         if (closed) return
         if (navigation.isSameDocument) return sameDocument(navigation)
+        if (navigation.didCommit()) automation.committed(navigation.page)
         val current = flight?.takeIf { it.navigation === navigation } ?: return
         if (navigation.didCommit() && !navigation.didCommitErrorPage()) {
             dead = false
@@ -222,6 +228,7 @@ internal class FrameBrowser(
 
     fun deleted(page: Page) {
         loadedPages -= page
+        automation.deleted(page)
     }
 
     /** A title, or the history with no navigation, changed: `currententrychange` if the record did. */
@@ -293,6 +300,8 @@ internal class FrameBrowser(
      */
     fun crashed() {
         if (closed) return
+        automation.detached()
+        automation.attach()
         val now = SystemClock.uptimeMillis()
         dead = true
         deaths.removeAll { now - it >= 30_000 }

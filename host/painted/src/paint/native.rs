@@ -349,6 +349,8 @@ impl Painter {
             NodeType::WebView => {
                 let mut props = serde_json::json!({
                     "src": p.str(PropId::Src),
+                    // What `@exact/browser-automation` finds the frame by (LLP 1020.002 D9).
+                    "id": p.str(PropId::Id),
                     "sandbox": p.str(PropId::Sandbox),
                     "partition": p.str(PropId::Partition),
                     "generation": node.key.generation,

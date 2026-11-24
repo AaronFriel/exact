@@ -56,11 +56,13 @@ class NativesPartitionTest {
         companion object {
             var profiles = false
             var navigation = true
+            var worlds = false
 
             @JvmStatic @Implementation fun isFeatureSupported(feature: String) = when (feature) {
                 WebViewFeature.NAVIGATION_LISTENER -> navigation
                 WebViewFeature.MULTI_PROFILE -> profiles
                 WebViewFeature.WEB_MESSAGE_LISTENER, WebViewFeature.DOCUMENT_START_SCRIPT -> !navigation
+                WebViewFeature.JS_INJECTION_IN_FRAME_AND_WORLD -> worlds
                 else -> false
             }
         }
@@ -80,6 +82,28 @@ class NativesPartitionTest {
             @JvmStatic @Implementation
             fun addWebMessageListener(web: WebView, name: String, origins: Set<String>, listener: WebViewCompat.WebMessageListener) {
                 pageWorld.add(web)
+            }
+
+            /** Each view's listeners and document-start scripts in an execution world, by world name. */
+            val worldListeners = HashMap<WebView, HashMap<String, WebViewCompat.WebMessageListener>>()
+            val worldScripts = HashMap<WebView, ArrayList<Pair<String, String>>>()
+
+            @JvmStatic @Implementation
+            fun getExecutionWorld(web: WebView, name: String) = androidx.webkit.JavaScriptExecutionWorld(name, web).also { names[it] = name }
+            private val names = java.util.IdentityHashMap<androidx.webkit.JavaScriptExecutionWorld, String>()
+
+            @JvmStatic @Implementation
+            fun addWebMessageListener(web: WebView, name: String, origins: Set<String>, world: androidx.webkit.JavaScriptExecutionWorld,
+                                      listener: WebViewCompat.WebMessageListener) {
+                worldListeners.getOrPut(web) { HashMap() }[names.getValue(world)] = listener
+            }
+
+            @JvmStatic @Implementation
+            fun addJavaScriptOnEvent(web: WebView, script: String, event: Int, origins: Set<String>,
+                                     world: androidx.webkit.JavaScriptExecutionWorld): androidx.webkit.ScriptHandler {
+                val entry = names.getValue(world) to script
+                worldScripts.getOrPut(web) { ArrayList() } += entry
+                return androidx.webkit.ScriptHandler { worldScripts[web]?.remove(entry) }
             }
 
             @JvmStatic @Implementation
