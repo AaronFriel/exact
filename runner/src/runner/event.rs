@@ -705,6 +705,11 @@ impl Event {
 
     fn invalid_payload(&self) -> Option<&'static str> {
         match *self {
+            Self::Media(kind @ (EventKind::Play | EventKind::Pause), ref how)
+                if !matches!(how.as_str(), "" | "remote") =>
+            {
+                Some(kind.name())
+            }
             Self::Pan(x, y) if !pixel(x) || !pixel(y) => Some("pan"),
             Self::PanRelease(vx, vy) if !vx.is_finite() || !vy.is_finite() => Some("panrelease"),
             Self::HeightRelease { height, velocity } if !valid_height_release(height, velocity) => {
@@ -1026,6 +1031,14 @@ impl<D: DataSource> Runner<D> {
             },
             event => event,
         };
+        // A remote Play or Pause the host carried out for the element (LLP
+        // 1133.023 D7a; no host reports one yet). A `play` or `pause`
+        // carries nothing else (`invalid_payload`).
+        if matches!(&event, Event::Media(EventKind::Play | EventKind::Pause, how) if how == "remote")
+        {
+            let cause = super::provenance::Cause::remote_control();
+            return self.as_cause(cause, |r| r.arrived(|r| r.dispatch_event(view, event)));
+        }
         // The person's act in the app's own UI is an `app` cause. What the
         // host observes of the page and a package view's message are the
         // person's while the page shows (`as_shown`).
