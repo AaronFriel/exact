@@ -40,6 +40,11 @@ test "a repeat is refused and keeps its text; the list survives a relaunch"
 wait in real time (pin `epoch`, `time-zone`). Give screens ids; tap a tab before
 reading in it.
 
+On the Android reader, `tap "intro" drag 0 -170 over 400 hold 200` scrolls
+the container under the starting point. With the agent clock, the move takes
+400 ms and the hold takes another 200 ms before release. A gesture handle
+can take the drag itself. Reader scroll samples have no native fling.
+
 ## Before you call it done
 
 Web and iOS `verify` check the launch, test ends and relaunch in light and dark.
