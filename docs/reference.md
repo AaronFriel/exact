@@ -3087,9 +3087,11 @@ fetching 20 times can all wait and answer. A failed resource keeps its last
 value; `refresh` asks again. See LLP 1041 §8.4 for the byte reservations and
 cancellation policy.
 
-A mutation's answer hands over one request at a time, in order. Sends of the
-same `parallel` mutation overlap, up to three at a time on the six shared
-workers. They wait for everything before them except the other sends of
+A mutation's answer hands over one request at a time, in order.
+To [wait for a click in a frame](recipes/wait-for-a-frame-click.md), arm
+the listener first and send the wait and the click to separate mutation targets.
+Sends of the same `parallel` mutation overlap, up to three at a time on the
+six shared workers. They wait for everything before them except the other sends of
 their mutation; later work waits for them. Replies retain the order asked.
 The six workers, a source's scoped requests and the launch's preloads share
 one connection pool natively (LLP 1162 D5), so a read reuses a connection
