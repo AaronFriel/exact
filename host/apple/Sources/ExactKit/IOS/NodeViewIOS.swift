@@ -470,7 +470,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         #endif
         let presses=pressedControls(presses,down:false)
         if presses.isEmpty {return}
-        // The release's `keyup` handlers (#140), as `pressesBegan` the down's.
+        // The release's `keyup` handlers, as `pressesBegan` the down's.
         if !formDisabled, isFirstResponder, let key = presses.first?.key { _ = hardwareKey(key, down: false) }
         if inputCanvas?.canvasInput?.presses(presses, down: false, source: self) != true { super.pressesEnded(presses, with: event) }
     }

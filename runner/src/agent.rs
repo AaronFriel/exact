@@ -510,7 +510,7 @@ pub fn tree<D: DataSource>(runner: &Runner<D>) -> String {
     tree::all(runner, false)
 }
 
-/// What agent output shows for a non-empty password field's value (#134):
+/// What agent output shows for a non-empty password field's value:
 /// a fixed mark, whatever its length, as no reply, log or transcript should
 /// carry a secret. The app's own state still holds the value.
 pub const MASKED: &str = "•••";

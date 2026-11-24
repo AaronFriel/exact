@@ -1,5 +1,5 @@
 // The driver's held key (agent-keys.mjs `typeFor`): it repeats while held, as
-// a keyboard does (#140), each repeat a keydown whose `repeat` is true.
+// a keyboard does, each repeat a keydown whose `repeat` is true.
 import { test, expect } from 'bun:test';
 import { chordKeys } from './agent-playwright.mjs';
 import { KEY_REPEAT, validateKey, typeFor, cdpKey, withHeldModifiers, browserKey, nativeKey, typeArguments, typeCommand, tapWords, tapArguments, pointerGap, intoArguments, MalformedOperation, clockSlices, padOp, postCommand, postInto, resizeArguments } from './agent-keys.mjs';

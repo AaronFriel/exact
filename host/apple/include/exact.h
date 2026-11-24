@@ -646,10 +646,10 @@ uint32_t exact_share_land(ExactRuntime rt);
  * 63 = scrolldragend: UTF-8 velocityX,velocityY[,targetLeft,targetTop]: UIKit's
  *      release velocity in points (CSS px) per millisecond, positive as
  *      scrollLeft/scrollTop grow, and where the momentum will rest, when known.
- * 6 = key (keydown), 43 = keyup and 44 = keycapture (#140): UTF-8 chord (`Shift+Meta+b`),
+ * 6 = key (keydown), 43 = keyup and 44 = keycapture: UTF-8 chord (`Shift+Meta+b`),
  *      optionally newline, KeyboardEvent.code (`KeyB`, "" unknown), newline,
  *      true|false for repeat, and optionally newline, true|false for isComposing;
- * 46 = focusin, 47 = focusout (#283): UTF-8 `<target byte length>:<target id>`
+ * 46 = focusin, 47 = focusout: UTF-8 `<target byte length>:<target id>`
  *      then `0` (no relatedTarget) or `1<related id>`;
  * 64 = host look states (UTF-8 bits: 1 hover, 2 focus-visible); presentation only.
  * any other kind is refused with an error batch.

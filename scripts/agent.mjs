@@ -552,7 +552,7 @@ export async function main(argv, injected = {}) {
           const drag = parseDrag(s, tail.replace(/^drag(?:\s+|$)/, ''));
           r = await s.tap(args[0], { drag });
         }
-        // Every other form, strictly (#107): the contact's phases (LLP 1035.003 D1) read as `tap move …`, `tap hold`,
+        // Every other form, strictly: the contact's phases (LLP 1035.003 D1) read as `tap move …`, `tap hold`,
         // `tap up`, `tap cancel` only while a contact is down; with none down those words are targets like any other.
         else {
           const [target, { phase, ...opts }] = tapWords(args, !!s.contact);

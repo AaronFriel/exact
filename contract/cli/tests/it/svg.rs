@@ -848,7 +848,7 @@ fn stage_ten_geometry_and_blend() {
     );
 }
 
-// LLP 1055.000 D15 (issue #123): a path's `d` is a transition property, as
+// LLP 1055.000 D15: a path's `d` is a transition property, as
 // CSS names it; `all` covers it. No keyframe names it yet.
 #[test]
 fn d_transitions_and_all_covers_it() {

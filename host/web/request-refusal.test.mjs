@@ -1063,7 +1063,7 @@ test("the JS target refuses a data module's clock, randomness and timers as Herm
 
 // LLP 1016.000 D3 on the JS target: a data module's own socket, request or
 // event source refuses with the wasm target's words (module-glue.js), in every
-// spelling, so no frame leaves past the grants (#126).
+// spelling, so no frame leaves past the grants.
 test("the JS target refuses a data module's own WebSocket, XMLHttpRequest and EventSource as the wasm target does", async () => {
   const { transformSync } = await import('rolldown/utils');
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-ts-io-'));

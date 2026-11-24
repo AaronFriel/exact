@@ -27,7 +27,7 @@ waits behind proving these shipped bindings in the app; Snapback2 stays deferred
 **Expanded (Charlie, 2026-10-08, option A for protocol-handler URL templates):**
 `app.json` `protocol_handlers` carries a complete custom-scheme URL through
 the existing navigation root as an encoded handler location (LLP 1038 D8).
-The OAuth/sign-in callback and return-link consumer of issue #268 can read its
+The OAuth/sign-in callback and return-link consumer can read its
 scheme and fragment. A no-router URL event remains deferred; Charlie's ruling
 keeps the navigation root requirement. Take: no second delivery mechanism is
 added.
@@ -427,7 +427,7 @@ a person drags the sheet to.
 **Expanded (Charlie, 2026-10-23, #854; part of LLP 1123 D7):** a presented
 route's `navigationSizing` is `page` (the default) or `form`, which iPadOS
 shows as UIKit's centred `.formSheet`; a host whose sheets have one size
-ignores it. T3 Code's Add environment sheet (#216) is the consumer, and Nathan
+ignores it. T3 Code's Add environment sheet is the consumer, and Nathan
 Schroeder implements it. Take: none offered; waived by Charlie. Still out:
 D7's `automatic` and `fitted`, which stay in stage 6.
 **Expanded (James, 2026-11-21: "We ideally can support any view and any role
@@ -488,7 +488,7 @@ word; nothing is admitted or taken by the rename.
 **Expanded (Charlie, 2026-10-12 menubar lane ruling, confirming 2026-10-08):**
 "menu bar: -exact-menu="app|file|edit|view|go|window|help" on button; root
 -exact-menu-remove="…" fixed ids; enabled follows disabled; agent taps button —
-OK for now". The coding-agent desktop app (#141) is the consumer (LLP 1021
+OK for now". The coding-agent desktop app is the consumer (LLP 1021
 §5.3). Take: none named; Charlie's approval admits this bounded extension.
 Built 2026-10-12: placement and root removal of the fixed standard-item ids
 in LLP 1021 §5.3. Develop remains in development builds.
@@ -873,7 +873,7 @@ sockets, the ephemeral-port callback, an HTTP server for content, and `tcp:`
 and `http:` addresses, which are written down only (LLP 1133.005 §11, D5).
 
 
-**Expanded (Charlie, 2026-10-08, issue #283; focus lane, 2026-10-12):**
+**Expanded (Charlie, 2026-10-08; focus lane, 2026-10-12):**
 DOM `focusin`/`focusout` with target and related target information bubble to
 an ancestor without adding a Tab stop. The clipped content and row action
 wrappers in `issues/20261009-bubbling-focus-events.md` are the consumers.
@@ -1123,7 +1123,7 @@ names no take; `:focus-within` remains out.
 
 **Components** — roughly 15 built-in tags, not 40; roughly 12 Facet components, not 47.
 
-**Expanded (Charlie, 2026-10-12, issue #275 rangeedit ruling):**
+**Expanded (Charlie, 2026-10-12, rangeedit ruling):**
 “setRangeText: (b) fire one input (insertReplacementText) as recorded deviation;
 selectMode preserve; no undo step — for now”. Consumer: the issue's editor
 replacing `@name` with a reference. LLP 1069.001 records the web, AppKit, UIKit and Linux implementations

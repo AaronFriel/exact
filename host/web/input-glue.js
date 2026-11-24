@@ -1290,7 +1290,7 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
             if (found.length) fire(38, `${at}\n${found.join("\n")}`); else log("drop: refused: the browser handed over no file");
           });
         }
-        // A field keeps the browser's own double-click, and a text field its edit menu (navigation.js `editMenu`); a control's input has no edit menu, so its node's `contextmenu` runs (#487).
+        // A field keeps the browser's own double-click, and a text field its edit menu (navigation.js `editMenu`); a control's input has no edit menu, so its node's `contextmenu` runs.
         if (kind === "contextmenu" ? editMenu(e.target) : e.target.closest("input,textarea,[contenteditable]")) return;
         e.preventDefault(); e.stopPropagation();
         fire(kind === "contextmenu" ? 10 : 11, kind === "contextmenu" ? pointerLine(el, e) : "");

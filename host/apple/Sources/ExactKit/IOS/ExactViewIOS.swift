@@ -313,7 +313,7 @@ public final class ExactView: UIView {
         #if os(iOS)
         if window != nil { session.presenter.resolveOrientationLock() } // a lock told before there was a window
         #endif
-        session.tellPage() // `hasFocus` is this window's scene's (#114)
+        session.tellPage() // `hasFocus` is this window's scene's
         session.natives.scopesChanged()
         session.rasters?.setPaused(window == nil)
         session.canvases.refreshLifecycle()

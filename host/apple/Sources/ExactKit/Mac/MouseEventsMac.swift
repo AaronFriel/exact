@@ -390,7 +390,7 @@ extension NodeView {
     /// here up answers it (`contextMenuAuthored`), its down, drags and
     /// release take a right-click's path (`rightMouseDown`) with the primary
     /// button and Control the event holds, and nothing presses. Selectable
-    /// text with none above had its menu from `menu(for:)` (#454); anywhere
+    /// text with none above had its menu from `menu(for:)`; anywhere
     /// else it stays a click with Control held.
     func contextClick(_ event: NSEvent) -> Bool {
         contextClicked = event.type == .leftMouseDown && event.modifierFlags.contains(.control)

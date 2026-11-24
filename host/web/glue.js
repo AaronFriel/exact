@@ -711,7 +711,7 @@ export const INHERITED_CSS = {
   widows: "widows",
   orphans: "orphans"
 };
-// A field's value as agent output shows it: a password's is the runner's fixed mark, whatever its length (#134).
+// A field's value as agent output shows it: a password's is the runner's fixed mark, whatever its length.
 export const shownValue = (el) => el.type === "password" && el.value ? "•••" : el.value;
 export const SETTLE_DEADLINE_MS = 2e4, REPLACE_SETTLE_MS = 1e3, GLIDE_BOUND_MS = 4e3;
 // a glide: as a native host waits for a scroll view a finger left moving (agent.mjs reason `scroll`)

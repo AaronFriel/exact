@@ -1128,7 +1128,7 @@ extension Agent {
             }
             // With nothing focused the first root hears it, as a keyboard's key reaches it (`ExactView`).
             let focus = v.field != nil || v.textArea != nil || v.isFirstResponder || v.handlers.contains("press") ? v : presenter.focusedNode == nil ? presenter.keyRoot : nil
-            // The release's `keyup` handlers at the focus (#140): after the
+            // The release's `keyup` handlers at the focus: after the
             // down, or when a held key comes up. A modifier's own keydown
             // holds it and its keyup no longer does, as DOM's.
             let code = device.code, lone = KeyCodes.modifier(code)

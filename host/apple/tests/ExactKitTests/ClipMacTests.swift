@@ -248,7 +248,7 @@ final class ClipMacTests: XCTestCase {
     }
 
     /// A backdrop is read inside its box and mirrored past it, as Chrome
-    /// reads it (#129): the chain mirrors the frame, follows it and its
+    /// reads it: the chain mirrors the frame, follows it and its
     /// scale, and a turned box reads past its edges.
     func testABackdropMirrorsItsBoxAndFollowsItsFrame() throws {
         let n = node("view", ["backdrop_filter": [["blur": 4]]])

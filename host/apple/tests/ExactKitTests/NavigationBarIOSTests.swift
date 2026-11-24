@@ -234,7 +234,7 @@ final class NavigationBarIOSTests: XCTestCase {
                 let dropped = serviceDropped && issuesBeforeDrop == 0
                 if serviceDropped, issuesBeforeDrop > 0 { XCTFail("\(name): a keyboard-service drop came after this attempt had failed; not retried") }
                 serviceDropped = false
-                // Handoff ends with the keyboard up: it goes down, did-hide come, before the window does (#1056).
+                // Handoff ends with the keyboard up: it goes down, did-hide come, before the window does.
                 let finalHidden = decision == "handoff" ? awaiting(UIResponder.keyboardDidHideNotification) : nil
                 window?.endEditing(true)
                 if let finalHidden { settle("\(name)'s keyboard to hide before its window goes", cleanup: true) { finalHidden.fired || !keyboardUp } }
@@ -377,7 +377,7 @@ final class NavigationBarIOSTests: XCTestCase {
         app.interactive = false
         app.usesAnimator = false
         // A zero inset can precede did-hide: the pop's keyboard is down, did-hide come, before the next fixture replaces
-        // this window and claims keyboard focus (#1056).
+        // this window and claims keyboard focus.
         let popHidden = decision == "handoff" ? nil : awaiting(UIResponder.keyboardDidHideNotification)
         nav.popViewController(animated: true)
         XCTAssertEqual(finished(nav, "the native pop to end"), false, "the native pop completed, not cancelled or missing")

@@ -278,7 +278,7 @@ export async function browserKey({id, opts, evaluate, ask, call, frame}) {
   if (f.error || !f.ok) throw new Error(f.error ?? `view ${id} could not take focus`);
   const reply = phase => ({ typed: id, key: opts.key, ...(phase != null ? { phase } : {}), delivery: 'platform' });
   // A key's text goes with its down, as a keyboard's does: a held printable key types, and each
-  // auto-repeat types again (#140); a Control or Meta chord has none (`cdpKey`).
+  // auto-repeat types again; a Control or Meta chord has none (`cdpKey`).
   // The chord's modifiers go down before the key and up after it (`modifierEdges`); a held
   // key's auto-repeat (`opts.repeat`, #140) finds them down already. A key that fails to go
   // down lets its modifiers go again, held or not.
@@ -322,7 +322,7 @@ export async function nativeKey({id, opts, ask}) {
   } catch (error) { if (releaseKey) error.release = release; throw error; }
 }
 
-/** The auto-repeat a held key makes (#140), at macOS's default rate (`NSEvent.keyRepeatDelay` and
+/** The auto-repeat a held key makes, at macOS's default rate (`NSEvent.keyRepeatDelay` and
  * `keyRepeatInterval` with nothing set): the first repeat 500 ms after the down, then one every 83 ms. A
  * modifier alone does not repeat, as AppKit's flags change does not. */
 export const KEY_REPEAT = { delay: 500, interval: 83 };
@@ -403,8 +403,8 @@ export function mouseContact() {
 
 /** The CLI `tap` line's words after `tap` (LLP 1012 §1): `[target, opts]` for `s.tap`, or `[null, opts]` for a
  * held contact's phase when `held` says one is down (`move [by] <x> <y> [over <ms>]`, `hold [<ms>]`, `up`, `cancel`).
- * Strict: a word no form uses, a word twice, or a number that is none is refused by name, never dropped (#107:
- * `tap probe auxclick` was sent as a left click). `drag` and a held request's `tap @N` are the caller's. */
+ * Strict: a word no form uses, a word twice, or a number that is none is refused by name, never dropped (so
+ * `tap probe auxclick` is not sent as a left click). `drag` and a held request's `tap @N` are the caller's. */
 export function tapWords(args, held = false) {
   const [first, form, ...rest] = args;
   const refuse = (why) => { throw new MalformedOperation(`tap${args.length ? ' ' + args.join(' ') : ''}: ${why}`); };
@@ -523,7 +523,7 @@ export function tapWords(args, held = false) {
       if (opts.release && (opts.wheel[0] !== 0 || opts.wheel[1] !== 0 || opts.at)) refuse('wheel release is `wheel 0 0 release`: it lifts the held gesture where it is');
       return [first, opts];
     }
-    // The mouse's buttons (#107): the left, a double click, the right (`contextmenu`), the middle (`auxclick`), n clicks.
+    // The mouse's buttons: the left, a double click, the right (`contextmenu`), the middle (`auxclick`), n clicks.
     case 'mouse': case 'contextmenu': case 'auxclick': return [first, { [form]: true, ...options(rest, ['at', 'modifiers']) }];
     // `dblclick touch`: a finger's double tap, which zooms a zoomable scroller (LLP 1057.001.000 §6), not a mouse's.
     case 'dblclick': return [first, { dblclick: true, ...options(rest, ['at', 'modifiers', 'touch']) }];
@@ -562,7 +562,7 @@ export function tapArguments(opts) {
   if (opts.into) intoArguments(opts.into);
   if (opts.seconds != null && !Number.isFinite(opts.seconds)) throw new MalformedOperation('mediasession: expected finite seconds');
   if (opts.mediaSession === 'seekto' && !(Number.isFinite(opts.seconds) && opts.seconds >= 0)) throw new MalformedOperation('mediasession: seekto needs finite nonnegative seconds');
-  // The mouse's forms (#107): one button form at a time, each at its middle or `at`, the modifiers held through it.
+  // The mouse's forms: one button form at a time, each at its middle or `at`, the modifiers held through it.
   const button = ['mouse', 'contextmenu', 'auxclick', 'dblclick', 'clicks'].filter((k) => opts[k] !== undefined && opts[k] !== false);
   if (button.length > 1) throw new MalformedOperation(`tap: one of mouse, dblclick, contextmenu, auxclick and clicks at a time, not ${button.join(' and ')}`);
   if (opts.clicks !== undefined && ![1, 2, 3].includes(opts.clicks)) throw new MalformedOperation('tap … clicks: 1, 2 or 3');
@@ -574,7 +574,7 @@ export function tapArguments(opts) {
   return button;
 }
 
-/** A `tap` form this carrier cannot deliver as a hand's (#107), or null.
+/** A `tap` form this carrier cannot deliver as a hand's, or null.
  * Unsupported forms are refused before any input reaches the platform. */
 export function pointerGap(host, browser, opts) {
   if (opts.touch && !['ios', 'host-ios', 'android', 'windows'].includes(host) && !(host === 'web' && (browser ?? 'chrome') === 'chrome')) return `${host === 'web' ? browser ?? 'chrome' : host} does not carry a touch double tap (dblclick touch, LLP 1057.001.000 §6)`;
