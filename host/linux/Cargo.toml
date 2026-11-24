@@ -53,3 +53,6 @@ getrandom = "0.3"
 [target.'cfg(unix)'.dev-dependencies]
 # The KMS flip state and the VNC password tests run without a display on macOS too.
 drm = "0.15"
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+tempfile = "3"

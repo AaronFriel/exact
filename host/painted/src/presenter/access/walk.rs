@@ -374,6 +374,7 @@ impl<D: DataSource> Presenter<D> {
             } else if (dialog.is_none()
                 && (Self::access_live(&node) != 0 || self.action_group(&node)))
                 || (label.is_some() && matches!(aria, Some("group" | "radiogroup" | "region")))
+                || (node.props.get(PropId::TabIndex).is_some() && self.focusable(node.id))
             {
                 let name = label.unwrap_or_else(|| {
                     if node.props.str(PropId::AccessibilityActions).is_some() {

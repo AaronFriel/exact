@@ -1,5 +1,7 @@
 //! AccessKit's window tree over the painted presenter (LLP 1115.004 D11).
 mod node;
+#[cfg(test)]
+mod tests;
 mod text;
 use self::text::FieldRuns;
 use super::access::{act, role};

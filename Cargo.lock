@@ -2185,6 +2185,7 @@ dependencies = [
  "sha2 0.10.9",
  "smithay-client-toolkit",
  "softbuffer",
+ "tempfile",
  "tiny-skia 0.12.0",
  "winit",
 ]

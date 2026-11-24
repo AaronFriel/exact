@@ -20,7 +20,9 @@ pub fn map_node(
 ) -> Node {
     let role = match source.role {
         role::TEXT => Role::Label,
-        role::GROUP if !source.name.is_empty() => Role::Group,
+        role::GROUP if !source.name.is_empty() || source.flags & flag::FOCUSABLE != 0 => {
+            Role::Group
+        }
         role::HEADING => Role::Heading,
         role::BUTTON | role::UP | role::TOGGLE => Role::Button,
         role::LINK => Role::Link,
@@ -130,6 +132,8 @@ pub fn map_node(
     }
     if flags & flag::CLICK != 0 {
         node.add_action(Action::Click);
+    }
+    if flags & (flag::CLICK | flag::FOCUSABLE) != 0 {
         node.add_action(Action::Focus);
     }
     if flags & flag::LONG_CLICK != 0 {

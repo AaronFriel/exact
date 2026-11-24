@@ -174,6 +174,8 @@ pub mod flag {
     pub const MODAL: i32 = 1 << 15;
     /// A held press lifts a drag out of the app (LLP 1094.000 D9).
     pub const DRAG: i32 = 1 << 16;
+    /// An authored tabindex makes the element a keyboard focus target.
+    pub const FOCUSABLE: i32 = 1 << 17;
 }
 
 /// What changed of a node since the last statement.
@@ -599,8 +601,7 @@ impl<D: DataSource> Presenter<D> {
         }
     }
 
-    /// Add `node` to the tree where its box shows; its identity, or `None`
-    /// where nothing of it shows (what is under it is then left out too).
+    /// Add a visible node and return its identity.
     #[allow(clippy::too_many_arguments)]
     fn access_emit(
         &self,
@@ -641,6 +642,9 @@ impl<D: DataSource> Presenter<D> {
             flags = (flags | flag::DISABLED) & !(flag::CLICK | flag::LONG_CLICK | flag::DRAG);
         } else if scope.disabled {
             flags |= flag::DISABLED;
+        }
+        if node.props.get(PropId::TabIndex).is_some() && self.focusable(node.id) {
+            flags |= flag::FOCUSABLE;
         }
         flags |= Self::access_live(node);
         b.out.push(Node {

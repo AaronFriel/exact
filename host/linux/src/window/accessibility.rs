@@ -120,3 +120,7 @@ impl Access {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "accessibility_tests.rs"]
+mod tests;
