@@ -501,9 +501,16 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         // a hand-built field's delegate resigns it (LLP 1115.000 D9.2),
         // unless that action focused this field again: "add another" keeps
         // the keyboard and never lets go of it on the way. Next moves to the
-        // next field instead, and from the last one puts the keyboard away.
+        // next field instead, and from the last one puts the keyboard away,
+        // but only from where the action left the focus. When another field
+        // took the keyboard, or a `focus()` waits to be delivered (a field
+        // not mounted yet, a transition, a sheet presenting), the action
+        // moved the focus and Next adds nothing; Android returns there too
+        // if a handler moved the focus (`hosted.rs`). A refused or cancelled
+        // `focus()` moved nothing, and nor did one on this field.
         if handlers.contains("submit") { presenter?.submit(id) }
-        if props["enterKeyHint"] == "next", presenter?.focusNextField(after: self) == true { return false }
+        if props["enterKeyHint"] == "next", textField.isFirstResponder, presenter?.pendingFocusNode == nil,
+           presenter?.focusNextField(after: self) == true { return false }
         if presenter?.focusAsked !== self, textField.isFirstResponder { textField.resignFirstResponder() }
         return false
     }
