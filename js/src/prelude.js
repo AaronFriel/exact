@@ -792,8 +792,9 @@
   // outcomeJson)` resolves that fetch; drain and settle again. `__exact_settle(id, "final")` refuses an answer still
   // waiting on nothing of its own.
   // A handler a module calls back (LLP 1133.016 D9): the `tools` export's, its value as JSON text.
-  function tool(name, args) {
-    var handlers = global.exact.tools,
+  function tool(source, args) {
+    var name = source.slice(source.indexOf(":") + 1),
+      handlers = name !== "script.message" || source === "event:script.message" ? global.exact.tools : undefined,
       f = handlers && Object.prototype.hasOwnProperty.call(handlers, name) ? handlers[name] : undefined,
       text = function (v) {
         return JSON.stringify(v === undefined ? null : v);
@@ -884,7 +885,7 @@
       try {
         result =
           mutation === "tool"
-            ? tool(source.slice(source.indexOf(":") + 1), JSON.parse(JSON.parse(argsJson)[0]))
+            ? tool(source, JSON.parse(JSON.parse(argsJson)[0]))
             : global.exact.answer(source, JSON.parse(argsJson), store, storage, native);
       } finally {
         call.sync = false;
