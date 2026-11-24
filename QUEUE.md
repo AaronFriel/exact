@@ -1,4 +1,5 @@
 # Queue
+- On iPhone 17 with iOS 26.5, add an inline “Detail” heading and a trailing “View the complete record” button to the pushed header in #1519. UIKit draws a leading chevron and shifts the title left. On 1915bddd9, `layout back` returns a hidden 0×0 box for the visible chevron.
 - On an iPhone 17 running iOS 26.5, `AgentBarPointerIOSTests.testAHostedItemBubblesPointersWithoutPressing` hits the navigation bar over the readout. `SplitIOSTests.testTheDetailColumnsTransitionIsItsBases` finds row-a outside the list port after expanding the split. Both reproduce on b77df3b3d.
 - Check the closed Duo’s system Back and ambiguous tab items on device. On iPhone 17, give two tabs the same title and omit the first control’s identifier. Only identifiable tabs can supply a frame. A disabled sibling strip can let the hit through to a different item under it (`NavigationBarIOSTests.testAnUnnamedControlBesideTheBarWithTheItemsBoxIsTheItemsButton`).
 - Check the containing block of pressed translations in Chromium. `bun test host/web-js/cleared-styles.test.mjs -t 'JS chromium: active translate'` measures 44 px where both containing-block cases expect 40 px.
