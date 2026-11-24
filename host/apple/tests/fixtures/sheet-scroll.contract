@@ -6,7 +6,12 @@ component ReadingSheet
   action snap(height: number, velocity: number)
     released = height
     speed = velocity
-    px = velocity > 400 ? 480 : velocity < -400 ? 160 : height > 420 ? 480 : height > 230 ? 320 : 160
+    if velocity >= 250
+      px = height < 320 ? 320 : 480
+    else if velocity <= -250
+      px = height > 320 ? 320 : 160
+    else
+      px = height < 240 ? 160 : height < 400 ? 320 : 480
     releases = releases + 1
   view
     column height="100%" position="relative"

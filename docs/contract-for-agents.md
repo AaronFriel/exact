@@ -5463,6 +5463,42 @@ A plan that binds `tip` links the `tips` capability (TipKit and SwiftUI on Apple
 driver's `state.tips` lists each tip's TipKit status, whether it shows and what it points
 at. Recipe: `tips`.
 
+#### A list inside a draggable sheet on iOS
+
+Put `heightDragFor` on the list and give its ancestor the named `id`. One
+contact expands the sheet, then scrolls the list. On the way down it takes
+the list back to its start, then lowers the sheet. A contact that moved the
+sheet sends its displayed height and its velocity in points per second to
+`heightrelease`. A contact that only scrolled can coast on its own.
+
+This sheet has stops at 160, 320 and 480. A slow release chooses the nearest
+stop (the higher one at a tie). A flick takes the next stop in its direction.
+
+```contract
+component ReadingSheet
+  state px = 320
+  action snap(height: number, velocity: number)
+    if velocity >= 250
+      px = height < 320 ? 320 : 480
+    else if velocity <= -250
+      px = height > 320 ? 320 : 160
+    else
+      px = height < 240 ? 160 : height < 400 ? 320 : 480
+  view
+    column id="sheet" height=px min-height=160 max-height=480 box-sizing="border-box" transition="height -exact-spring(300,30,1)"
+      list heightDragFor="sheet" heightrelease=snap flex=1 min-height=0
+        for n in range(24) key=n
+          text `Row ${n}` height=50
+```
+
+On iOS 26.5, UIKit settled to 320 from a held height of 399.00 and to 480
+from 400.33. At a release height of 376.33, +241.62 points/s stayed at 320
+and +266.77 advanced to 480. The example chooses 250 within that bracket.
+UIKit also stayed at 320 from 338.33 with a speed of +379.09, so a single
+cutoff only approximates its flick decisions across release heights.
+UIKit's inset sheet and an unscaled in-page box can reach different heights
+on the same finger stroke.
+
 #### Swipe to reply
 
 `swiperight` moves its node with the finger: it follows up to 64 points, then a fifth of
