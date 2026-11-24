@@ -1366,6 +1366,16 @@ text paragraph, so the widget can reserve its width; calendar formats may be
 inline. Links must be their own elements, not runs among other paragraph text.
 Snapshot handlers are refused; use a link to open the app.
 
+On Apple platforms a widget's first rendered root gives the widget its container
+background: the root's `background-color` and gradient layers paint edge to
+edge, behind the system's content margins, through SwiftUI's
+`containerBackground(for: .widget)` (LLP 1126 D5). The system removes that
+background where it shows widgets without one, such as StandBy and the Lock
+Screen. With no background on the root, the widget takes the system's. A
+background on a nested box paints that box alone, inside the margins: put it on
+the root when it should fill the widget. A Live Activity's Lock Screen root
+likewise gives the activity its `activityBackgroundTint` (above).
+
 Snapshot accessibility admits labels, roles, hints, heading levels and hidden
 content. Live announcements and control-state accessibility rows are refused.
 

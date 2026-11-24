@@ -789,14 +789,18 @@ What a port writes from habit, what the compiler says, and what to write (the eu
 | `0% rotate=-2deg` in `keyframes` | `syntax-unquoted-length` | `0% rotate="-2deg"`, each keyframe on one line |
 | `tags.find(t => …)` | `syntax-method-call` | `first(tags.filter(t => …))`; in each row of a list, `lower-row-lookup` (warning): join it in the data module |
 | a helper action reading state its caller just set | `analyze-read-after-assign` (warning) | `let next = …` in the caller, `n = next`, pass `next` |
-| `width=120` on a box of text | `lower-text-px-width` (warning) | `width="7.5rem"`, or let the content size it |
+| `width=120` on a box of text | `lower-text-px-width` (warning) | let the content size it, or, where the width should grow with the text, `` width=`${120 / 17}rem` ``: 120 pt at iOS's default text size, where `7.5rem` is 127.5 pt |
 | `numberOfLines`, `ellipsizeMode`, `resizeMode`, `textTransform`, `fontVariant` | `lower-unknown-attr` | `line-clamp`, `text-overflow`, `object-fit`, `text-transform`, `font-variant-numeric` |
 | `backgroundColor`, `flexDirection`, `onPress`, `activeOpacity` | `lower-unknown-attr` | `background-color`, `flex-direction`, `press`, `-exact-press-opacity` |
 | `paddingHorizontal=16` | `lower-unknown-attr` | `padding-left=16 padding-right=16`, or `padding="0px 16px"` |
 | `marginVertical=8` | `lower-unknown-attr` | `margin-top=8 margin-bottom=8`, or `margin="8px 0px"` |
 | `shadowColor`, `shadowOpacity`, `shadowRadius`, `shadowOffset`, `elevation` | `lower-unknown-attr`, `lower-attr-tag` | one `box-shadow="<x>px <y>px <2 × radius>px <colour>"` (below); nothing when the same style has `overflow: "hidden"`, which iOS draws without its shadow |
 | `font-weight="bold"`, `"600"` | `lower-attr-value` | `font-weight=700`, `font-weight=600` |
-| `fontSize: 16` | nothing; `verify` lists it as a fixed size | `font-size="1rem"` (16 ÷ 16), or a text style (`font="-exact-body"`): React Native's `fontSize` follows Dynamic Type by default (`allowFontScaling`), and a bare number here is points that do not (LLP 1115.000 D12) |
+| `fontSize: 16` | nothing; `verify` lists it as a fixed size | `` font-size=`${16 / 17}rem` ``, or a text style (`font="-exact-body"`) where the platform's body is meant: React Native's `fontSize` follows Dynamic Type by default (`allowFontScaling`), and a bare number here is points that do not (LLP 1115.000 D12). `1rem` is the root font size: 17 pt at iOS's default text size, 13 pt on the Mac (`NSFont.systemFontSize`, which the Mac's text size does not change) and normally 16 px on the web; an authored root font size changes it on every host, and the user's text size on iOS and the web. `font-size=16` is a fixed 16 pt |
+| `Text` with no `fontSize` of its own or inherited | nothing | `font-size=14` for a fixed size, or `` font-size=`${14 / 17}rem` `` to scale from it: React Native's default is 14 pt, and unstyled text here is the platform's body, 17 pt at iOS's default text size |
+| `withTiming(x)`, `withSpring(x)` with no configuration | nothing: neither function has a counterpart | a `transition` on the property that changes ([motion](recipes/motion.md)). Read the defaults in the installed Reanimated: in 4.7.1 timing is 300 ms with `Easing.inOut(Easing.quad)`, and the spring has stiffness 900, damping 120, mass 4. `transition="translate 300ms ease-in-out"` keeps the duration with a different curve; `transition="translate -exact-spring(900, 120, 4)"` takes the spring's numbers. Whether either ends when Reanimated's does, or follows Reduce Motion as it does, is not established |
+| `Gesture.Pan().activeOffsetX(…).failOffsetY(…).minPointers(2)` | nothing: no attribute sets a threshold or a pointer count | `pan` with `touch-action` is the drag the platform recognizes, without these thresholds, and its iOS recognizer takes one touch. Where the gesture needs two fingers or thresholds of its own, add a recognizer through an [access hatch](reference.md#access-hatches) |
+| `ScreenOrientation.lockAsync(OrientationLock.LANDSCAPE_LEFT)` | nothing: both landscape words compile | on iPhone `orientationlock="landscape-secondary"` is UIKit's landscape left, and `LANDSCAPE_RIGHT` is `"landscape-primary"`. The lock holds while its element is displayed, with no unlock call: when the element goes, another displayed lock or the platform decides ([the reference](reference.md#lock-the-screen-orientation) has the manifest's limit and iPad's) |
 | `transform="rotate(-2deg)"` | `lower-attr-tag` | `rotate="-2deg"`, `translate="0px 25px"`, `scale=0.8` |
 | Expo's `NativeTabs.Trigger role="search"`, SwiftUI's `Tab(role: .search)` | `lower-attr-value` on `role="search"` | `rel="search"` on the root tab, written last; `autofocus` on its root's header search field sets it apart on iOS 26 (`contract vocab search`) |
 | a `ScrollView` in a `flex: 1` `View`: `column flex=1` › `scroll flex=1` | `lower-scroll-grows` (warning) | `min-height=0` on the column; the scroller alone needs none |
@@ -804,6 +808,10 @@ What a port writes from habit, what the compiler says, and what to write (the eu
 | `alignItems`, `justifyContent`, `gap` on a `View` (a flex column in RN) | `lower-flex-on-block` (warning) | `column` or `row`: a `view` is `display: block`, as a `<div>` is |
 | `flexDirection="row"` on a `Pressable` with content | `lower-flex-on-block` (warning) | `button display="flex"`, and `text-align="left"` where its text is not centred: a `button` is a block with centred text, as `<button>` is |
 | `<SFSymbol name="x" size={N}>`, expo-symbols `SymbolView` | nothing; hand-drawn as an `svg`, or as `font-size=N`, the glyph comes out smaller | `image "symbol:sf/x" width=N height=N object-fit="contain"`, its tint as `color` ("Values beside an SF Symbol", below) |
+
+Dividing by 17 keeps an iOS measurement at the default text size and follows the root
+font from there. It does not reproduce React Native's `allowFontScaling` curve, and a
+fixed length that holds no text needs no conversion.
 
 What the original's style objects say is not always what its iOS screen shows. Port
 what the screenshot shows. (euxy port against its Expo original, judged screen by
