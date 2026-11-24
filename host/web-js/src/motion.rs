@@ -180,7 +180,9 @@ impl Em<'_> {
             });
         let spring = binding(StyleId::Transition as u16, BindingKind::Style).is_some_and(|b| {
             match style::literal(plan, plan.code(b.expr)) {
-                Some(v) => v.as_str().is_some_and(|t| t.contains("spring")),
+                Some(v) => v
+                    .as_str()
+                    .is_some_and(|t| t.to_ascii_lowercase().contains("spring")),
                 // Settled derives, state and resource answers are opaque here;
                 // any computed transition can select a spring (LLP 1047 D2).
                 None => true,
@@ -190,7 +192,7 @@ impl Em<'_> {
         // A drag timeline's source: the motion piece resolves the plan's
         // timeline names (motion-glue.js `followTimelines`, LLP 1057.003 D5).
         let source = binding(StyleId::DragTimeline as u16, BindingKind::Style).is_some();
-        swiped || indicator || spring || target || source
+        swiped || indicator || spring || target || source || self.heights.contains(&i)
     }
 
     /// A node the motion engine follows (rt.js `mo`, the kernel's motion
@@ -225,6 +227,32 @@ impl Em<'_> {
                     None => format!("(({})()??{initial})", self.bound(i, e, &b, scope)?),
                 },
             });
+        }
+        let drag = self.heights.contains(&i);
+        if let Some(height) = binding(StyleId::Height as u16, BindingKind::Style) {
+            exact_motion::link_transitions();
+            let follows =
+                binding(StyleId::Transition as u16, BindingKind::Style).is_some_and(|b| {
+                    style::literal(plan, plan.code(b.expr)).is_none_or(|v| {
+                        v.as_str()
+                            .and_then(|s| exact_motion::Transitions::parse(s).ok())
+                            .is_some_and(|row| {
+                                row.matching(exact_motion::Property::Height)
+                                    .is_some_and(|t| {
+                                        matches!(t.timing, exact_motion::TimingFunction::Spring(_))
+                                    })
+                            })
+                    })
+                });
+            if follows || drag {
+                values.push(match style::literal(plan, plan.code(height.expr)) {
+                    Some(v) => value_js(&v),
+                    None => format!("({})()", self.bound(i, e, &height, scope)?),
+                });
+                if drag {
+                    values.push(if follows { "\"both\"" } else { "\"drag\"" }.into());
+                }
+            }
         }
         let mo = self.uses.rt("mo");
         let _ = write!(self.out, "{mo}({e},()=>[{}]);", values.join(","));
@@ -281,35 +309,6 @@ impl Em<'_> {
             .iter()
             .map(|b| plan.binding(b))
             .any(|b| b.kind == BindingKind::Prop && b.id == PropId::ReorderFor as u16)
-    }
-
-    /// A height drag's owner (rt.js `mh`): its numeric height and its
-    /// `transition`, which a released drag springs by.
-    pub(crate) fn height_owner(&mut self, i: u32, e: &str, scope: &Scope) -> Result<(), String> {
-        if !self.heights.contains(&i) {
-            return Ok(());
-        }
-        self.motion = true;
-        let plan = self.plan;
-        let mut values = Vec::new();
-        for (id, initial) in [(StyleId::Height, "null"), (StyleId::Transition, "\"\"")] {
-            let b = plan
-                .node(NodesId(i))
-                .bindings
-                .iter()
-                .map(|b| plan.binding(b))
-                .find(|b| b.kind == BindingKind::Style && b.id == id as u16);
-            values.push(match b {
-                None => initial.to_string(),
-                Some(b) => match style::literal(plan, plan.code(b.expr)) {
-                    Some(v) => value_js(&v),
-                    None => format!("(({})()??{initial})", self.bound(i, e, &b, scope)?),
-                },
-            });
-        }
-        let mh = self.uses.rt("mh");
-        let _ = write!(self.out, "{mh}({e},()=>[{}]);", values.join(","));
-        Ok(())
     }
 }
 
