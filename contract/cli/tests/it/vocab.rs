@@ -1090,6 +1090,7 @@ fn every_concepts_code_compiles_and_its_names_are_its_own() {
         "titlebar",
         "haptics",
         "toast",
+        "live",
         "var",
     ] {
         let one: Value = serde_json::from_str(&stdout(&vocab(&["--json", name]))).unwrap();
