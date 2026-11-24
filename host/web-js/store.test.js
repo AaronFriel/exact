@@ -1,4 +1,4 @@
-// The web JS target's store. Run alone, `bun test ./host/web-js/store.test.js`: reorder.test.js mocks rt.js for its process.
+// The web JS target's store, with its persistence (store.js), as a page with a data module links it. Run alone, `bun test ./host/web-js/store.test.js`: reorder.test.js mocks rt.js for its process.
 import { test, expect, mock } from "bun:test";
 
 // The build copies navigation.js and prompt-glue.js in from host/web and writes names.js.
@@ -8,6 +8,7 @@ mock.module("./alert-message.js", () => ({}));
 mock.module("./menu-rows.js", () => ({}));
 mock.module("./names.js", () => ({ sourceTypes: {} }));
 const { Store } = await import("./rt.js");
+await import("./store.js");
 const { createSecretFacade } = await import("./admission.js");
 
 test("a render's store refuses writes before changing memory or scheduling readers", () => {

@@ -127,9 +127,11 @@ function adoptArm(p, f, own) {
   return [s, mark(p)];
 }
 // An owning task can refuse a new instance. Prepare its detached subtree during
-// settlement, before any existing scope or DOM range is replaced.
-export let PrepareTasks = false;
-export function taskRegions() { PrepareTasks = true; }
+// settlement, before any existing scope or DOM range is replaced. Null until the
+// plan owns a task (schedule.js `ownedTasks`); then what a commit that stands
+// runs to retire the preparations it superseded.
+export let PrepareTasks = null;
+export function taskRegions() { PrepareTasks = finishTaskScopes; }
 const PreparedScopes = new Set();
 /** Task owners follow the candidate regions, even while their DOM update waits. */
 export function taskScopeLive(s) {
@@ -151,7 +153,7 @@ function prepareScope(s, current, used, forget) {
   stood(keep);
 }
 /** Once validation succeeds, retire preparations superseded before publication. */
-export function finishTaskScopes() {
+function finishTaskScopes() {
   for (const p of PreparedScopes) {
     if (p.s.gone || p.used()) PreparedScopes.delete(p);
     else if (!untracked(() => taskScopeLive(p.s))) {
