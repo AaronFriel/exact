@@ -246,7 +246,7 @@ object Native {
      * (the presenter's own press at the node, as a driver's `tap`), 2 hold (its context menu), 3 scroll a scroller
      * on or step a range up, 4 back or down, 5 set a range to [value], 6 start the node's drag out of the app. Whether
      * anything took it. */
-    @JvmStatic external fun accessAct(id: Int, action: Int, value: Float): Boolean
+    @JvmStatic external fun accessAct(id: Int, action: Int, value: Float, target: Int): Boolean
     /** No accessibility service is on any more: exact2 forgets the tree it told and builds none until [access]. */
     @JvmStatic external fun accessOff()
     /** One slice ([budgetUs] of shaping) of laying out what the touch that is down would open; whether more is left. */

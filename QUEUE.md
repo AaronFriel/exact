@@ -1479,6 +1479,10 @@ sits on that list carries the trade it would take.
 - An embedder's plain `NSWindow` still freezes page layout during an animated `setFrame` inside `native.call`. Run the window-frame fixture's 300-by-200 resize in an embedder window and compare the root and viewport at each resize notification (#1412).
 - Snapshot viewport injection rejects `safeAreaTop: number` as a string field. Declare it on a widget’s `snapshot_viewport` shape and compile the widget.
 - The viewport test in `host/web-js/facts.test.mjs` leaves `globalThis.matchMedia` installed. Run that file with a Bun `afterAll` hook comparing `matchMedia` with its value before the tests.
+- `tree --ax` action-list parity is deferred in LLP 1114.008 D5. Compare the quantity spinbutton’s Chromium CDP actions relation with the names in the Apple agent reply.
+- UIKit's painted swipe row still lists Delete when its button is disabled. Disable Delete before adopting the row in SwipeActionsIOSTests and inspect the row’s custom actions.
+- On macOS 27.0.1, restarting twice after focusing the second field restores launch autofocus. Run AccessibilityTests.testARestartThatLosesAChosenFocusConsumesTheLaunchAutofocus.
+- Windows UI Automation cannot expose the custom actions carried by AccessKit 0.25.1 through accesskit_windows 0.35.2. On the quantity spinbutton in the range-adjust fixture, compare the AccessKit node’s Reset action with the UI Automation action list.
 - Restore the LLP working set to 15 documents. `bun scripts/caps.mjs` reports 16 in `llp/current` on main.
 - On macOS, pressing `link href="#keys" target="other"` at `/shortcuts` leaves the ordinary named window unopened. Resolve the fragment against the current visit before choosing its target (LLP 1153 D5, LLP 1030.004 D1).
 - An ordinary named Mac window with a toolbar reopens lower on the screen (LLP 1030.004 D3). Close and reopen it from a two-route app with `window-controls-overlay`. On macOS 27 its 480 × 322 frame moved down 52 points each time.
