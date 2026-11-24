@@ -50,7 +50,7 @@ internal class Contacts(private val view: ExactView, private val scrolling: Scro
                         if (pending.any { it.actionMasked == MotionEvent.ACTION_POINTER_DOWN }) {
                             finishHold(null)
                         } else {
-                            DragOut.held(downTime); view.forward(4, downX, downY, tool, -1L)
+                            DragOut.held(downTime); view.forward(4, downX, downY, tool, -1L, at = -1L)
                             view.ask(downX, downY) { words ->
                                 if (token == serial && !stopped) finishHold(words)
                             }
@@ -78,7 +78,7 @@ internal class Contacts(private val view: ExactView, private val scrolling: Scro
     /** The long press to exact2. One it took (its menu, or a drag that lifts as the finger moves on, LLP 1094.000 D7) keeps
      * the rest of the contact from a scroller, which would otherwise claim the finger's next move along its axis. */
     private fun longPress() {
-        DragOut.held(downTime); view.forward(4, downX, downY, tool, -1L)
+        DragOut.held(downTime); view.forward(4, downX, downY, tool, -1L, at = -1L)
         val token = serial
         // The moves that come meanwhile wait for the answer ([drain]), so a scroller cannot claim one first.
         waiting = true
@@ -128,7 +128,7 @@ internal class Contacts(private val view: ExactView, private val scrolling: Scro
         for (e in pending) e.recycle()
         pending.clear(); dropCandidate(); module.clear(); releaseInterception()
         if (field) view.fields?.cancel()
-        if (engine) view.forward(3, downX, downY, tool, 0L)
+        if (engine) view.forward(3, downX, downY, tool, 0L, at = -1L)
         engine = false; field = false
     }
 
@@ -139,7 +139,7 @@ internal class Contacts(private val view: ExactView, private val scrolling: Scro
 
     fun scrollClaimed(x: Float, y: Float, tool: Int) {
         dropCandidate(); module.cancel(); hold(null); releaseInterception()
-        if (field || engine) view.forward(3, x, y, tool, 0L)
+        if (field || engine) view.forward(3, x, y, tool, 0L, at = -1L)
         field = false; engine = false
     }
 
@@ -292,7 +292,7 @@ internal class Contacts(private val view: ExactView, private val scrolling: Scro
 
     private fun endEngine() {
         hold(null)
-        if (engine) view.forward(3, downX, downY, tool, 0L)
+        if (engine) view.forward(3, downX, downY, tool, 0L, at = -1L)
         engine = false
     }
 

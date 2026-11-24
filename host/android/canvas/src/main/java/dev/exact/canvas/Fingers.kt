@@ -1,5 +1,6 @@
 package dev.exact.canvas
 
+import android.os.Build
 import android.view.MotionEvent
 
 /**
@@ -58,8 +59,16 @@ internal class Fingers(private val view: ExactView) {
         }
     }
 
-    /** The first finger's event [e] to exact2 as [action] ([ExactView.forward]). */
-    fun forward(e: MotionEvent, action: Int) = view.forward(action, e.getX(index), e.getY(index), e.getToolType(index), -1L)
+    /** The first finger's event [e] to exact2 as [action] ([ExactView.forward]), each at its own time. A move carries
+     * the samples Android batched into it since the last ([MotionEvent.getHistoricalX]): a drag's release velocity reads
+     * them (LLP 1057.001 §3), and a fast flick between two frames is mostly history. */
+    fun forward(e: MotionEvent, action: Int) {
+        val tool = e.getToolType(index)
+        // A second finger cancels a painted drag. GPU canvases route their additional fingers separately.
+        val history = e.takeIf { (action == 1 || action == 2) && it.pointerCount == 1 && it.historySize > 0 }
+        val at = if (Build.VERSION.SDK_INT >= 34) e.eventTimeNanos else e.eventTime * 1_000_000L
+        view.forward(action, e.getX(index), e.getY(index), tool, -1L, at, history)
+    }
 
     /** [e] to exact2 as [touch] splits it: how [Fields] replays a touch it held for a field that was not the one
      * under it. */
@@ -78,5 +87,13 @@ internal class Fingers(private val view: ExactView) {
         if (action != 2) o.input()
         // A move waits for nothing: several fingers cost the main thread no frame time.
         if (o.finger(action, id, x, y, if (action == 2) 0L else view.releaseWait)) view.publish()
+    }
+}
+
+/** Replay a single finger's batch on the thread that owns the presenter, before sending its current position. */
+internal fun MotionEvent.forwardHistory(tool: Int) {
+    for (h in 0 until historySize) {
+        val at = if (Build.VERSION.SDK_INT >= 34) getHistoricalEventTimeNanos(h) else getHistoricalEventTime(h) * 1_000_000L
+        Native.touch(2, getHistoricalX(0, h), getHistoricalY(0, h), tool, at)
     }
 }

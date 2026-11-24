@@ -1095,6 +1095,7 @@ pub struct CanvasHost<D: DataSource> {
     /// Scroll deferral state across `frame`, `requests`, `refine`, and input
     /// (`scroll::ScrollHold`). Only active once the reader calls `refine` (`prefetching`).
     scroll_hold: scroll::ScrollHold,
+    input_clock: crate::presenter::InputClock,
     prefetching: bool,
     /// The kernel epoch a collection pass left, when nothing else changed
     /// since the paint: rows mounted or retired out of view, which the next

@@ -235,15 +235,23 @@ impl<D: DataSource> Presenter<D> {
     /// scroll, a field or a hosted view takes a touch that is still down,
     /// and no up follows it here ([`Presenter::set_touching`] says when the
     /// finger lifts).
-    pub fn reader_touch(&mut self, action: i32, x: f32, y: f32, now: f64) -> Result<(), String> {
+    pub fn reader_touch(
+        &mut self,
+        action: i32,
+        x: f32,
+        y: f32,
+        now: f64,
+        at: f64,
+    ) -> Result<(), String> {
         if action != 2 {
             self.top.lift = None;
         }
         match action {
-            0 => self.pointer_down(x, y, now).map(|_| ()),
-            1 => self.pointer_up(x, y, now).map(|_| ()),
+            0 => self.pointer_down_at(x, y, now, at).map(|_| ()),
+            1 => self.pointer_up_at(x, y, now, at).map(|_| ()),
+            // Drag-out hands the contact to the shell and closes its menu at presentation time.
             2 if self.lift_moved(x, y, now) => Ok(()),
-            2 => self.pointer_move(x, y, now).map(|_| ()),
+            2 => self.pointer_move_at(x, y, now, at).map(|_| ()),
             4 => {
                 self.long_press(x, y, now);
                 Ok(())

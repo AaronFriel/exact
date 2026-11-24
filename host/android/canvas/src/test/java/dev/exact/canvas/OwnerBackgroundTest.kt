@@ -62,6 +62,10 @@ class OwnerBackgroundTest {
             var recordedY = 0f
             var scrollStatement: IntArray? = null
             val samples = ArrayList<Float>()
+            val touches = ArrayList<Triple<Int, Float, Long>>()
+            @JvmStatic @Implementation fun touch(action: Int, x: Float, y: Float, tool: Int, at: Long) {
+                touches.add(Triple(action, y, at))
+            }
             fun statement() = intArrayOf(
                 scrollScale.toBits(), 1, 2 or 4 or 8, 0,
                 0, logicalY.toBits(), 0, recordedY.toBits(), 0, 500f.toBits(),
@@ -179,6 +183,27 @@ class OwnerBackgroundTest {
             thread.quitSafely(); thread.join(5000)
             assertFalse(thread.isAlive)
         }
+    }
+
+    @Test fun aQueuedLiftKeepsItsHistoryAfterTheReaderRecyclesIt() = withOwner { owner ->
+        owner.ask { Host.touches.clear() }
+        val drain = CountDownLatch(1)
+        owner.tell { check(drain.await(5, TimeUnit.SECONDS)) }
+        val up = MotionEvent.obtain(100, 108, MotionEvent.ACTION_MOVE, 20f, 40f, 0)
+        try {
+            up.addBatch(116, 20f, 50f, 1f, 1f, 0)
+            up.addBatch(118, 20f, 52f, 1f, 1f, 0)
+            up.action = MotionEvent.ACTION_UP
+            owner.touch(1, up.x, up.y, MotionEvent.TOOL_TYPE_FINGER, 0L, 118_000_000L, up)
+            up.offsetLocation(0f, 100f)
+        } finally {
+            up.recycle()
+            drain.countDown()
+        }
+        assertEquals(
+            listOf(Triple(2, 40f, 108_000_000L), Triple(2, 50f, 116_000_000L), Triple(1, 52f, 118_000_000L)),
+            owner.ask { Host.touches.toList() },
+        )
     }
 
     private fun turn(word: Int) {

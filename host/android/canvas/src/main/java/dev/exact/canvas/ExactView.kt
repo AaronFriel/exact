@@ -335,10 +335,8 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     /** exact2 has heard a touch's down and not yet its end. */
     private var heard = false
 
-    /** A touch to exact2 (0 down, 1 up, 2 move, 3 cancel) at the view's pixels. [wait]: the ms the frame waits for
-     * exact2's answer, or negative for the action's own. [Scrolling] cancels a touch its scroll won with this, and
-     * waits for nothing. */
-    internal fun forward(action: Int, x: Float, y: Float, tool: Int, wait: Long) {
+    /** Forward a touch in view pixels. A negative [wait] uses the action's usual wait in milliseconds. */
+    internal fun forward(action: Int, x: Float, y: Float, tool: Int, wait: Long, at: Long, history: MotionEvent? = null) {
         // A scroll that takes a hosted field's touch cancels it in the field: exact2 never heard of it.
         if (action == 3 && fields?.cancel() == true) return
         // Nor is a touch whose end exact2 has heard cancelled there: one that lifted before exact2's answer for its
@@ -361,12 +359,13 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
                 o.held(true)
             }
             if (action == 1 || action == 3) holdFrom = 0L
-            val answered = o.touch(action, x, y, tool, if (wait >= 0) wait else if (press) 0L else if (action == 2) 2L else releaseWait)
+            val answered = o.touch(action, x, y, tool, if (wait >= 0) wait else if (press) 0L else if (action == 2) 2L else releaseWait, at, history)
             if (action == 1 || action == 3) o.held(false)
             if (answered) publish()
             return
         }
-        Native.touch(action, x, y, tool)
+        history?.forwardHistory(tool)
+        Native.touch(action, x, y, tool, at)
         // A frame only when the touch changed what exact2 draws (a down on a plain row changes nothing).
         if (started) pump()
     }

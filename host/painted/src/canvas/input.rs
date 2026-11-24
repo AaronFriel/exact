@@ -51,8 +51,10 @@ impl<D: DataSource + Default> CanvasHost<D> {
     /// one that is down has been held still for the system's long-press
     /// time, which the reader measures; what names a context menu there
     /// takes it ([`crate::presenter::Presenter::long_press`]), and the
-    /// touch then presses nothing when it lifts.
-    pub fn touch(&mut self, action: i32, x: f32, y: f32, tool: i32) {
+    /// touch then presses nothing when it lifts. `at_ns`: when it happened,
+    /// the `MotionEvent`'s time (`CLOCK_MONOTONIC`, `SystemClock`'s
+    /// uptime), or -1 for one the reader made itself.
+    pub fn touch(&mut self, action: i32, x: f32, y: f32, tool: i32, at_ns: i64) {
         let _s = Section::begin(c"exact touch");
         self.scroll_hold.touch(action);
         self.p.set_pointer_kind(match tool {
@@ -68,8 +70,9 @@ impl<D: DataSource + Default> CanvasHost<D> {
             self.travel.stopped();
         }
         let now = self.now();
+        let at = self.input_clock.android(action == 0, at_ns, now);
         let (x, y) = (x / self.scale, y / self.scale);
-        let r = self.p.reader_touch(action, x, y, now);
+        let r = self.p.reader_touch(action, x, y, now, at);
         self.touched(action, x, y, now, r);
     }
 
@@ -91,7 +94,7 @@ impl<D: DataSource + Default> CanvasHost<D> {
             .p
             .canvas_finger(id, action, x / self.scale, y / self.scale, now);
         if !taken && action == 0 {
-            self.touch(3, x, y, 0);
+            self.touch(3, x, y, 0, -1);
         }
     }
 }

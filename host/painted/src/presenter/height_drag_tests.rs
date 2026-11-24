@@ -313,6 +313,59 @@ fn agent_height_drag_releases_at_the_moves_pace_without_advancing_time() {
     assert!(text(&p, "seen").parse::<f64>().unwrap() > 180.);
 }
 
+#[test]
+#[cfg(unix)]
+fn reader_height_release_uses_the_batched_moves_and_the_lifts_input_time() {
+    let uptime = || crate::launch_marks::clock(libc::CLOCK_MONOTONIC) * 1000.;
+    for (lift, expected) in [(32, 1000.), (160, 0.)] {
+        let mut p = boot(APP);
+        let mut input = contact::InputClock::default();
+        let start = uptime().floor() as i64 - 200;
+        for (action, y, at) in [
+            (0, 340., 0),
+            (2, 330., 10),
+            (2, 320., 20),
+            (2, 310., 30),
+            (1, 310., lift),
+        ] {
+            let ns = (start + at) * 1_000_000;
+            let before = uptime();
+            let event = input.android(action == 0, ns, 400.);
+            if action == 0 {
+                let age = 400. - event;
+                assert!((before - start as f64..=uptime() - start as f64).contains(&age));
+            }
+            p.reader_touch(action, 200., y, 400., event).unwrap();
+        }
+        assert_eq!(text(&p, "count"), "1");
+        let velocity: f64 = text(&p, "velocity").parse().unwrap();
+        assert!(
+            (velocity - expected).abs() < 1e-6,
+            "{velocity} at lift {lift}"
+        );
+    }
+}
+
+#[test]
+fn a_live_driver_lifting_a_delayed_reader_move_counts_the_time_since_input() {
+    let mut p = boot(APP);
+    p.set_live_clock(Some(std::rc::Rc::new(|| 400.)));
+    for (action, y, at) in [
+        (0, 340., 0.),
+        (2, 330., 10.),
+        (2, 320., 20.),
+        (2, 310., 30.),
+    ] {
+        p.reader_touch(action, 200., y, 400., at).unwrap();
+    }
+    assert_eq!(p.pump(400.), None);
+    assert_eq!(p.contact_event_ms(None), Some(30.));
+    let reply = crate::agent::handle_for_window(&mut p, r#"{"op":"tap","phase":"up"}"#);
+    assert!(!reply.contains("error"), "{reply}");
+    assert_eq!(text(&p, "count"), "1");
+    assert_eq!(text(&p, "velocity"), "0");
+}
+
 /// A pause before the lift is sampled: the same drag held 120 ms releases at
 /// rest (LLP 1057.001 §6).
 #[test]

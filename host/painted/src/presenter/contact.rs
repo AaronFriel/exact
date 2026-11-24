@@ -2,10 +2,13 @@
 use super::*;
 mod hold;
 mod mouse;
+mod time;
 use crate::host::press::Edge;
 use exact_kernel::{NodeKey, TransformDragBinding};
 use exact_motion::{HoldEnd, HoldStart, Value, VelocityTracker};
 pub(super) use hold::Hold;
+#[cfg(any(target_os = "android", all(test, unix)))]
+pub(crate) use time::InputClock;
 
 #[derive(Clone, Copy)]
 pub(super) enum Candidate {
@@ -306,22 +309,6 @@ impl<D: DataSource> Presenter<D> {
         self.land_surface_ripple();
         self.dirty = true;
     }
-    pub(crate) fn contact_event_ms(&self, platform_ms: Option<f64>) -> Option<f64> {
-        let (event_ms, delivered_ms) = self
-            .contact
-            .as_ref()
-            .map(|c| (c.event_ms, c.last_ms))
-            .or_else(|| self.stage_contact().map(|c| (c.event_ms, c.delivered_ms)))?;
-        // A synthesized move delivers its samples together. Idle time starts
-        // at delivery, even when the last sample is timestamped ahead of it.
-        Some(event_ms + platform_ms.map_or(0., |at| (at - delivered_ms).max(0.)))
-    }
-    pub(crate) fn delay_contact_event(&mut self, ms: f64) {
-        if let Some(contact) = &mut self.contact {
-            contact.event_ms += ms;
-        }
-        self.stage_delay_contact(ms);
-    }
     /// A held Arrange's preview again where the contact is, after an edge
     /// scroll moved the list under it (the page's `sampleMove` after its
     /// scroll): no pointer event, and no second edge step.
@@ -497,7 +484,7 @@ impl<D: DataSource> Presenter<D> {
     /// synthesis; then the node's `pointerdown` (LLP 1005 §3), which the
     /// contact never waits for.
     pub fn pointer_down(&mut self, x: f32, y: f32, now_ms: f64) -> Result<bool, String> {
-        self.pointer_down_counted(x, y, now_ms, 1)
+        self.pointer_down_counted(x, y, now_ms, now_ms, 1)
     }
 
     fn pointer_down_counted(
@@ -505,6 +492,7 @@ impl<D: DataSource> Presenter<D> {
         x: f32,
         y: f32,
         now_ms: f64,
+        event_ms: f64,
         clicks: u32,
     ) -> Result<bool, String> {
         // Before anything routes it: a scrollbar's, a sheet's or a menu's
@@ -515,7 +503,7 @@ impl<D: DataSource> Presenter<D> {
         #[cfg(any(target_os = "android", test))]
         self.cancel_fingers(now_ms);
         self.touched();
-        if self.stage_down(x, y, now_ms) {
+        if self.stage_down(x, y, now_ms, event_ms) {
             return Ok(true);
         }
         if self.overlay_pointer(0, x, y, now_ms) || self.scrollbar_pointer(0, x, y) {
@@ -528,8 +516,9 @@ impl<D: DataSource> Presenter<D> {
             return Ok(false);
         }
         let mark = self.hatch_pointer_mark(crate::hatches::Phase::Down, x, y);
+        // The presenter's double-tap deadline runs on the session clock.
         self.zoom_contact_down((x, y), now_ms);
-        let result = match self.contact_down(x, y, now_ms) {
+        let result = match self.contact_down(x, y, now_ms, event_ms) {
             Ok(taken) => {
                 // Keep the down target's identity before its handler can remove it.
                 let focus = self.contact.as_ref().and_then(|c| {
@@ -619,7 +608,7 @@ impl<D: DataSource> Presenter<D> {
         }
         self.focus_for_press(hit.unwrap(), point, now_ms, false);
     }
-    fn contact_down(&mut self, x: f32, y: f32, now_ms: f64) -> Result<bool, String> {
+    fn contact_down(&mut self, x: f32, y: f32, now_ms: f64, event_ms: f64) -> Result<bool, String> {
         self.pointer_sample(x, y, now_ms)?;
         if self.host.content_region().is_some() {
             if let Some(view) = self
@@ -647,7 +636,7 @@ impl<D: DataSource> Presenter<D> {
                     origin: (x, y),
                     position: (x, y),
                     last_ms: now_ms,
-                    event_ms: now_ms,
+                    event_ms,
                     hold: None,
                     group: false,
                     retained: Some(retained),
@@ -716,7 +705,7 @@ impl<D: DataSource> Presenter<D> {
                 origin: (x, y),
                 position: (x, y),
                 last_ms: now_ms,
-                event_ms: now_ms,
+                event_ms,
                 hold: None,
                 group: false,
                 panning: false,
@@ -763,7 +752,7 @@ impl<D: DataSource> Presenter<D> {
         }
         let candidate = (!rest.is_empty()).then(|| rest.remove(0));
         let mut pan_velocity = VelocityTracker::new();
-        pan_velocity.push(now_ms / 1000., Value::new(x as f64, y as f64));
+        pan_velocity.push(event_ms / 1000., Value::new(x as f64, y as f64));
         self.contact = Some(Contact {
             hit,
             activation,
@@ -772,7 +761,7 @@ impl<D: DataSource> Presenter<D> {
             origin: (x, y),
             position: (x, y),
             last_ms: now_ms,
-            event_ms: now_ms,
+            event_ms,
             hold: None,
             group: false,
             panning: false,
@@ -808,8 +797,9 @@ impl<D: DataSource> Presenter<D> {
     pub fn pointer_move(&mut self, x: f32, y: f32, now_ms: f64) -> Result<bool, String> {
         self.pointer_move_at(x, y, now_ms, now_ms)
     }
-    // The agent timestamps synthesized samples for pan velocity. Dispatch
-    // and held motion use the presenter's current time.
+    /// [`Presenter::pointer_move`] for a move that happened at `event_ms`
+    /// on the session clock, which velocity reads.
+    /// Dispatch and presentation use `now_ms`.
     pub(crate) fn pointer_move_at(
         &mut self,
         x: f32,
@@ -1121,6 +1111,7 @@ impl<D: DataSource> Presenter<D> {
     pub fn pointer_up(&mut self, x: f32, y: f32, now_ms: f64) -> Result<bool, String> {
         self.pointer_up_at(x, y, now_ms, now_ms)
     }
+    /// [`Presenter::pointer_up`] for a lift at `event_ms` on the session clock.
     pub(crate) fn pointer_up_at(
         &mut self,
         x: f32,

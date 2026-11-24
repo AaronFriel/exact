@@ -84,6 +84,8 @@ mod pointer;
 mod present;
 mod reader_selection;
 mod replacement;
+#[cfg(target_os = "android")]
+pub(crate) use contact::InputClock;
 pub use frames::with_partitions;
 pub use present::Carried;
 use replacement::Waiting;

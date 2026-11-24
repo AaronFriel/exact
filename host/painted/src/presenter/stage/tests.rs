@@ -356,7 +356,8 @@ fn a_sheets_drag_and_a_back_preview_follow_the_finger() {
         p.stage_follows_finger(),
         "past the slop the sheet is dragged"
     );
-    p.pointer_up(200., y + 30., t + 24.).unwrap();
+    // Pause before lifting so the sheet stays open for the Back preview.
+    p.pointer_up(200., y + 30., t + 160.).unwrap();
     assert!(!p.stage_follows_finger(), "let go, it glides on its own");
     after(&mut p, 1000.0);
     let t = p.host().now();

@@ -55,6 +55,7 @@ class HostedTouchTest {
                 finally { flushing = false }
             }
             val touches = ArrayList<Int>()
+            val samples = ArrayList<Pair<Float, Long>>()
             val scrolls = ArrayList<Float>()
             val deltas = ArrayList<Triple<Int, Float, Float>>()
             val fingers = ArrayList<Pair<Int, Int>>()
@@ -72,8 +73,9 @@ class HostedTouchTest {
                 beforeReply?.also { beforeReply = null }?.invoke()
                 return answer
             }
-            @Implementation @JvmStatic fun touch(action: Int, x: Float, y: Float, tool: Int) {
+            @Implementation @JvmStatic fun touch(action: Int, x: Float, y: Float, tool: Int, at: Long) {
                 touches.add(action)
+                samples.add(y to at)
                 if (action == 4 && takesLongPress) reply[3 + 11 * reply[1] + 7]++
             }
             @Implementation @JvmStatic fun finger(action: Int, id: Int, x: Float, y: Float) {
@@ -156,6 +158,7 @@ class HostedTouchTest {
         val view = ExactView(activity, false) {}.also { it.started = true; it.natives = natives }
         val parent = FrameLayout(activity).also { it.addView(natives); it.addView(view) }
         init {
+            Engine.samples.clear()
             Engine.touches.clear(); Engine.scrolls.clear(); Engine.deltas.clear(); Engine.fingers.clear(); Engine.takesLongPress = false; Engine.asks = 0; Engine.beforeReply = null
             Engine.fingerPoints.clear(); Engine.deferReplies = false; Engine.replies.clear(); Engine.asksPending.clear(); Engine.flushing = false
             natives.ensure(7, 2, 200, 300, "{\"module\":\"test-map\",\"slot\":2,\"generation\":3}", 0)
@@ -202,6 +205,19 @@ class HostedTouchTest {
             assertNull("Scrolling.$name must release the abandoned contact",
                 ReflectionHelpers.getField<Any?>(scrolling, name))
         }
+    }
+
+    @Test fun aBatchedMoveKeepsEachPositionAtItsInputTime() {
+        val f = Fixture(scroller = false)
+        val down = MotionEvent.obtain(100, 100, MotionEvent.ACTION_DOWN, 20f, 30f, 0)
+        val move = MotionEvent.obtain(100, 108, MotionEvent.ACTION_MOVE, 20f, 40f, 0)
+        move.addBatch(116, 20f, 50f, 1f, 1f, 0)
+        try {
+            f.view.fingers.began(down)
+            f.view.fingers.relay(down)
+            f.view.fingers.relay(move)
+            assertEquals(listOf(30f to 100_000_000L, 40f to 108_000_000L, 50f to 116_000_000L), Engine.samples)
+        } finally { down.recycle(); move.recycle() }
     }
 
     @Test fun verticalDragScrollsThePageWithoutScrollingMultilineText() {

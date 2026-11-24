@@ -3,6 +3,7 @@ package dev.exact.canvas
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.view.MotionEvent
 import android.view.Choreographer
 import java.nio.ByteOrder
 import java.nio.IntBuffer
@@ -460,9 +461,14 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
 
     /** A touch: answered within [waitMs] if exact2 is free (as LLP 1072's events are synchronous, so the response is
      * in this frame), else published when it is. Whether it was answered. */
-    fun touch(action: Int, x: Float, y: Float, tool: Int, waitMs: Long): Boolean = answer(waitMs) {
-        Native.touch(action, x, y, tool)
-        if (action == 0 && ahead) { handler.removeCallbacks(aheadSlice); handler.post(aheadSlice) }
+    fun touch(action: Int, x: Float, y: Float, tool: Int, waitMs: Long, at: Long, history: MotionEvent?): Boolean {
+        // Android recycles the delivered event as soon as the reader returns.
+        val batch = history?.let { MotionEvent.obtain(it) }
+        return answer(waitMs) {
+            try { batch?.forwardHistory(tool) } finally { batch?.recycle() }
+            Native.touch(action, x, y, tool, at)
+            if (action == 0 && ahead) { handler.removeCallbacks(aheadSlice); handler.post(aheadSlice) }
+        }
     }
 
     /** A finger past the touch's first ([Native.finger]) on the exact thread, waiting as a touch does. */

@@ -200,8 +200,8 @@ object Native {
      * has been held still for the system's long-press time ([android.view.ViewConfiguration.getLongPressTimeout]).
      * A node with `draggable` nearer than any menu asks for its drag (request kind 23, LLP 1094.000 D7); else what
      * names a context menu there opens it (D10), and a move past the touch slop then lifts the node's drag. That touch
-     * presses nothing when it lifts. */
-    @JvmStatic external fun touch(action: Int, x: Float, y: Float, tool: Int)
+     * presses nothing when it lifts. [at] is the event time in uptime nanoseconds, or -1 for a reader action. */
+    @JvmStatic external fun touch(action: Int, x: Float, y: Float, tool: Int, at: Long)
     /** A finger past the touch's first ([Fingers]): 0 down, 1 up, 2 move, 3 cancel, at the view's pixels, by its pointer
      * [id] ([android.view.MotionEvent.getPointerId]). The canvas holding the touch takes it where it lands on that
      * canvas; where no canvas holds the touch, a second finger cancels it. */
