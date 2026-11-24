@@ -1,5 +1,3 @@
-import { viewParent, viewChildren } from './navigation/lists.js';
-import { focusStack } from './navigation/routes.js';
 // @ref LLP 1043.000 §3 D7/D8 — flow settlement must not change LLP 1012's API.
 import { afterAll, test, expect } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
@@ -15,12 +13,14 @@ import { retainDevGeneration, readDevGeneration, readDevGenerationAsync, serveBu
 import { placeReporter, timeReporter, pageReporter } from './navigation/environment.js';
 import { appRootFontSize } from './navigation/type.js';
 import { grantOrigins } from './navigation/grant-origins.js';
+import { WINDOW_STATE } from './navigation/store.js';
 import { storageKey } from './storage-environment.js';
 import { open } from '../../scripts/agent.mjs';
 import { suiteBrowser, launchFacts, launchEnvironment, parseFlags } from '../../scripts/agent-launch.mjs';
 import { nodeNamed } from '../../scripts/agent-test.mjs';
 import { drivable, engineTests } from '../../scripts/coverage.mjs';
 import { declaration, deferred, fixture, requestClock, source, timedRequests } from './glue-fixture.mjs';
+import { inputFixtureSource } from './tests/glue-fixture.mjs';
 import { parseSync } from 'rolldown/utils';
 
 const engineTest = await engineTests();
@@ -218,20 +218,30 @@ function plain(reply) {
 }
 
 test('only an explicit targeted layout carries its same-reply accepted plan', () => {
-  const c = fixture(), requests = [];
+  const c = fixture(), requests = [], baselines = [];
+  let type = 'Text';
   c.ask = request => {
     requests.push(request);
-    if (request.op === 'node') return {id: request.id, type: 'Text', props: {testId:'current'}, ...(request.plan ? {planDigest:'a'.repeat(64)} : {})};
+    if (request.op === 'node') return {id: request.id, type, props: {testId:'current'}, ...(request.plan ? {planDigest:'a'.repeat(64)} : {})};
     return {epoch:2,incarnation:1,clock:0};
+  };
+  c.textBaseline = el => {
+    baselines.push(el);
+    return 17.5;
   };
   const initial = c.exact.agent({op:'layout',id:1});
   plain(initial);
   expect(initial.error).toBeUndefined();
+  expect(initial.node.space.baseline).toBe(17.5);
   expect(initial.node.planDigest).toBeUndefined();
   const result = c.exact.agent({op:'layout',id:1,plan:true});
   plain(result);
+  expect(result.node.space.baseline).toBe(17.5);
   expect(result.node.planDigest).toBe('a'.repeat(64));
   expect(requests.filter(r=>r.op==='node').map(r=>r.plan ?? false)).toEqual([false,true]);
+  type = 'View';
+  expect(c.exact.agent({op:'layout',id:1}).node.space.baseline).toBeUndefined();
+  expect(baselines).toEqual([c.views.get(1), c.views.get(1)]);
 });
 
 test('ordinary reads and inputs are synchronous; the awaited entry returns the same reply', async () => {
@@ -753,14 +763,7 @@ test('non-flow operation transcripts remain byte-for-byte equal to the existing 
 });
 
 // Run the input adapter with controlled scheduling; browser tests cover geometry.
-let inputSource = readFileSync(new URL('./input-glue.js', import.meta.url), 'utf8').replace(/^import \{[^}]+\} from '\.\/navigation\.js';\n/m, '');
-for (const name of ['prompt-glue', 'alert-message']) {
-  const stripped = inputSource.replace(new RegExp(`^import\\s+["']\\./${name}\\.js["'];[^\\n]*\\n`, 'm'), '');
-  if (stripped === inputSource) throw new Error(`input glue must retain its ${name} side-effect import`);
-  inputSource = stripped;
-}
-const inputCode = inputSource.replace(/^export (async function|function|const) /gm, '$1 ');
-const inputScript = new vm.Script(inputCode + '\n' + declaration('attach'), { filename: 'input-glue.js' });
+const inputScript = new vm.Script(await inputFixtureSource() + '\n' + declaration('attach'), { filename: 'input-glue.js' });
 
 function inputFixture() {
   const listeners = new Map(), windowListeners = new Map(), documentListeners = new Map(), frames = new Map(), sent = [], captured = [];
@@ -769,12 +772,14 @@ function inputFixture() {
     addEventListener(kind, fn) { const list = listeners.get(kind) ?? []; list.push(fn); listeners.set(kind, list); },
     closest() { return this.disabled ? this : null; }, matches: () => false, contains: () => true, setPointerCapture(id) { captured.push(id); } };
   const buttons = [];
+  const querySelectorAll = selector => selector === 'button[aria-keyshortcuts]' ? buttons : [];
   // `page` is a built document being adopted (LLP 1048.000 D6); this page was not built.
-  const f = vm.createContext({ focusStack, viewParent, viewChildren, inputReady: false, inputHandlers: null, page: null,
+  const f = vm.createContext({ exact: {}, inputReady: false, inputHandlers: null, page: null,
     views: new Map([[7, el]]), retiredViews: new WeakSet(), frames, sent, captured, el,
-    root: { querySelectorAll: s => s.includes('aria-modal') ? [] : buttons, addEventListener() {}, contains: () => true }, // press feedback's listener: press.test.mjs drives it
+    root: { querySelectorAll, addEventListener() {}, contains: () => true }, // press feedback's listener: press.test.mjs drives it
     // The shortcuts' keydown listens in the capture phase, a pressable's activation in the bubble phase.
     document: {
+      querySelectorAll,
       addEventListener(kind, fn, capture) {
         if (kind === 'keydown') f[capture ? 'keydown' : 'keyActivate'] = fn;
         const list = documentListeners.get(kind) ?? []; list.push(fn); documentListeners.set(kind, list);
@@ -796,6 +801,7 @@ function inputFixture() {
   f.host = f;
   el.ownerDocument = f.document;
   inputScript.runInContext(f);
+  expect(typeof f.exact.backButton).toBe('function');
   f.attach(el, 7, ['pan']);
   function event(extra = {}) {
     return { isPrimary: true, button: 0, pointerId: 1, clientX: 0, clientY: 0,
@@ -807,7 +813,7 @@ function inputFixture() {
     // Capture reaches the window, then the document; an outside event skips this node's listeners.
     outside(kind, extra) { const e = event(extra); for (const fn of [...windowListeners.get(kind) ?? [], ...documentListeners.get(kind) ?? []]) fn(e); return e; },
     load() {
-      vm.runInContext(`inputHandlers = createInputHandlers({ root, views, retiredViews,
+      vm.runInContext(`inputHandlers = exact.createInputHandlers({ root, views, retiredViews,
         ready: () => inputReady, inertAncestor,
         dispatch: (id, payload) => send(wasm.exact_dispatch(id, 20, writeIn(payload), now())),
       }); inputReady = true;`, f);
@@ -955,10 +961,16 @@ test('a pressable that is no button activates by Enter or Space', () => {
 
 // @ref LLP 1043.000 §3 D7/D8 — optional host code cannot gate data readiness.
 const checkpoint = () => new Promise(resolve => setImmediate(resolve));
-async function startupFixture(rustOnly = false, served = null, timerFirst = false) {
+async function startupFixture(rustOnly = false, served = null, timerFirst = false, refuseWindowRead = false) {
+  const windowKey = WINDOW_STATE + 'selection', stored = [];
+  const sessionStorage = { length: 1, key: () => windowKey, getItem(key) {
+    if (refuseWindowRead) throw new Error('storage unavailable');
+    expect(key).toBe(windowKey);
+    return 'second';
+  } };
   const data = deferred(), input = deferred(), timer = deferred();
-  const frames = [], timeouts = [], loads = [], errors = [], events = [];
-  const exports = { memory: {}, exact_compat: () => '{"inputs":{}}',
+  const frames = [], timeouts = [], loads = [], errors = [], warnings = [], events = [];
+  const exports = { memory: {}, exact_store: record => stored.push(record), exact_compat: () => '{"inputs":{}}',
     exact_logic: () => '{"appId":"test.startup"}',
     exact_data_ready: () => { events.push('activate'); return '{"ops":[]}'; },
     ...(rustOnly ? {} : { exact_module_artifact() {} }) };
@@ -967,15 +979,15 @@ async function startupFixture(rustOnly = false, served = null, timerFirst = fals
     views: new Map(), retiredViews: new WeakSet(), authoredDisabled: new WeakMap(),
     inputReady: false, inputHandlers: null, wasm: null, memory: null, logicInfo: null,
     moduleLoader: null, activeModule: null, timerFactory: null, agentMode: false, agentKeepsStore: true, // glue.js: !agentMode || ?storage
-    performance: { now: () => 1 }, t0: 0, URL, localStorage: { length: 0 }, AbortController,
+    performance: { now: () => 1 }, t0: 0, URL, localStorage: { length: 0 }, WINDOW_STATE, sessionStorage, writeIn: value => value, AbortController,
     document: { querySelectorAll: () => [] }, // no preload: the glue fetches ./app.wasm
     fetch: async () => ({}), WebAssembly: { instantiateStreaming: async () => ({ instance: { exports } }), Module: { customSections: () => [], imports: () => [] } },
     moduleCall() {}, rustImports: {}, dataImports: {}, grantOrigins, readOut: value => value,
     boot: async () => events.push('boot'), loadGpuIfNeeded() {}, startClock() {}, httpHelpers() {}, pieces: { pending: () => null },
-    requestAnimationFrame: fn => frames.push(fn), setTimeout: (fn, ms) => timeouts.push([fn, ms]), console: { error: error => errors.push(String(error)) },
+    requestAnimationFrame: fn => frames.push(fn), setTimeout: (fn, ms) => timeouts.push([fn, ms]), console: { warn: (...args) => warnings.push(args), error: error => errors.push(String(error)) },
     motion: { commit() {} }, collections: { dataReady: () => events.push('collections') },
     applyBatch: () => events.push('batch'), inertAncestor: () => false, editMenu: () => false, focusAutofocus() {},
-    resolveModuleReady: () => events.push('ready'), page: served && { holding: true, early: [] }, pageNative: undefined, log() {}, // the input piece's journal (a cancelled pan's line)
+    resolveModuleReady: () => events.push('ready'), page: served && { holding: true, early: [] }, pageNative: undefined, track: promise => promise, log() {}, // the input piece's journal (a cancelled pan's line)
     loadAfterPaint(file) {
       loads.push(file);
       if (file === './input-glue.js') return input.promise;
@@ -991,6 +1003,8 @@ async function startupFixture(rustOnly = false, served = null, timerFirst = fals
   vm.runInContext([source.match(/^const AGENT_ADMITTED = .*$/m)[0], "const navigation = { activate: () => events.push('navigation') };", ...['ModuleStopped', 'StageNotLoaded', 'withPlaceholders', 'guardedExports', 'stopModule', 'setInputReady', 'activateData', 'main'].map(declaration)].join('\n')
     .replaceAll('import.meta.url', '"https://fixture.invalid/glue.js"'), f);
   await f.main();
+  expect(warnings).toEqual(refuseWindowRead ? [['exact: window state', 'Error: storage unavailable']] : []);
+  expect(stored).toEqual(refuseWindowRead ? [] : [windowKey + '\0second']);
   if (served) return { f }; // a served document's first pixel is painted: activation is not a frame away
   expect(events).toEqual(['boot', 'navigation']); // Adoption activates navigation before optional modules or data.
   expect(loads).toEqual([]); // Neither optional nor app modules run before paint.
@@ -999,6 +1013,10 @@ async function startupFixture(rustOnly = false, served = null, timerFirst = fals
   const activation = frames.shift()(); expect(timeouts.map(([, ms]) => ms)).toEqual([1000]); expect(timeouts[0][0]()).toBe(activation); if (early) expect(activation).toBe(early); // one activation, whichever comes first
   return { f, data, input, timer, activation };
 }
+
+test('a window storage read failure warns and boot reaches the first frame', async () => {
+  await startupFixture(true, null, false, true);
+});
 
 test('pending, failed and invalid optional modules leave Rust and JS apps ready after paint', async () => {
   for (const rustOnly of [false, true]) for (const failure of ['pending', 'reject', 'invalid']) for (const timerFirst of [false, true]) {
@@ -1021,7 +1039,7 @@ test('pending, failed and invalid optional modules leave Rust and JS apps ready 
     expect(f.root.dataset.error).toBeUndefined();
     expect(f.root.dataset.moduleReady).toBe('true');
     expect(f.events.filter(event => event === 'activate')).toHaveLength(1);
-    expect(f.errors).toHaveLength(failure === 'pending' ? 1 : 2);
+    expect(f.errors, f.errors.join('\n')).toHaveLength(failure === 'pending' ? 1 : 2);
     if (failure === 'pending') expect(f.inputHandlers.pan).toBe('installed after readiness');
   }
 });

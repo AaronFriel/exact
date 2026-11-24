@@ -22,6 +22,19 @@ export function hostFixtureFile(path, encoding) {
 
 import { parseSync } from 'rolldown/utils';
 
+// Bundle the module graph so the VM evaluates the same input handlers the page loads after paint.
+export async function inputFixtureSource() {
+  const entry = resolve(root, 'host/web/input-glue.js');
+  const imports = parseSync(entry, readFileSync(entry, 'utf8')).program.body.filter(node =>
+    node.type === 'ImportDeclaration' && !node.specifiers.length);
+  for (const file of ['./prompt-glue.js', './alert-message.js']) {
+    if (!imports.some(node => node.source.value === file)) throw new Error(`input glue must retain its ${file} side-effect import`);
+  }
+  const bundle = await Bun.build({ entrypoints: [entry], target: 'browser', format: 'iife' });
+  if (!bundle.success) throw new AggregateError(bundle.logs, 'input fixture build failed');
+  return bundle.outputs[0].text();
+}
+
 // Select declarations, not text between neighbouring functions: a new neighbour
 // must not silently become part of a fixture's scope.
 export function glueDeclarations(source, names) {

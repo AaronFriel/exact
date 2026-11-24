@@ -1,34 +1,27 @@
-import { viewParent, viewChildren } from './navigation/lists.js';
 // Issue #110: an aria-keyshortcuts chord whose key types no Latin character
 // (Korean 2-Set's ㅠ on KeyB, Russian, Greek) is its physical key's (`code`),
 // as web apps match; a Latin character is the key wherever it is (AZERTY,
 // Dvorak, German's ö), so one chord fires, never two.
 import { test, expect } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { inputFixtureSource } from './tests/glue-fixture.mjs';
 import { Script } from 'node:vm';
 
-let inputSource = readFileSync(new URL('./input-glue.js', import.meta.url), 'utf8').replace(/^import \{ viewChildren, viewParent \} from '\.\/navigation\.js';\n/m, '');
-for (const name of ['prompt-glue', 'alert-message']) {
-  const stripped = inputSource.replace(new RegExp(`^import\\s+["']\\./${name}\\.js["'];[^\\n]*\\n`, 'm'), '');
-  if (stripped === inputSource) throw new Error(`input glue must retain its ${name} side-effect import`);
-  inputSource = stripped;
-}
-const inputCode = inputSource.replace(/^export (async function|function|const) /gm, '$1 ');
-const inputScript = new Script(`${inputCode}\ncreateInputHandlers({ root, views: new Map(), retiredViews: new WeakSet(), ready: () => true, inertAncestor: () => false, dispatch() {} });`, { filename: 'input-glue.js' });
+const inputScript = new Script(`${await inputFixtureSource()}\nexact.createInputHandlers({ root, views: new Map(), retiredViews: new WeakSet(), ready: () => true, inertAncestor: () => false, dispatch() {} });`, { filename: 'input-glue.js' });
 // `shown`: the buttons have boxes; `marked`: each is a Back control its route's bar stands for (navigation.js).
 function page(chords, { shown = true, marked = false } = {}) {
   const clicks = [], listeners = [];
   const buttons = chords.map(chord => ({ isConnected: true, disabled: false, getClientRects: () => (shown ? [{}] : []),
     hasAttribute: name => marked && name === 'data-exact-bar-back', getAttribute: () => chord, click() { clicks.push(chord); } }));
-  const context = { viewParent, viewChildren,
-    document: { addEventListener(kind, fn, capture) { if (kind === 'keydown' && capture) listeners.push(fn); }, activeElement: { closest: () => null },
+  const querySelectorAll = selector => selector === 'button[aria-keyshortcuts]' ? buttons : [];
+  const context = { exact: {},
+    document: { querySelectorAll, addEventListener(kind, fn, capture) { if (kind === 'keydown' && capture) listeners.push(fn); }, activeElement: { closest: () => null },
       getElementById: id => (id === 'exact-snap' ? {} : null), styleSheets: [], documentElement: { dataset: {} } },
     getComputedStyle: () => ({ visibility: 'visible' }),
     // What the input glue reads as it starts that no chord here touches: its sheets' observers, hover, looks.
     MutationObserver: class { observe() {} disconnect() {} takeRecords() { return []; } },
     queueMicrotask, Element: class {}, matchMedia: () => ({ matches: false, addEventListener() {} }),
     addEventListener() {}, removeEventListener() {},
-    root: { querySelectorAll: s => (s.includes('aria-modal') ? [] : buttons), addEventListener() {}, contains: () => true },
+    root: { querySelectorAll, addEventListener() {}, contains: () => true },
   };
   inputScript.runInNewContext(context);
   const key = (key, code, extra = {}) => {
