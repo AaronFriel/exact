@@ -1,5 +1,6 @@
 # Queue
 
+- An Android native module that emits `submit`, `key` or `hover` on a node with the matching handler never reaches it. Compare those callbacks with the iOS module event roster in LLP 1024.
 - Check an Android in-list reorder grip inside a height-drag handle with vertical scrolling allowed. The ancestor still claims the vertical axis at down. Compare a quick swipe there with one on the grip alone.
 - Compare the Android reader driver with native input on a text field inside a scroller and on a scrolled list inside a partially expanded sheet. Drag from an unselected part of the field, then drag the list through its top edge. The deterministic scroll samples do not exercise either native handoff.
 - Queue a notification click at 0 ms and call Rust’s `advance_until_request(5000)` with no pending presentation. The click waits for `apply_announced` and its handler then sees 5000 ms (#1454).

@@ -832,9 +832,10 @@ An app's optional native module views (LLP 1024) live in the same `modules/andro
 libraries are named in `app.json` under `host.android.maven` ("Maven libraries" below). Define
 `class exact.app.Modules : dev.exact.canvas.NativeModules` with a `modules: Map<String, NativeModule>` roster;
 the APK resolves it only at the first module view. Each module creates and updates its real Android `View`.
-`events(view, emit)` binds before its first update; call `emit("change", value)` or `emit("input", value)` with
-string values, `emit("message", payload)` with the guest message, `emit("load", "")`, or `emit("press", "")`.
-Retired bindings and events for an old node allocation are ignored.
+`events(view, emit)` binds before its first update; call `emit("change", value)` with
+a string value, `emit("message", payload)` with the guest message, `emit("load", "")`, or `emit("press", "")`.
+A view reports focus with `emit("focus", "")` and blur with `emit("blur", "")`. A live, eligible view can take or release focus even
+without a handler. Other events need a handler on the node. Retired bindings and events for an old node allocation are ignored.
 
 A hosted view receives `dispatchTouchEvent` in its current painted content coordinates, inside its CSS border and padding
 (LLP 1133.008 D8). The inverse of the allocation's full transform maps every pointer into the view, including through
