@@ -49,7 +49,7 @@ package class ScrollView: UIScrollView {
     /// Where it last came to rest along x and y, and on which snap area (`ScrollSnapIOS.swift`).
     var snapRested = [ScrollSnap.Rested(), ScrollSnap.Rested()]
     /// UIKit's paging is on because its snap is a pager's (`ScrollSnapIOS.swift`).
-    var snapPages = false
+    package internal(set) var snapPages = false
     package override func layoutSubviews() {
         super.layoutSubviews()
         syncIndicators()
@@ -257,7 +257,7 @@ package class ScrollView: UIScrollView {
     /// The direction is the velocity, or the movement that crossed the slop
     /// while UIKit has none yet, as a photo's yield reads it (LLP 1057.001
     /// rule 2), so the drag it steps aside from is taken here.
-    func admitsPan(velocity: CGPoint, translation: CGPoint, start: CGPoint) -> Bool {
+    package func admitsPan(velocity: CGPoint, translation: CGPoint, start: CGPoint, chain: Bool = true) -> Bool {
         let direction = velocity == .zero ? translation : velocity
         var view = hitTest(start, with: nil)
         if CanvasInputs.owns(view) { return false }
@@ -269,7 +269,7 @@ package class ScrollView: UIScrollView {
             view = current.superview
         }
         if let owner = scrollingNode, !owner.allowsTouchPan(direction) { return false }
-        return !handsOff(direction)
+        return !chain || !handsOff(direction)
     }
     #if os(iOS)
     /// A zoomable scroller's pinch (LLP 1057.001.000 §3): rule 2, where
@@ -302,6 +302,9 @@ package class ScrollView: UIScrollView {
         // axis this view scrolls under `none`.
         let still = { (axis: String) in owner.style["overscroll_behavior_\(axis)"]?.string == "none" }
         bounces = !(behavior == "none" || (scrollsX && still("x")) || (scrollsY && still("y")))
+        #if os(iOS)
+        if (owner.heightRecognizer as? SheetScrollGesture)?.takesEdge(in: self, direction: velocity) == true { return false }
+        #endif
         return chains(velocity)
     }
     /// `handsOff`'s answer without its side effect: whether a drag in

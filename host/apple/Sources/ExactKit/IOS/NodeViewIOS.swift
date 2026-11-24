@@ -226,6 +226,16 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if hitsNativeEditor(touch.view) { return false }
         var hit = touch.view
         while let current = hit, current !== self {
+            #if os(iOS)
+            if gestureRecognizer === heightRecognizer, let scroll = current as? UIScrollView,
+               let sheet = gestureRecognizer as? SheetScrollGesture {
+                if scroll === scrollView { return sheet.receive(touch, in: scroll) }
+                if let rail = scroll as? ScrollView, rail.scrollsX && !rail.scrollsY {
+                    hit = current.superview
+                    continue
+                }
+            }
+            #endif
             if (gestureRecognizer === heightRecognizer || gestureRecognizer === transformRecognizer || gestureRecognizer === transformContact?.pinchRecognizer), current is UIScrollView { return false }
             hit = current.superview
         }
@@ -724,6 +734,9 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     /// A scroll under a canvas repaints it (LLP 1014 D4 c).
     package func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView === self.scrollView, let presenter else { return }
+        #if os(iOS)
+        if (heightRecognizer as? SheetScrollGesture)?.correctOffset(in: scrollView) == true { return }
+        #endif
         if scrollView.scrollsItself { dropCarriedScroll() }
         let post = Presenter.signpostLog.signpostsEnabled ? Presenter.beginScrollSignpost() : nil
         #if DEBUG

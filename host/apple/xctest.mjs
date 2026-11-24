@@ -67,6 +67,7 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   contract([filteredFeed, '-o', env[`${prefix}_FILTERED_FEED_PLAN`] = resolve(dir, 'filtered-feed.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/quiet-edge.contract'), '-o', env[`${prefix}_QUIET_EDGE_PLAN`] = resolve(dir, 'quiet-edge.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/scroll-facts.contract'), '-o', env[`${prefix}_SCROLL_FACTS_PLAN`] = resolve(dir, 'scroll-facts.plan')]);
+  contract([resolve(root, 'host/apple/tests/fixtures/sheet-scroll.contract'), '-o', env[`${prefix}_SHEET_SCROLL_PLAN`] = resolve(dir, 'sheet-scroll.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/scroll-snap.contract'), '-o', env[`${prefix}_SCROLL_SNAP_PLAN`] = resolve(dir, 'scroll-snap.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/fixed-page.contract'), '-o', env[`${prefix}_FIXED_PAGE_PLAN`] = resolve(dir, 'fixed-page.plan')]);
   contract([resolve(root, 'scripts/fixtures/collection-fixed-chat.contract'), '-o', env[`${prefix}_COLLECTION_FIXED_PLAN`] = resolve(dir, 'collection-fixed.plan')]);
