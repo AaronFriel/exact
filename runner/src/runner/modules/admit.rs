@@ -49,7 +49,7 @@ impl<D: DataSource> Runner<D> {
         (self.extensions.declared.statements.lock())
             .unwrap_or_else(|e| e.into_inner())
             .contains_key(&id)
-            || (self.extensions.held.iter()).any(|h| h.cause.owner == id)
+            || (self.extensions.held.iter()).any(|h| h.cause.owner() == id)
     }
 
     /// Whether the host bound its own implementation of `extension`.
@@ -73,7 +73,7 @@ impl<D: DataSource> Runner<D> {
     /// Invocation `id`'s held calls end `AbortError` with `message`.
     pub(super) fn abort_held_of_linked(&mut self, id: u64, message: &str) {
         let held: Vec<(u64, u64)> = (self.extensions.held.iter())
-            .filter(|h| h.cause.owner == id && id != 0)
+            .filter(|h| h.cause.owner() == id && id != 0)
             .map(|h| (h.token, h.hold))
             .collect();
         for (token, hold) in held {
@@ -131,7 +131,7 @@ impl<D: DataSource> Runner<D> {
         send: bool,
         timeout: Option<f64>,
     ) -> Decision {
-        let origin = cause.origin;
+        let origin = cause.origin();
         // A member is an option of its owner's call, never a call of its own.
         if let Some(owner) = self.substitute(row)["memberOf"].as_str() {
             let why = format!(
@@ -251,7 +251,7 @@ impl<D: DataSource> Runner<D> {
             }
             decision => decision,
         };
-        self.span_admitted(row, args, origin, &decision);
+        self.span_admitted(row, args, cause, &decision);
         decision
     }
 
@@ -473,7 +473,7 @@ impl<D: DataSource> Runner<D> {
 
     /// The checks before any decision: why the call is refused, if it is.
     pub(super) fn admit(&self, row: &ModulesRow, args: &Json, cause: Cause) -> Result<(), String> {
-        let origin = cause.origin;
+        let origin = cause.origin();
         let sub = self.substitute(row);
         let lines: Vec<&str> = (self.data.grants().lines())
             .filter_map(|l| l.split_whitespace().next())
@@ -595,7 +595,7 @@ impl<D: DataSource> Runner<D> {
         // call's possible causes, read before they are folded to one (LLP
         // 1133.035 D16 item 6).
         if let Some(none) = sub["origin"]["none"].as_array().filter(|_| applies) {
-            let causes = cause.causes;
+            let causes = cause.causes();
             let found = (none.iter().filter_map(Json::as_str))
                 .find(|w| ORIGINS.iter().any(|o| o.word() == *w && causes.has(*o)));
             if let Some(word) = found {
@@ -630,7 +630,7 @@ impl<D: DataSource> Runner<D> {
         // action's rule however the origins fold (LLP 1133.023 D7a).
         if applies
             && sub["foreground"] == true
-            && (cause.causes.has(CallOrigin::Action) || (self.page.in_background() && !calling()))
+            && (cause.causes().has(CallOrigin::Action) || (self.page.in_background() && !calling()))
             && !(origin == CallOrigin::Action && self.press_starts_audio(row, args, cause))
         {
             return Err("not in the foreground".into());
@@ -656,8 +656,8 @@ impl<D: DataSource> Runner<D> {
         // Data code holds no press record (LLP 1126.004 D2), and work the
         // press joined with another cause holds what both allow, so not the
         // press's own exemption (LLP 1133.023 D7a).
-        let alone = cause.causes == Cause::of(CallOrigin::Action, 0, false).causes;
-        audio_only && alone && !cause.data && self.press_records(cause.id)
+        let alone = cause.only(CallOrigin::Action);
+        audio_only && alone && !cause.is_data() && self.press_records(cause.invocation())
     }
 
     /// The implementation's answer for `row` under the agent, the agent's

@@ -213,7 +213,7 @@ impl<D: DataSource> Runner<D> {
             None => format!("tool:system:{door}"),
         };
         self.log(format!("{by} {name} dispatched"));
-        let cause = Cause::of(origin, id, true);
+        let cause = Cause::call(origin == CallOrigin::Action, id);
         let result = self.as_cause(cause, |r| r.run_action(tool.action, args, &[]));
         match result {
             Ok(receipt) => Ok(Some(receipt)),
@@ -562,7 +562,7 @@ impl<D: DataSource> Tools<D> for LinkedTools {
     /// too (LLP 1133.023 D7a).
     fn skip_in_call(&self, r: &mut Runner<D>, first: usize) {
         let cause = r.cause();
-        if !cause.call {
+        if !cause.is_call() {
             return;
         }
         let mut i = first;
@@ -575,7 +575,7 @@ impl<D: DataSource> Tools<D> for LinkedTools {
             r.commands.remove(i);
             if SKIPPED.contains(&name.as_str()) {
                 // The running call's record says what it skipped.
-                let ours = |c: &&mut Call| c.id == cause.id || c.id == cause.owner();
+                let ours = |c: &&mut Call| c.id == cause.invocation() || c.id == cause.owner();
                 if let Some(call) = (r.calls.current.as_mut()).filter(ours) {
                     call.skipped.push(name.clone());
                 }

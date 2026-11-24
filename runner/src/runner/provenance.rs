@@ -89,6 +89,11 @@ impl Causes {
     pub(in crate::runner) fn has(self, origin: CallOrigin) -> bool {
         self.0 & Self::bit(origin) != 0
     }
+
+    /// The set of `origin` alone.
+    pub(in crate::runner) const fn of(origin: CallOrigin) -> Causes {
+        Causes(Self::bit(origin))
+    }
 }
 
 impl Origins {
@@ -106,42 +111,135 @@ impl Origins {
     }
 }
 
+/// A cause's folded origin, read in place: it borrows its cause, so code
+/// outside this module can compare it, name it and tell it to the host, but
+/// cannot keep it as a field in place of the cause it folds.
+#[derive(Clone, Copy, Debug)]
+pub(in crate::runner) struct Folded<'a>(CallOrigin, std::marker::PhantomData<&'a Cause>);
+
+impl Folded<'_> {
+    /// Its word in the journal, a ticket and `state.extensions`.
+    pub(in crate::runner) fn word(self) -> &'static str {
+        self.0.word()
+    }
+}
+
+impl PartialEq<CallOrigin> for Folded<'_> {
+    fn eq(&self, other: &CallOrigin) -> bool {
+        self.0 == *other
+    }
+}
+
 /// Who caused a piece of work (LLP 1133.023 D7a): captured when it is
 /// scheduled and installed when it runs.
+///
+/// Its fields are this module's alone. A cause begins only as the
+/// constructors below say (boot or the person's act, the device, an
+/// invocation), several combine only through [`Runner::join_causes`], and
+/// its origin is the one they fold: no other code can write an origin,
+/// a flag or a contributor, or copy one cause's onto another.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cause {
-    pub(in crate::runner) origin: CallOrigin,
+    origin: CallOrigin,
     /// The invocation whose grants it holds while that invocation is live;
     /// 0 for none.
-    pub(in crate::runner) id: u64,
+    id: u64,
     /// Every cause it has, its origin's included.
-    pub(in crate::runner) causes: Causes,
+    causes: Causes,
     /// The invocation is a call: LLP 1111 D4a's command rules hold for its
     /// work, after the call too.
-    pub(in crate::runner) call: bool,
+    call: bool,
     /// The invocation whose work it is (D7's ownership), whose id its
     /// commits stamp on what they start; 0 for none. A device's re-ask is
     /// no invocation's.
-    pub(in crate::runner) owner: u64,
+    owner: u64,
     /// A data-code call admitted under the causes in flight: it holds no
     /// press record (LLP 1126.004 D2).
-    pub(in crate::runner) data: bool,
+    data: bool,
 }
 
 impl Cause {
-    /// The app's: boot, or the person's act in the app's own UI.
+    /// The app's: boot, or the person's act in the app's own UI or on the
+    /// platform's UI for the app.
     pub(in crate::runner) const fn person() -> Cause {
-        Cause::of(CallOrigin::App, 0, false)
+        Cause::begin(CallOrigin::App, 0, false)
     }
 
-    /// No cause: what work with none installed runs as, the least
-    /// privileged origin with no grant.
+    /// The device's: an event a package emits. Work with no cause installed
+    /// runs as this, the least privileged origin with no grant.
+    pub(in crate::runner) const fn device() -> Cause {
+        Cause::begin(CallOrigin::Device, 0, false)
+    }
+
+    /// No cause installed: [`Cause::device`].
     pub(in crate::runner) const fn none() -> Cause {
-        Cause::of(CallOrigin::Device, 0, false)
+        Cause::device()
     }
 
-    /// Invocation `id`'s own work, of `origin`.
-    pub(in crate::runner) const fn of(origin: CallOrigin, id: u64, call: bool) -> Cause {
+    /// Wake `id`'s event (LLP 1133.017 D5).
+    pub(in crate::runner) const fn wake(id: u64) -> Cause {
+        Cause::begin(CallOrigin::Wake, id, false)
+    }
+
+    /// Notification background action `id`, the person's act for that one
+    /// action, run with no view (LLP 1133.004).
+    pub(in crate::runner) const fn background_action(id: u64) -> Cause {
+        Cause::begin(CallOrigin::Action, id, false)
+    }
+
+    /// A wake's invocation `id` of `origin`: a wake's event, or a
+    /// notification's background action; nothing else.
+    pub(in crate::runner) fn wake_event(origin: CallOrigin, id: u64) -> Cause {
+        match origin {
+            CallOrigin::Action => Cause::background_action(id),
+            _ => Cause::wake(id),
+        }
+    }
+
+    /// Call `id`: a tool's (LLP 1111) or, for a control's press, an
+    /// `action` (LLP 1126.004 D2). D4a's command rules hold for its work.
+    pub(in crate::runner) fn call(press: bool, id: u64) -> Cause {
+        let origin = if press {
+            CallOrigin::Action
+        } else {
+            CallOrigin::Tool
+        };
+        Cause::begin(origin, id, true)
+    }
+
+    /// A model's tool handler (LLP 1133.016 D10): a tool's, no invocation's.
+    pub(in crate::runner) const fn model_tool() -> Cause {
+        Cause::begin(CallOrigin::Tool, 0, false)
+    }
+
+    /// A world's message carrying the origins posted into it (LLP 1133.022
+    /// D6): each one's ended invocation, joined, with a call's command rules
+    /// where a tool or a press may be among them. It holds no grant, since a
+    /// mark names no invocation, and is never the app's.
+    pub(in crate::runner) fn marked(causes: Causes) -> Cause {
+        let origin = (ORIGINS.into_iter())
+            .find(|o| causes.has(*o) && *o != CallOrigin::App)
+            .unwrap_or(CallOrigin::Device);
+        Cause {
+            causes: causes.union(Causes(Causes::bit(origin))),
+            call: causes.has(CallOrigin::Tool) || causes.has(CallOrigin::Action),
+            ..Cause::begin(origin, 0, false)
+        }
+    }
+
+    /// [`Runner::act_from`]'s: an invocation of `origin` with no id, for a
+    /// door and a test that name only the origin.
+    fn of_origin(origin: CallOrigin) -> Cause {
+        Cause::begin(origin, 0, origin == CallOrigin::Tool)
+    }
+
+    /// A module event the host raised with `origin`, its word for who caused
+    /// it: `app` only for an activation its platform callback reported.
+    pub(in crate::runner) const fn raised(origin: CallOrigin) -> Cause {
+        Cause::begin(origin, 0, false)
+    }
+
+    const fn begin(origin: CallOrigin, id: u64, call: bool) -> Cause {
         Cause {
             origin,
             id,
@@ -152,9 +250,67 @@ impl Cause {
         }
     }
 
+    /// The origin, folded from every contributor: the one the host is told.
+    /// It is read in place ([`Folded`]), never kept apart from the cause.
+    pub(in crate::runner) fn origin(&self) -> Folded<'_> {
+        Folded(self.origin, std::marker::PhantomData)
+    }
+
+    /// The invocation whose grants it holds while live, 0 for none.
+    pub(in crate::runner) fn invocation(self) -> u64 {
+        self.id
+    }
+
+    /// Every origin among its contributors.
+    pub(in crate::runner) fn causes(self) -> Causes {
+        self.causes
+    }
+
+    /// Whether `origin` is its only contributor's.
+    pub(in crate::runner) fn only(self, origin: CallOrigin) -> bool {
+        self.causes == Causes(Causes::bit(origin))
+    }
+
+    /// Whether D4a's command rules hold for its work.
+    pub(in crate::runner) fn is_call(self) -> bool {
+        self.call
+    }
+
+    /// Whether it is a data-code call's, which holds no press record.
+    pub(in crate::runner) fn is_data(self) -> bool {
+        self.data
+    }
+
     /// The same cause, not owned by its invocation: a device's re-ask.
     pub(in crate::runner) fn unowned(self) -> Cause {
         Cause { owner: 0, ..self }
+    }
+
+    /// The same cause, owned by invocation `owner` (D7's ownership, which
+    /// is separate from provenance): a held call or a report a running
+    /// invocation must wait for.
+    pub(in crate::runner) fn owned_by(self, owner: u64) -> Cause {
+        Cause { owner, ..self }
+    }
+
+    /// The same cause as a fresh invocation `id`'s: it owns its work and
+    /// holds no live invocation's grants, since `id` is no call's or wake's.
+    pub(in crate::runner) fn fresh(self, id: u64) -> Cause {
+        Cause {
+            id,
+            owner: id,
+            ..self
+        }
+    }
+
+    /// The same cause with no invocation's grants and no owner: work of
+    /// its origins that no invocation is.
+    pub(in crate::runner) fn without_invocation(self) -> Cause {
+        Cause {
+            id: 0,
+            owner: 0,
+            ..self
+        }
     }
 
     /// The invocation that owns the work, 0 for none.
@@ -246,14 +402,7 @@ impl<D: DataSource> Runner<D> {
         name: &str,
         args: Vec<Value>,
     ) -> Result<CommitReceipt, RunnerError> {
-        let cause = Cause::of(origin, 0, origin == CallOrigin::Tool);
-        self.as_cause(cause, |r| r.act_named(name, args))
-    }
-
-    /// The origin of the commit being made; with no cause installed, the
-    /// least privileged.
-    pub fn call_origin(&self) -> CallOrigin {
-        self.cause().origin
+        self.as_cause(Cause::of_origin(origin), |r| r.act_named(name, args))
     }
 
     /// Whether a cause is installed.
@@ -270,7 +419,7 @@ impl<D: DataSource> Runner<D> {
     /// The host delivers `event`, the app's own commit: an activation
     /// triggering one starts the window [`Self::user_activation`] reads.
     pub(in crate::runner) fn note_input(&mut self, event: &Event) {
-        if self.call_origin() == CallOrigin::App && activates(event) {
+        if self.cause().origin == CallOrigin::App && activates(event) {
             self.origins.activated = Some(self.now_ms);
         }
     }
@@ -285,16 +434,34 @@ impl<D: DataSource> Runner<D> {
         self.origins.activated = Some(self.now_ms);
     }
 
-    /// Whether a call `origin` makes now has HTML's transient activation:
+    /// Whether a call `cause` makes now has HTML's transient activation:
     /// the app makes it within [`TRANSIENT_ACTIVATION_MS`] of a person's
     /// input or of an activation the host raised. Code a timer or an answer runs inside the window has it too,
     /// as on the web, since a data-code call cannot be traced to the handler
     /// that led to it. Nothing consumes the window: one press may start
     /// several calls.
-    pub(in crate::runner) fn user_activation(&self, origin: CallOrigin) -> bool {
+    pub(in crate::runner) fn user_activation(&self, cause: Cause) -> bool {
         let at = self.origins.activated;
-        origin == CallOrigin::App
+        cause.origin() == CallOrigin::App
             && at.is_some_and(|at| (0.0..TRANSIENT_ACTIVATION_MS).contains(&(self.now_ms - at)))
+    }
+
+    /// What a request asked under `cause` carries to the host, whose own
+    /// admission reads its folded origin: the one place an origin leaves a
+    /// cause, besides [`Self::view_origin`]'s answer outside the runner.
+    pub(in crate::runner) fn reach_of(&self, cause: Cause) -> crate::local_network::Reach {
+        crate::local_network::Reach {
+            origin: cause.origin,
+            substitute: self.network_substitute(),
+        }
+    }
+
+    /// The origin the runner reported for view `id`'s displayed state, or for
+    /// its binding `prop`: what an acquisition the view makes is admitted
+    /// with (LLP 1133.008 D3).
+    pub fn view_origin(&self, id: exact_kernel::ViewId, prop: Option<&str>) -> Option<CallOrigin> {
+        let cause = self.seams.modules.view_origin(self, id, prop)?;
+        Some(cause.origin)
     }
 
     /// Run `f` under `cause`: the one way work gets a cause (D7a).
@@ -482,11 +649,10 @@ impl<D: DataSource> Runner<D> {
     /// it is not let go).
     pub(in crate::runner) fn note_kept(&mut self, target: Target, ticket: u64) {
         let was = self.ticket_cause(ticket);
-        let cause = Cause {
-            owner: was.owner,
-            ..self.join_causes(was, self.cause_for(target))
-        };
-        self.origins.tickets.insert(ticket, cause);
+        let cause = self.join_causes(was, self.cause_for(target));
+        self.origins
+            .tickets
+            .insert(ticket, cause.owned_by(was.owner));
     }
 
     /// The cause of `data_ready`'s commit (LLP 1027 D4): the join of the
@@ -518,14 +684,6 @@ impl<D: DataSource> Runner<D> {
         let out = f(self);
         self.origins.reasking = before;
         out
-    }
-
-    /// The origin a request of `target` asked now carries.
-    pub(in crate::runner) fn origin_for(&self, target: Option<Target>) -> CallOrigin {
-        match target {
-            Some(target) => self.cause_for(target).origin,
-            None => self.call_origin(),
-        }
     }
 
     /// Resource `i`'s ask at `args` waits for the data source (LLP 1027
@@ -570,14 +728,9 @@ impl<D: DataSource> Runner<D> {
         self.origins.asked.insert(i, cause);
     }
 
-    /// The origin of resource `i`'s last ask, if it was asked.
-    pub(in crate::runner) fn origin_asked(&self, i: usize) -> Option<CallOrigin> {
-        self.origins.asked.get(&i).map(|c| c.origin)
-    }
-
-    /// The origin of request `ticket`'s answer, the commit it lands in.
-    pub(in crate::runner) fn ticket_origin(&self, ticket: u64) -> CallOrigin {
-        self.ticket_cause(ticket).origin
+    /// The cause of resource `i`'s last ask, if it was asked.
+    pub(in crate::runner) fn asked_cause(&self, i: usize) -> Option<Cause> {
+        self.origins.asked.get(&i).copied()
     }
 
     /// Request `ticket` of `target` goes out: it keeps its cause, and a
@@ -743,7 +896,7 @@ mod tests {
         };
         let boot = r.take_requests();
         r.fulfill(boot[0].ticket, ok()).unwrap();
-        let tool = super::Cause::of(CallOrigin::Tool, 7, true);
+        let tool = super::Cause::call(false, 7);
         r.as_cause(tool, |r| r.act_named("go", vec![])).unwrap();
         let asked = r.take_requests();
         assert_eq!(r.ticket_id(asked[0].ticket), 7, "the call's own ask");

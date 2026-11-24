@@ -4,10 +4,8 @@
 use super::super::provenance::CallOrigin;
 use super::super::{AppState, CommitReceipt, DataError, DataSource, Runner, RunnerError, Target};
 use super::{build_target, Readers};
-use crate::local_network::Reach;
 use crate::request::{Answer, Dispatch, Outcome, Request};
 use crate::HoldAnswer;
-use exact_kernel::ViewId;
 use exact_plan::{ModulesRow, TypesId, Value};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
@@ -645,13 +643,6 @@ impl<D: DataSource> Runner<D> {
         self.seams.modules.tool_tickets(self)
     }
 
-    /// The origin the runner reported for view `id`'s displayed state, or for
-    /// its binding `prop`: what an acquisition the view makes is admitted
-    /// with (LLP 1133.008 D3).
-    pub fn view_origin(&self, id: ViewId, prop: Option<&str>) -> Option<CallOrigin> {
-        self.seams.modules.view_origin(self, id, prop)
-    }
-
     /// After a commit is applied: its origin is the one a change it made is
     /// reported with.
     pub(in crate::runner) fn views_committed(&mut self) {
@@ -702,14 +693,11 @@ impl<D: DataSource> Runner<D> {
         self.seams.modules.module_key(self, row)
     }
 
-    /// What a request asked under `origin` carries: under the agent, with the
-    /// app's local-network permission answered by the substitute, that
-    /// permission's state stands for the host's fact (LLP 1133.036).
-    pub(in crate::runner) fn reach_of(&self, origin: CallOrigin) -> Reach {
-        Reach {
-            origin,
-            substitute: self.seams.modules.local_network_substitute(self),
-        }
+    /// Under the agent, with the app's local-network permission answered by
+    /// the substitute, that permission's state, which a request's `Reach`
+    /// carries for the host's fact (LLP 1133.036).
+    pub(in crate::runner) fn network_substitute(&self) -> Option<crate::local_network::State> {
+        self.seams.modules.local_network_substitute(self)
     }
 
     /// Whether `token` is a held module request (not I/O: no clock waits).

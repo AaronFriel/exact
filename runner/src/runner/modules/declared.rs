@@ -171,7 +171,6 @@ impl<D: DataSource> Runner<D> {
         reply: Option<Arc<Mutex<Pending>>>,
         cause: Cause,
     ) -> Effect {
-        let origin = cause.origin;
         let declared = self.plan.str(row.declared).to_owned();
         // The grants, origin and foreground every call is held to (LLP
         // 1133.002 D14), before anything else; a grant matched by value
@@ -258,7 +257,7 @@ impl<D: DataSource> Runner<D> {
                 None => Effect::Now(Json::Null),
             };
         }
-        let said = self.say_person_required(row, true, origin);
+        let said = self.say_person_required(row, true, cause);
         // The permission that settles the call: its own, or one it requires.
         let sub = self.substitute_for(row, &args);
         let permission = &sub["permission"];
@@ -298,7 +297,7 @@ impl<D: DataSource> Runner<D> {
                 .map_or_else(|| self.apply_effect(row, &args), Err)
             {
                 Ok(()) => {
-                    self.effect_played(row, &args, origin);
+                    self.effect_played(row, &args, cause);
                     Effect::Now(self.effect_answer(row, &args))
                 }
                 Err(refusal) => {

@@ -76,7 +76,7 @@ fn a_model_handler_starts_no_program() {
         "probe".into(),
         "probe",
         &serde_json::json!({}),
-        crate::runner::provenance::Cause::of(CallOrigin::Tool, 0, false),
+        crate::runner::provenance::Cause::model_tool(),
         To::Implementation(reply),
         None,
     );
@@ -110,7 +110,7 @@ fn an_undeclared_kind_is_refused_from_the_apps_origin() {
     for kind in ["processStatus", "child.write", "shell"] {
         let body = format!(r#"{{"kind":"{kind}","program":"path:ssh"}}"#);
         let mut request = Request::process(body.into_bytes(), false, 4096);
-        request.reach.origin = CallOrigin::App;
+        request.reach.origin = crate::CallOrigin::App;
         let why = r.process_refusal(&request).expect(kind);
         assert!(why.contains("does not declare"), "{kind}: {why}");
     }

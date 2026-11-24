@@ -1017,8 +1017,8 @@ impl<D: DataSource> Runner<D> {
                 let event = Event::Message(text.to_owned());
                 // A tool's or a press's work keeps D4a's command rules (LLP
                 // 1133.023 D7a); the mark cannot tell a press from another action.
-                let call = matches!(origin, super::CallOrigin::Tool | super::CallOrigin::Action);
-                let cause = super::provenance::Cause::of(origin, 0, call);
+                let causes = super::provenance::Causes::of(origin);
+                let cause = super::provenance::Cause::marked(causes);
                 return self.as_cause(cause, |r| r.arrived(|r| r.dispatch_event(view, event)));
             }
         }

@@ -541,7 +541,7 @@ impl<D: DataSource> Runner<D> {
         let name = self.plan.str(action.name).to_owned();
         let (event_name, tag) = self.invocation_words(i);
         self.log(format!("{word} {event_name} {tag}: heard by {name}"));
-        let cause = Cause::of(origin, id, false);
+        let cause = Cause::wake_event(origin, id);
         let result = self.as_cause(cause, |r| r.run_action(event.action, args, &[]));
         match result {
             Ok(receipt) => Ok(Some(receipt)),
@@ -742,7 +742,7 @@ impl<D: DataSource> Runner<D> {
                 .current
                 .as_ref()
                 .map_or(CallOrigin::Wake, |w| w.origin);
-            let result = self.as_cause(Cause::of(origin, id, false), |r| {
+            let result = self.as_cause(Cause::wake_event(origin, id), |r| {
                 r.commit_again(Vec::new(), "an expired wake's queued sends")
             });
             match result {
@@ -780,7 +780,7 @@ impl<D: DataSource> Runner<D> {
     /// not run, when a wake or a background action (origin `action`: the
     /// person's act, but nothing is shown) is among the commit's causes.
     pub(in crate::runner) fn refuse_in_wake(&mut self, first: usize) {
-        let causes = self.cause().causes;
+        let causes = self.cause().causes();
         let during = if causes.has(CallOrigin::Wake) {
             "during a wake"
         } else if causes.has(CallOrigin::Action) {

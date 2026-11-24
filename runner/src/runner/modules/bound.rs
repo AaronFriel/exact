@@ -240,7 +240,7 @@ impl<D: DataSource> Runner<D> {
             Some(i) => self.cause_for(crate::runner::Target::Resource(i)),
             None => self.cause(),
         };
-        let origin = cause.origin;
+        let origin = cause.origin();
         if origin != super::CallOrigin::App {
             // A capture a live recording press may start (LLP 1126.004 D4):
             // the implementation opens the microphone for it as for the app.
@@ -264,7 +264,7 @@ impl<D: DataSource> Runner<D> {
         }
         // A person's input stands (`provenance.rs`): the implementation may take
         // the call as their act.
-        if self.user_activation(origin) {
+        if self.user_activation(cause) {
             body["userActivation"] = json!(true);
         }
         // A send's number, which `cancel` names if it is let go (LLP 1133.016 D15 item 2).

@@ -145,7 +145,7 @@ impl<D: DataSource> Runner<D> {
             if raised.origin == CallOrigin::App {
                 self.note_activation();
             }
-            let cause = Cause::of(raised.origin, 0, false);
+            let cause = Cause::raised(raised.origin);
             let result = self.as_cause(cause, |r| r.run_action(row.action, args, &[]));
             match result {
                 Ok(receipt) => receipts.push(receipt),
@@ -161,8 +161,9 @@ impl<D: DataSource> Runner<D> {
         &mut self,
         row: &ModulesRow,
         send: bool,
-        origin: CallOrigin,
+        cause: Cause,
     ) -> bool {
+        let origin = cause.origin();
         if origin == CallOrigin::App {
             return false;
         }

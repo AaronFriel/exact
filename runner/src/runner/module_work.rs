@@ -166,7 +166,7 @@ impl<D: DataSource> Runner<D> {
             let mut request = report.request;
             let ticket = self.next_ticket;
             self.next_ticket += 1;
-            request.reach = self.reach_of(cause.origin);
+            request.reach = self.reach_of(cause);
             self.log(super::lines::enqueued(ticket, NAME, &request));
             let authority = Authority {
                 completion: None,
@@ -214,11 +214,7 @@ impl<D: DataSource> Runner<D> {
             }
             Reporter::None => {
                 let id = self.next_invocation();
-                Cause {
-                    id,
-                    owner: id,
-                    ..self.data_cause()
-                }
+                self.data_cause().fresh(id)
             }
         }
     }
@@ -356,7 +352,7 @@ impl<D: DataSource> Runner<D> {
                 {
                     let next = r.next_ticket;
                     r.next_ticket += 1;
-                    request.reach = r.reach_of(authority.cause.origin);
+                    request.reach = r.reach_of(authority.cause);
                     let mut next_authority = authority.clone();
                     next_authority.completion = None;
                     r.module_work.tickets.insert(next, (token, next_authority));

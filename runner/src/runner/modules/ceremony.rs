@@ -218,7 +218,7 @@ impl<D: DataSource> Runner<D> {
             "rpId": rp_id,
             "clientOrigin": client,
             "options": options,
-            "origin": cause.origin.word(),
+            "origin": cause.origin().word(),
         });
         for (option, described) in self.members_args(row, args) {
             out[option] = described;

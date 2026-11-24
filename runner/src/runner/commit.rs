@@ -774,10 +774,8 @@ impl<D: DataSource> Runner<D> {
             i += 1;
         }
         // A world hears whose commit posted to it (`world_origin.rs`).
-        super::world_origin::mark_world_posts(
-            self.call_origin(),
-            &mut self.commands[first_command..],
-        );
+        let cause = self.cause();
+        super::world_origin::mark_world_posts(cause, &mut self.commands[first_command..]);
         let commands: Vec<String> = self.commands[first_command..]
             .iter()
             .map(|c| {
@@ -1062,7 +1060,7 @@ impl<D: DataSource> Runner<D> {
         let mut request = request;
         crate::canvas_capture::from_fetch(&mut request);
         self.number_data_call(&mut request);
-        request.reach = self.reach_of(self.origin_for(Some(target)));
+        request.reach = self.reach_of(self.cause_for(target));
         self.log(super::lines::enqueued(ticket, &name, &request));
         let refusal = self.ask_refusal(target, &args, &request);
         self.note_asked(target, ticket);

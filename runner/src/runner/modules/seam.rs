@@ -2,7 +2,7 @@
 //! modules' code (`module_seam.rs`).
 
 use super::super::module_seam::{Modules, Readers};
-use super::super::provenance::CallOrigin;
+use super::super::provenance::{CallOrigin, Cause};
 use super::super::{CommitReceipt, DataError, DataSource, Runner, RunnerError, Target};
 use super::AppState;
 use crate::request::{Answer, Dispatch, Outcome, Request};
@@ -413,7 +413,7 @@ impl<D: DataSource> Modules<D> for LinkedModules {
         r.tool_tickets_linked()
     }
 
-    fn view_origin(&self, r: &Runner<D>, id: ViewId, prop: Option<&str>) -> Option<CallOrigin> {
+    fn view_origin(&self, r: &Runner<D>, id: ViewId, prop: Option<&str>) -> Option<Cause> {
         r.view_origin_linked(id, prop)
     }
 

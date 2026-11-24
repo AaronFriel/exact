@@ -227,7 +227,7 @@ impl<D: DataSource> Runner<D> {
         self.keep_running(ticket, token, self.pending[pos].fetch);
         let next = self.next_ticket;
         self.next_ticket += 1;
-        request.reach = self.reach_of(self.ticket_origin(ticket));
+        request.reach = self.reach_of(self.ticket_cause(ticket));
         let p = &mut self.pending[pos];
         p.ticket = next;
         p.completion = None;

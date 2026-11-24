@@ -157,7 +157,7 @@ impl<D: DataSource> Runner<D> {
 
     fn send_turn(&mut self, stream: u64, mut request: Request, held: bool) {
         // The turn is the stream's: its request carries the stream's origin.
-        request.reach = self.reach_of(self.ticket_origin(stream));
+        request.reach = self.reach_of(self.ticket_cause(stream));
         let Some(p) = self.pending.iter().find(|p| p.ticket == stream) else {
             return;
         };

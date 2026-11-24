@@ -333,7 +333,7 @@ impl<D: DataSource> Runner<D> {
             "phase": sheet.phase.word(),
             "waiting": sheet.asking.as_ref().map(|a| a.ask.clone()),
             "result": sheet.last.as_ref().map(|l| l["result"].clone()),
-            "origin": sheet.cause.origin.word(),
+            "origin": sheet.cause.origin().word(),
             "target": self.host_target(),
         })
     }
@@ -435,7 +435,7 @@ impl<D: DataSource> Runner<D> {
         self.reopen(token);
         let cause = self.handler_cause(granted);
         let at = format!("payments: {handler} for {id}");
-        self.log(format!("{at}: run, {}", cause.origin.word()));
+        self.log(format!("{at}: run, {}", cause.origin().word()));
         let to = To::Sheet {
             token,
             attempt: call,
@@ -949,7 +949,7 @@ impl<D: DataSource> Runner<D> {
             "requestId": s.request_id,
             "method": s.method,
             "total": amount_text(&s.details["total"]["amount"]),
-            "origin": s.cause.origin.word(),
+            "origin": s.cause.origin().word(),
             "outcome": outcome,
             "handlers": s.handled,
         }))

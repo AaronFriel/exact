@@ -1088,7 +1088,7 @@ fn reply() -> Outcome {
 
 /// `change` as tool invocation 7's.
 fn change_as_tool<D: DataSource>(r: &mut Runner<D>) {
-    let tool = crate::runner::provenance::Cause::of(CallOrigin::Tool, 7, true);
+    let tool = crate::runner::provenance::Cause::call(false, 7);
     let change = |r: &mut Runner<D>| r.act_named("change", vec![Value::Number(1.)]);
     r.as_cause(tool, change).unwrap();
 }
@@ -1109,7 +1109,7 @@ fn a_reask_keeps_the_asks_origin_and_invocation() {
     r.advance(t0 + 250.).unwrap();
     let asked = r.take_requests();
     assert_eq!(asked.len(), 1, "asked again");
-    assert_eq!(r.ticket_origin(asked[0].ticket), CallOrigin::Tool);
+    assert_eq!(r.ticket_cause(asked[0].ticket).origin(), CallOrigin::Tool);
     assert_eq!(r.ticket_id(asked[0].ticket), 7);
     // Its reply refused by a turn over its budget: asked again, the same.
     r.data().parse_error = Some(overrun());
@@ -1119,7 +1119,7 @@ fn a_reask_keeps_the_asks_origin_and_invocation() {
     r.advance(t1 + 1000.).unwrap();
     let again = r.take_requests();
     assert_eq!(again.len(), 1, "asked again after the reply's refusal");
-    assert_eq!(r.ticket_origin(again[0].ticket), CallOrigin::Tool);
+    assert_eq!(r.ticket_cause(again[0].ticket).origin(), CallOrigin::Tool);
     assert_eq!(r.ticket_id(again[0].ticket), 7);
 }
 
@@ -1284,7 +1284,7 @@ fn a_refresh_replaces_another_invocations_wait() {
     r.advance(t0 + 350.).unwrap();
     let asked = r.take_requests();
     assert_eq!(asked.len(), 1);
-    assert_eq!(r.ticket_origin(asked[0].ticket), CallOrigin::App);
+    assert_eq!(r.ticket_cause(asked[0].ticket).origin(), CallOrigin::App);
     assert_eq!(r.ticket_id(asked[0].ticket), 0);
 }
 
@@ -1360,7 +1360,7 @@ fn a_spent_streaks_failure_keeps_its_asks_provenance() {
         .iter()
         .find(|q| q.target == "watch")
         .expect("watch asked");
-    assert_eq!(r.ticket_origin(watch.ticket), CallOrigin::Tool);
+    assert_eq!(r.ticket_cause(watch.ticket).origin(), CallOrigin::Tool);
     assert_eq!(r.ticket_id(watch.ticket), 7);
 }
 
@@ -1395,7 +1395,7 @@ fn a_refresh_asked_again_in_a_later_pass_still_replaces_the_wait() {
         .iter()
         .find(|q| q.target == "rows")
         .expect("rows asked");
-    assert_eq!(r.ticket_origin(rows.ticket), CallOrigin::App);
+    assert_eq!(r.ticket_cause(rows.ticket).origin(), CallOrigin::App);
 }
 
 /// Arguments that change by the re-ask's time start a new streak: their first

@@ -23,7 +23,7 @@
 use super::super::provenance::Cause;
 use super::super::{DataError, DataSource, Runner};
 use super::handles::{collect, ids_in};
-use super::{CallOrigin, Json, ModulesRow};
+use super::{Json, ModulesRow};
 use crate::request::{Answer, Dispatch, Outcome, Reply, RequestOut, Work};
 use exact_plan::Value;
 use serde_json::json;
@@ -210,7 +210,10 @@ impl<D: DataSource> Runner<D> {
             return reply(json!({ "error": "NotAllowedError", "message": message }).to_string());
         };
         let cause = self.handler_cause(grant.cause);
-        self.log(format!("{at}: run, {}:model:{handle}", cause.origin.word()));
+        self.log(format!(
+            "{at}: run, {}:model:{handle}",
+            cause.origin().word()
+        ));
         let to = To::Implementation(reply);
         self.run_handler(at, &handler, &v["args"], cause, to, None);
     }
@@ -242,7 +245,7 @@ impl<D: DataSource> Runner<D> {
             return reply(json!({ "error": "NotAllowedError", "message": message }).to_string());
         };
         let cause = self.handler_cause(granted);
-        self.log(format!("{at}: run, {}", cause.origin.word()));
+        self.log(format!("{at}: run, {}", cause.origin().word()));
         if last {
             let ends = self.now_ms + budget;
             self.extensions.invocations.finals.insert(n, ends);
@@ -255,15 +258,7 @@ impl<D: DataSource> Runner<D> {
     /// The cause a handler that a call of `cause` granted runs under: no
     /// more than a tool's and no invocation's, with that call's rules too.
     pub(super) fn handler_cause(&self, cause: Cause) -> Cause {
-        let tool = Cause::of(CallOrigin::Tool, 0, false);
-        self.join_causes(
-            Cause {
-                id: 0,
-                owner: 0,
-                ..cause
-            },
-            tool,
-        )
+        self.join_causes(cause.without_invocation(), Cause::model_tool())
     }
 
     /// Run the data module's handler `handler` with `args` as a fresh answer
@@ -379,7 +374,7 @@ impl<D: DataSource> Runner<D> {
             Ok(Answer::Later(mut request)) => {
                 let ticket = self.next_ticket;
                 self.next_ticket += 1;
-                request.reach = self.reach_of(run.cause.origin);
+                request.reach = self.reach_of(run.cause);
                 if request.module.is_some() {
                     run.module = request.module.clone();
                 }
@@ -637,7 +632,7 @@ mod tests {
             at: "test: h".into(),
             source: "tool:h".into(),
             args: Value::str("{}"),
-            cause: Cause::of(CallOrigin::Tool, 0, false),
+            cause: Cause::model_tool(),
             started: 0.0,
             to,
             final_of: None,
