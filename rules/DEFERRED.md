@@ -2004,7 +2004,15 @@ browser as the oracle, the same shape layout already has. In exchange, not in v1
 - **A gesture arena, claims, leases, compositions, or an interactive-navigation
   model.** Recognition, hit-testing, and scroll-vs-pan arbitration are the
   platform's (`touch-action`, `UIGestureRecognizer`); owning them is the
-  permanent bug annuity LLP 0559 F1 describes. Scroll always wins.
+  permanent bug annuity LLP 0559 F1 describes. Scroll wins except at the
+  sheet boundary below.
+  **Expanded (Charlie, 2026-11-24, "recs ok"):** A `scroll` or vertical `list`
+  may bind `heightDragFor` to an ancestor (Pocket Lab's in-card sheet).
+  The host owns the contact. Upward travel grows the target to `max-height`
+  before scrolling. Downward travel consumes the offset before lowering the
+  target to `min-height`. Only a drag that moved the sheet sends
+  `heightrelease`, once, with its displayed height and velocity. A scroll-only
+  release and its deceleration belong to the scroller (LLP 1041 §8.5).
   **Expanded (Charlie, 2026-09-28: approved `panrelease`, with Spark as the
   consumer LLP 1057 asked for):** `panrelease=action`, fired once when a `pan`
   that began ends, with its release velocity (vx, vy) in pan's units per
