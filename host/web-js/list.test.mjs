@@ -332,11 +332,14 @@ test('element jumps use Chrome scroll padding and margins and settle once', asyn
   expect(result).toEqual({nearest:268, start:368, still:368, ends:2});
 }, 60_000);
 
-test('a keyed row jump includes the same scroll margin as Chrome element alignment', async () => {
+test.each([['24px', 2468], ['var(--inset)', 2472]])
+('a keyed row jump includes scroll margin and %s scroll padding', async (padding, start) => {
   const result = await evaluate(`(async () => {
     const root = document.getElementById('exact-root');
     const port = document.createElement('div'); port.id = 'margin-feed';
     port.style.cssText = 'height:200px;width:200px;overflow:auto;scroll-padding:24px 0 12px';
+    port.style.setProperty('--inset', 'max(10%, 8px)');
+    port.style.scrollPaddingTop = ${JSON.stringify(padding)};
     root.append(port);
     const own = rt.scope(() => list.vl(port, () => Array.from({length:100}, (_, i) => i), i => i(), (w, i) => {
       const row = document.createElement('div'); row.textContent = String(i());
@@ -352,7 +355,7 @@ test('a keyed row jump includes the same scroll margin as Chrome element alignme
     rt.end(own); port.remove(); rt.settled();
     return {start, end};
   })()`);
-  expect(result).toEqual({start:2468, end:2368});
+  expect(result).toEqual({start, end:2368});
 }, 60_000);
 
 test('nested smooth element jumps align both ports at their destinations', async () => {
