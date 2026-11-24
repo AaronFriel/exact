@@ -232,15 +232,15 @@ macro_rules! canvas_jni {
                 let mut told = $crate::canvas::Told {
                     size: (width.max(0) as u32, height.max(0) as u32),
                     scale,
-                    insets: [0; 16],
+                    geometry: [0; 20],
                 };
-                let n = ((**env).GetArrayLength.expect("jni"))(env, insets).clamp(0, 16);
+                let n = ((**env).GetArrayLength.expect("jni"))(env, insets).clamp(0, 20);
                 ((**env).GetIntArrayRegion.expect("jni"))(
                     env,
                     insets,
                     0,
                     n,
-                    told.insets.as_mut_ptr(),
+                    told.geometry.as_mut_ptr(),
                 );
                 $crate::canvas::window(told);
                 with(|h| h.set_window(told));

@@ -81,7 +81,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/top.rs", "Presenter::present"],
     ["painted:host/painted/src/presenter/top/status.rs", "Presenter::sync_status_images"],
     ["painted:host/painted/src/presenter/window.rs", "Presenter::chrome Presenter::set_window Presenter::window_background"],
-    ["painted:host/painted/src/scale.rs", "Host::apply_live Host::set_display_scale Host::set_modes Host::set_root_font_size Host::set_view"],
+    ["painted:host/painted/src/scale.rs", "Host::apply_live Host::set_display_scale Host::set_modes Host::set_root_font_size Host::set_view Host::set_window_view"],
     ["painted:host/painted/src/surfaces.rs", "Presenter::sync_surfaces_with_canvas_tick"],
     ["painted:host/painted/src/forma.rs", "Host::forma_json"],
     ["painted:host/painted/src/presenter/frames.rs", "Presenter::candidate_page Presenter::frame_partitions_asked Presenter::serve_frame_partitions"],

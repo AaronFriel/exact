@@ -45,7 +45,8 @@ object Native {
     @JvmStatic external fun colors(roles: IntArray)
     /** The window (LLP 1115.001 D3.3): its size in pixels, the display's pixels a point, and the system's raw insets
      * in pixels, sixteen numbers: top, right, bottom, left for the system bars, then the display cutout, the software
-     * keyboard and the system's gestures. Before [start], from any thread, so the host boots laid out in it, and on
+     * keyboard and the system's gestures. A fold adds its state (flat 1, half-open 2), divider (none 0, vertical 1,
+     * horizontal 2) and its start and end on that axis in window pixels. Before [start], from any thread, so the host boots laid out in it, and on
      * the host's thread again whenever any of it changes. The reader pads nothing: [chrome] says where the page is. */
     @JvmStatic external fun window(width: Int, height: Int, scale: Float, insets: IntArray)
     /** What the reader draws around the page, when that is not what this last returned (else null): where the page is

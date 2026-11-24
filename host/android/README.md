@@ -19,9 +19,9 @@ one line in the log, `exact canvas: unknown op …; the frame stops here`.
 | `app/` | the shell: one activity over the reader, packaging the app that `-Papp=<name>` names |
 | `gradlew`, `gradle/` | the Gradle wrapper (9.8.0), committed. Its jar is Gradle's own (sha256 `238e777f…`, as services.gradle.org publishes it) and the distribution's sha256 is pinned in `gradle-wrapper.properties` |
 
-minSdk the app's manifest's `host.android.minimumOS` gives: 31 (Android 12) without one, 29 at `"10"` ("Android 10
-and 11", below). targetSdk 36, compileSdk 37.2, AGP 9.4.1, Kotlin 2.4.10, `arm64-v8a` by default. Views, with no Compose,
-AppCompat or Material library.
+The app defaults to minSdk 31 (Android 12). Set `host.android.minimumOS` to `"10"` for minSdk 29 (see "Android 10 and 11").
+The shell targets SDK 36, compiles with SDK 37.2, AGP 9.4.1 and Kotlin 2.4.10, and defaults to `arm64-v8a`. It uses Views without Compose, AppCompat or Material.
+Jetpack WindowManager supplies the activity's fold. A half-open hinge reports `devicePosture="folded"`. A separating hinge gives the window two columns or two rows, even when flat. See the [foldables recipe](../../docs/recipes/foldables.md).
 
 The Android reader displays `image` sources from HTTPS URLs (LLP 1011 §2).
 
