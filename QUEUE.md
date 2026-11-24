@@ -6,6 +6,9 @@
 - Queue a notification click at 0 ms and call Rust’s `advance_until_request(5000)` with no pending presentation. The click waits for `apply_announced` and its handler then sees 5000 ms (#1454).
 - Raise 17 notification clicks before a web microtask runs, with the root handler mounted. The 16-entry hold drops the first click before the mounted handler can hear it (LLP 1133.004 D6, #1454).
 - Schedule two local notifications with explicit `tag=""` and different deadlines. Apple creates two requests with distinct identifiers. The web cancels the first timer and posts only the second (#1454 review, reproduced against the parent).
+- Check contrast on composited accents. A selected switch with `accent-color="#ffffff10"` over black has a near-black track. The painted ink threshold reads the uncomposited RGB channels (#1565).
+- Compare a checked neutral switch with `accent-color="#fff"` on the web, Linux and Windows. The neutral look specifies a white thumb even on the white track (#1565).
+- Measure a filled button before a host reports its palette. The built-in fallback paints white on `#0075ff` (4.21:1), below the contrast for ordinary text (#1565).
 - An Android notification alarm already queued for delivery can post a replacement early. Schedule the same tag for a later time, then deliver the first broadcast. `Later.due` reads the replacement by identifier alone (#1454 review).
 - A root module-event handler taking only the tag accepts an ill-typed second argument. Raise a two-argument event with a valid tag and a non-record payload and check the handler’s journal (LLP 1133.004 D6, #1454 review).
 - On iPhone 17 with iOS 26.5, add an inline “Detail” heading and a trailing “View the complete record” button to the pushed header in #1519. UIKit draws a leading chevron and shifts the title left. On 1915bddd9, `layout back` returns a hidden 0×0 box for the visible chevron.
