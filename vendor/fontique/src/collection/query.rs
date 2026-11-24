@@ -9,6 +9,7 @@ use super::super::{Collection, SourceCache};
 
 use alloc::vec::Vec;
 use parlance::Script;
+use smallvec::SmallVec;
 
 use super::{
     super::{Attributes, Blob, FallbackKey, FamilyId, FamilyInfo, GenericFamily, Synthesis},
@@ -140,33 +141,54 @@ impl<'a> Query<'a> {
             let Entry::Ok(family_info) = &family.family else {
                 continue;
             };
-            let mut best_index = None;
-            if let Some(font) = load_font(
-                family_info,
-                self.attributes,
-                &mut family.best,
-                false,
-                self.source_cache,
-            ) {
-                best_index = Some(font.family.1);
-                if f(font) == QueryStatus::Stop {
-                    return;
+            let attrs = self.attributes;
+            let default = family_info.default_font_index();
+            let best = family.best.get_or_insert_with(|| {
+                (
+                    family_info
+                        .match_index(attrs.width, attrs.style, attrs.weight, true)
+                        .unwrap_or(default),
+                    Entry::Vacant,
+                )
+            });
+            if load_font(family_info, attrs, &mut best.1, best.0, self.source_cache)
+                .is_some_and(|font| f(font) == QueryStatus::Stop)
+            {
+                return;
+            }
+            // Android splits Noto Sans Symbols across files with the same family
+            // and style. Look for those subsets only after the best face misses.
+            let others = family.others.get_or_insert_with(|| {
+                let mut fonts = SmallVec::<[(usize, Entry<QueryFont>); 1]>::new();
+                if let Some(face) = family_info.fonts().get(best.0) {
+                    for (i, sibling) in family_info.fonts().iter().enumerate() {
+                        if i != best.0
+                            && sibling.style() == face.style()
+                            && sibling.matching_width(attrs.width)
+                                == face.matching_width(attrs.width)
+                            && sibling.matching_weight(attrs.weight)
+                                == face.matching_weight(attrs.weight)
+                        {
+                            fonts.push((i, Entry::Vacant));
+                        }
+                    }
                 }
-            }
-            // Don't invoke for the default font if it's the same as the
-            // best match.
-            if best_index == Some(family_info.default_font_index()) {
-                continue;
-            }
-            if let Some(font) = load_font(
-                family_info,
-                self.attributes,
-                &mut family.default,
-                true,
-                self.source_cache,
-            ) {
-                if f(font) == QueryStatus::Stop {
-                    return;
+                if default != best.0 && !fonts.iter().any(|(i, _)| *i == default) {
+                    fonts.push((default, Entry::Vacant));
+                }
+                fonts
+            });
+            for (index, entry) in others {
+                if let Some(font) = load_font(
+                    family_info,
+                    self.attributes,
+                    entry,
+                    *index,
+                    self.source_cache,
+                ) {
+                    if f(font) == QueryStatus::Stop {
+                        return;
+                    }
                 }
             }
         }
@@ -231,6 +253,8 @@ pub struct QueryFont {
     pub blob: Blob<u8>,
     /// Index of a font in a font collection (`ttc`) file.
     pub index: u32,
+    /// Whether the face contains colour glyph tables.
+    pub has_color: bool,
     /// Synthesis suggestions for this font based on the requested attributes.
     pub synthesis: Synthesis,
     /// Data used for constructing a character map for this font.
@@ -248,7 +272,7 @@ fn load_font<'a>(
     family: &FamilyInfo,
     attributes: Attributes,
     font: &'a mut Entry<QueryFont>,
-    is_default: bool,
+    family_index: usize,
     source_cache: &mut SourceCache,
 ) -> Option<&'a QueryFont> {
     match font {
@@ -258,11 +282,6 @@ fn load_font<'a>(
             // Set to error in case we fail. This simplifies
             // the following code.
             *status = Entry::Error;
-            let family_index = if is_default {
-                family.default_font_index()
-            } else {
-                family.match_index(attributes.width, attributes.style, attributes.weight, true)?
-            };
             let font_info = family.fonts().get(family_index)?;
             let blob = font_info.load(Some(source_cache))?;
             let blob_index = font_info.index();
@@ -272,6 +291,16 @@ fn load_font<'a>(
                 family: (family.id(), family_index),
                 blob: blob.clone(),
                 index: blob_index,
+                has_color: read_fonts::FontRef::from_index(blob.as_ref(), blob_index).is_ok_and(
+                    |face| {
+                        face.table_directory().table_records().iter().any(|record| {
+                            matches!(
+                                &record.tag().to_be_bytes(),
+                                b"COLR" | b"CBDT" | b"sbix" | b"SVG "
+                            )
+                        })
+                    },
+                ),
                 synthesis,
                 charmap_index: font_info.charmap_index(),
             });
@@ -288,8 +317,8 @@ fn load_font<'a>(
 struct CachedFamily {
     id: FamilyId,
     family: Entry<FamilyInfo>,
-    best: Entry<QueryFont>,
-    default: Entry<QueryFont>,
+    best: Option<(usize, Entry<QueryFont>)>,
+    others: Option<SmallVec<[(usize, Entry<QueryFont>); 1]>>,
 }
 
 impl CachedFamily {
@@ -297,14 +326,14 @@ impl CachedFamily {
         Self {
             id,
             family: Entry::Vacant,
-            best: Entry::Vacant,
-            default: Entry::Vacant,
+            best: None,
+            others: None,
         }
     }
 
     fn clear_fonts(&mut self) {
-        self.best = Entry::Vacant;
-        self.default = Entry::Vacant;
+        self.best = None;
+        self.others = None;
     }
 }
 

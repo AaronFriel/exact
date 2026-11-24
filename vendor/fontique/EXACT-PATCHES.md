@@ -70,6 +70,10 @@ here pass.
    which a failed open leaves as they were, so it caches no directory that a
    scan could not read whole. Tests: `host/painted/src/text/font_cache.rs`.
 
+7. **Presentation and subset coverage.** A query exposes a face’s colour-table
+   support and visits each subset of the matching style. Android supplies its
+   Noto symbol subsets under the same family name.
+
 `Cargo.toml` also carries the empty `[workspace]` boundary described below;
 retain it when updating. All remaining archive files are byte-for-byte upstream.
 
