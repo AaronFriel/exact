@@ -1863,8 +1863,12 @@ reading. Nothing that isn't HTML is added by it.
   under the agent both write a private pasteboard. Unblocks T3 Code's Copy
   image without app Swift. Take: `QUEUE.md`'s "Chrome conformance steps for
   Paste and Match Style and for a clipboard event with nothing focused"
-  moves to Later. Still out, each until a consumer asks: `read` and
-  `readText` outside a paste, `text/html` and RTF, custom formats, file
+  moves to Later.
+  **Clipboard reads (Charlie, 2026-11-24, "recs ok").** Float and Pocket Lab
+  need reads from a person's action. Charlie admits them on macOS, the web
+  and iOS (LLP 1133.006 D6). HTML writes and the iOS write options await
+  their implementation under the same ruling. Still out: Windows reads, `text/uri-list` until a
+  second consumer asks, RTF, custom formats, file
   promises, several items in one write, a Contract `write`, a
   clipboard-change event, and the Linux and Android cells.
   **Built (maintainers' agent, 2026-11-12, #196;
