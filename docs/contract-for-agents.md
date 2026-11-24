@@ -4576,7 +4576,11 @@ the complete original URL percent-encoded in `u`; read it with
 `searchParam(top(nav), "u")`. The handler needs an `/open` route and a
 navigation root with `navigate=`. At cold launch it is the initial location;
 when already running, each link fires one `navigate` event in arrival order.
-An app without `protocol_handlers` keeps ordinary URL-to-location behavior.
+A scheme registered with `host.ios.urlSchemes` or `host.macos.urlSchemes` alone
+needs no `/open` route: the link arrives as its path. A non-empty authority is the first
+segment and an empty one is none, so `notes://post/42?x=1`, `notes:///post/42?x=1` and
+`notes:/post/42?x=1` are all `/post/42?x=1`. Expo's `Linking.createURL("/post/42")`
+writes the three-slash form.
 For the app's own web addresses, declare `"handle_links": "preferred"` beside
 `app.origin` (and `scope`, `scope_extensions` to narrow or widen the claim):
 iOS, macOS and Android then open links to them in the app, at the link's path,
