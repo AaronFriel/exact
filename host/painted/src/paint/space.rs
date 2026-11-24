@@ -320,7 +320,7 @@ impl Painter {
         }
         let (x, y, w, h) = paint_rect(node.frame, offset);
         if w <= 0.0 || h <= 0.0 {
-            self.boxless_audio(walk, node);
+            self.unpainted(walk, node);
             return true;
         }
         let parent = self.split_parent(walk.scene.kernel, node);
@@ -353,7 +353,7 @@ impl Painter {
         let facing = m[2][2] * if m[3][3] < 0.0 { -1.0 } else { 1.0 };
         let turned = (m[0][0] * m[1][1] - m[0][1] * m[1][0]) * m[3][3] < 0.0 || facing < 0.0;
         if turned && s.backface_visibility == exact_kernel::BackfaceVisibility::Hidden {
-            self.boxless_audio(walk, node);
+            self.unpainted(walk, node);
             return true;
         }
         if let Some(inv) = self.native_plane(walk, node.id, own, island, clamped) {
@@ -398,7 +398,7 @@ impl Painter {
         }
         let device = crate::placement::compose(plane, ts, 0.0, 0.0);
         let Some(inv) = crate::placement::inverse(device) else {
-            self.boxless_audio(walk, node);
+            self.unpainted(walk, node);
             return true;
         };
         let mut painter = Painter::new(

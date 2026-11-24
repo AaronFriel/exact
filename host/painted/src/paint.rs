@@ -941,7 +941,7 @@ impl Painter {
         if node.style.display == Display::None
             || (node.props.str(PropId::SemanticTag) == Some("dialog") && walk.dialog != Some(id))
         {
-            self.boxless_audio(walk, &node);
+            self.unpainted(walk, &node);
             return;
         }
         // The roles drawn in the accent read the nearest authored accent color.
@@ -1159,6 +1159,7 @@ impl Painter {
                     self.backend.pop_clip();
                 }
             }
+            NodeType::NativeView if !paints_self => self.held_module(node),
             // The rest is this element's own paint (its picture, field, or control).
             _ if !paints_self => {}
             // @ref LLP 1056 D7 — a 2D canvas's kept bitmap fills its content box.

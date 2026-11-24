@@ -735,12 +735,8 @@ impl Backend for Recorder {
         self.record_native(id, crate::paint::NativeKind::Video, &empty, props);
     }
 
-    fn held_video(&mut self, id: ViewId, props: &str) {
-        self.transform(Transform::identity());
-        let at = self.ops.len();
-        let empty = Shape::rect((0., 0., 0., 0.));
-        self.record_native(id, crate::paint::NativeKind::Video, &empty, props);
-        self.ops[at + 2] |= 1 << 9;
+    fn held(&mut self, id: ViewId, kind: crate::paint::NativeKind, props: &str) {
+        self.record_held(id, kind, props);
     }
 
     fn canvas(&mut self, pixels: &Arc<Pixmap>, dst: Rect4, clips: &[Shape], ts: Transform) {

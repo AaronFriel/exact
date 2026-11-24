@@ -647,6 +647,9 @@ class Natives(
                 byView[e.view] = e
                 if (kind == 2) bindEvents(e)
             }
+            // A module's view is placed at once, at an empty box too: it came attached at 1 by 1, or pooled at its
+            // last borrower's size.
+            if (kind == 2 && !e.parked) { e.w = w; e.h = h; place(e) }
         }
         if (kind == 1) refuseFrame(e, json!!)
         e.fullWindow = fullWindow && row == 0
@@ -661,8 +664,10 @@ class Natives(
         e.rows.add(row)
         e.wanted = props
         if (hidden) {
-            // Its size and view stay as they were shown, so showing it again only places the same player.
+            // Its size and view stay as they were shown, so showing it again only places the same player. A module's
+            // view is invisible meanwhile, out of touch and accessibility, as iOS hides it.
             if (!e.hidden && !e.parked) players[e.view]?.hidden()
+            if (kind == 2 && !e.parked) e.view.visibility = View.INVISIBLE
             e.hidden = true
             if (!e.parked && e.props != props) apply(e, props)
             if (!e.parked) play(e, false)
@@ -671,6 +676,7 @@ class Natives(
         // Shown again: its props first, so the player is told it is in view with the ones it shows.
         val returned = e.hidden
         e.hidden = false
+        if (kind == 2 && !e.parked) e.view.visibility = View.VISIBLE
         if (e.w != w || e.h != h) {
             e.w = w; e.h = h
             if (!e.parked) { place(e); askBuffers(e) }
@@ -890,7 +896,7 @@ class Natives(
         byView[view] = e
         if (e.kind == 2) bindEvents(e)
         e.browser?.automation?.attach()
-        if (e.w > 0 && e.h > 0) place(e)
+        if (e.w > 0 && e.h > 0 || e.kind == 2) place(e)
         // Its page is loaded afresh from `src`: what was asked of it meanwhile moved nothing.
         if (e.kind == 1) JSONObject(e.wanted).let { json ->
             for (op in FrameBrowser.unrun("${e.session}:${e.slot}:${e.generation}", json)) refuseCommand(e, op.optString(1), json, parked = true)
