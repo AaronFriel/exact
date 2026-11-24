@@ -128,6 +128,7 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("website"),
     recipe!("website-hosting"),
     recipe!("white-label"),
+    recipe!("window-bounds"),
 ];
 
 pub const PATTERNS: &[(&str, &str)] = &[
