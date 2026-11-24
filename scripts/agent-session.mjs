@@ -880,6 +880,12 @@ export async function open({
       return r;
     },
     close: carrier.close,
+    async fold(degrees) {
+      if (!Number.isFinite(degrees) || degrees < 0 || degrees > 180) throw new MalformedOperation('fold takes a hinge angle from 0 through 180 degrees');
+      if (!carrier.fold) throw new Error('fold needs agent ios on a simulator with a hinge (iPhone Duo)');
+      if (s.held) throw new Error(`a drag's finger is down (${s.held}): only reads and the clock until it lifts`);
+      return carrier.fold(degrees, angle => s.landed({ degrees: angle, carrier: host }));
+    },
     background(ms) {
       if (!Number.isInteger(ms) || ms < 0 || ms > 2147483647) throw new MalformedOperation('background takes a whole number of milliseconds from 0 through 2147483647');
       if (!carrier.background) throw new Error('background needs the iOS simulator or a connected iPhone');

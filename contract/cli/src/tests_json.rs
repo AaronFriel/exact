@@ -394,6 +394,9 @@ fn step_json(step: &Step, s: &mut String) {
             s.push_str(",\"text\":");
             q(text, s);
         }
+        Step::Fold { degrees, .. } => {
+            s.push_str(&format!("{{\"op\":\"fold\",\"degrees\":{degrees}"));
+        }
         Step::Background { ms, .. } => {
             s.push_str(&format!("{{\"op\":\"background\",\"ms\":{ms}"));
         }

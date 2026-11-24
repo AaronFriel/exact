@@ -389,6 +389,13 @@ pub enum Step {
         /// Where.
         span: Span,
     },
+    /// Move the iOS simulator's hinge and wait for its angle.
+    Fold {
+        /// Hinge angle from closed (0) to fully open (180).
+        degrees: f64,
+        /// Where.
+        span: Span,
+    },
     /// `resize 800x600`: the window (a desktop's, the browser's), mid-test,
     /// as the driver's `resize` (reader: repagination on resize).
     Resize {

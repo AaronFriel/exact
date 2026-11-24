@@ -695,6 +695,7 @@ export function propertyHolds(line, state, previous) {
 async function propertyFailure(p, line, state, previous, s, file, test, step, index, host) {
   const label = ['boot', 'reload'].includes(step.op) ? step.op
     : step.op === 'clock' ? `clock ${step.arg}`
+    : step.op === 'fold' ? `fold ${step.degrees}`
     : step.op === 'presence' ? `presence ${step.answer}`
     : `${step.op} ${JSON.stringify(step.target)}${step.op === 'type' ? ` ${JSON.stringify(step.text)}` : ''}`;
   const location = at => `${at.file}:${at.line}:${at.col}`;
@@ -1021,7 +1022,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       };
       // Before an input while counted faults are outstanding: those that fired leave the check, so a press the app
       // answers with `close()` cannot take an unfired one's evidence with it (LLP 1103 D3).
-      const INPUTS = new Set(['tap', 'drag', 'type', 'key', 'pick', 'authorize', 'presence', 'clipboard', 'resize', 'back']);
+      const INPUTS = new Set(['tap', 'drag', 'type', 'key', 'pick', 'authorize', 'presence', 'clipboard', 'resize', 'fold', 'back']);
       const settleFired = async () => {
         if (!armed.size) return;
         const faults = (await s.state()).faults ?? [];
@@ -1151,6 +1152,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
           // The driver writes through the app's server as another person (LLP 1116.006 D8), not the app: nothing it
           // shows changes until it reads again.
           case 'request': await serverRequest(server, st); unpolled = st.line; break;
+          case 'fold': delivered(await s.fold(st.degrees)); input = st.line; break;
           case 'resize': delivered(await s.resize(st.width, st.height)); input = st.line; break;
           // The window's close button (studio diary R17): a window a `beforeunload` keeps stays and the test goes on;
           // one that closed takes the session, so a step after it fails naming it.
@@ -1307,7 +1309,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
           default: failures.push(`${at}: unknown step ${st.op}`);
         }
         if (closedAt == null) await mutationClock.advance(s, properties.length ? async (state, delta) => {
-          if (delta || ['tap', 'type', 'clock', 'key', 'reload', 'presence'].includes(st.op)) {
+          if (delta || ['tap', 'type', 'clock', 'key', 'reload', 'presence', 'fold'].includes(st.op)) {
             await checkProperties(state, delta ? { ...st, op: 'clock', arg: '+' + delta } : st, n);
           } else previous = state;
         } : undefined);

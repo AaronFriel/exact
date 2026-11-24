@@ -169,6 +169,7 @@ impl Parser {
         for step in &steps {
             let refused = match step {
                 Step::Perf { .. } | Step::ExpectPerf { .. } => Some("a `perf` block measures steps; its `expect perf` lines follow it, and blocks do not nest".to_string()),
+                Step::Fold { .. } => Some("`fold` waits for the simulator hinge on the wall clock, so it cannot run in a `perf` block".to_string()),
                 Step::Background { .. } => Some("`background` waits on iOS and the wall clock, so it cannot run in a `perf` block".to_string()),
                 // `clock +N real`, `clock held` and `clock until` let real
                 // time pass while the agent's clock stands.
@@ -769,6 +770,13 @@ impl Parser {
                     );
                 }
                 Step::Authorize { cancel, span }
+            }
+            "fold" => {
+                let degrees = self.step_number("a fold angle from 0 through 180 degrees")?;
+                if !(0.0..=180.0).contains(&degrees) {
+                    return self.err("syntax-expected-step", "fold takes a hinge angle from 0 through 180 degrees");
+                }
+                Step::Fold { degrees, span }
             }
             "background" => {
                 let ms = self.step_number("the time away in milliseconds")?;

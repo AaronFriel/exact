@@ -1,10 +1,10 @@
 # Recipe: foldables
 
-On native Duo hosts, `exactViewport()` reports `devicePosture="folded"` and
+Duo simulator drives and tests take `fold 130`. `devicePosture` is `continuous` at
+0° and 180°, `folded` at 90° and 130°. `exactViewport()` gives
 `horizontalViewportSegments=2` (book) or `verticalViewportSegments=2` (laptop).
-Web pages need browser support for these signals; a feature flag alone does not
-establish availability. `env(viewport-segment-<left|top|width|height> <x> <y>)`
-places a box in segment `x, y`.
+`env(viewport-segment-<left|top|width|height> <x> <y>)` reads segment `x, y`’s bounds.
+Web pages need browser support.
 
 ```contract
 shape Viewport

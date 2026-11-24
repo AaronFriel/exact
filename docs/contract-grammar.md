@@ -865,6 +865,7 @@ step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
               | "authorize" [ "cancel" ] NL           (* the held sign-in, against the app's server (oauth recipe) *)
               | "presence" ( "allow" | "cancel" | "fail" | "lockout" | "invalidated" ) NL
                                                      (* answer the pending user-presence prompt, as tap @presence *)
+              | "fold" NUMBER NL        (* hinge angle from 0 through 180 degrees on an iOS simulator with a hinge *)
               | "background" NUMBER NL  (* whole milliseconds on iOS *)
               | "clock" ( "settle" | "data" | "+" NUMBER [ "real" ] | NUMBER ) NL
               | "clock" "held" { IDENT } [ NUMBER ( "s" | "ms" ) ] NL

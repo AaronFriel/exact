@@ -1510,6 +1510,12 @@ sits on that list carries the trade it would take.
 - UIKit's painted swipe row still lists Delete when its button is disabled. Disable Delete before adopting the row in SwipeActionsIOSTests and inspect the row’s custom actions.
 - On macOS 27.0.1, restarting twice after focusing the second field restores launch autofocus. Run AccessibilityTests.testARestartThatLosesAChosenFocusConsumesTheLaunchAutofocus.
 - Windows UI Automation cannot expose the custom actions carried by AccessKit 0.25.1 through accesskit_windows 0.35.2. On the quantity spinbutton in the range-adjust fixture, compare the AccessKit node’s Reset action with the UI Automation action list.
+- Give the Duo smoke’s tall sheet fixture Duo Lab’s inputs. With `arrangement.contract`, `arrangement-view.contract`, `app.forma` and `assets/icons/` alongside the two files it copies, the plan compiles for the rotation and web legs.
+- Sample the two embedded sessions after the closed Duo’s viewport sizes settle in the smoke. On iOS 27.1, session A still measured 382 × 306⅓ points when B measured 382 × 68. Reading both again gave 382 × 68 in each.
+- Reproduce the Duo smoke’s platform touch failures on iOS 27.1. In the Reading leg the dispatch log missed its one-second deadline, and in the closed embedded Back leg the requested cell was outside the list’s viewport.
+- Check whether the iOS agent’s `clock land` should wait for a pending reserved-region reread. After a flat Duo moved to 130°, the first `layout` reported `folded` with one segment. UIKit supplied the two rectangles on a later layout (LLP 1078 D7).
+- Decide whether authored fold tests should restore the simulator's starting angle. A later test can inherit the pose an earlier test left.
+- Check authored state invariants after `resize`. A resize that clears a value can escape `expect state … stays …` until the next input.
 - Restore the LLP working set to 15 documents. `bun scripts/caps.mjs` reports 16 in `llp/current` on main.
 - On macOS, pressing `link href="#keys" target="other"` at `/shortcuts` leaves the ordinary named window unopened. Resolve the fragment against the current visit before choosing its target (LLP 1153 D5, LLP 1030.004 D1).
 - An ordinary named Mac window with a toolbar reopens lower on the screen (LLP 1030.004 D3). Close and reopen it from a two-route app with `window-controls-overlay`. On macOS 27 its 480 × 322 frame moved down 52 points each time.

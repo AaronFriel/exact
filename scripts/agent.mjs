@@ -29,7 +29,7 @@
 //   tap @<id> <choice> | type @<id> <value> (by the node it answers at, or its capability: files F11)
 //   clock <ms|+ms|+ms real [until <path>]|settle|data|held [<target>…] [<n>s]|until state <path> == <literal> within
 //     <ms>> (+ms real until: a test harness's signal file, ending the real wait early; until state: the wall clock, the
-//     clock frozen, until state reads the JSON literal) | resize <w>x<h> | resize <w> <h> | post [<surface>] <text>
+//     clock frozen, until state reads the JSON literal) | fold <degrees> | resize <w>x<h> | resize <w> <h> | post [<surface>] <text>
 //     (type <surface> message <text>: a world's Input::messages) | close | sample <x> <y> […] (extended linear sRGB on Apple, screenshot sRGB elsewhere
 //     under view points, LLP 1100 D12) | prefer <media feature or page fact> <value> […] | perf [<target>] [during
 //     "<op>" …] | perf frames [late <n>] | perf hatches [during "<op>" …] | perf streams [start]
@@ -340,6 +340,7 @@ export async function main(argv, injected = {}) {
             "post [<surface>] <text> (one word or one quoted string: a message the world reads from Input::messages next tick, as the page's postMessage(text, surface) sends it; no surface, the page's one world)",
             'tap @N|@<id> <choice>',
             'type @N|@<id> <value>',
+            'fold <degrees> (0 through 180 on an iOS simulator with a hinge)',
             'background <milliseconds> (iOS: leave the app for real time, then resume the same session)',
             "clock <ms|+ms|+ms real [until <path>]|settle|data|held [<target>…] [<n>s]|until state <path> == <literal> within <ms> (real time, the clock frozen, until state <path> reads the JSON literal; a miss fails naming the last value: a stream's state after its first message)>",
             'sample <x> <y> […]',
@@ -564,6 +565,10 @@ export async function main(argv, injected = {}) {
           r = target === null && !opts.midi ? await s.pointer(phase, opts) : await s.tap(target, opts);
         }
         break;
+      case 'fold':
+        if (args.length !== 1 || !/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(args[0])) throw new MalformedOperation('fold <degrees> (0 through 180)');
+        r = await s.fold(Number(args[0]));
+        break;
       case 'background':
         if (args.length !== 1 || !/^\d+$/.test(args[0])) throw new MalformedOperation('background <milliseconds>');
         r = await s.background(Number(args[0]));
@@ -636,7 +641,7 @@ export async function main(argv, injected = {}) {
         );
       default:
         throw new MalformedOperation(
-          `unknown op: ${op} (tree, layout, state, logs, check, screenshot, sample, tap, type, post, pick, reload, clock, background, resize, close, back, prefer, call, perf, fail fetch, pass fetch)`,
+          `unknown op: ${op} (tree, layout, state, logs, check, screenshot, sample, tap, type, post, pick, reload, clock, background, fold, resize, close, back, prefer, call, perf, fail fetch, pass fetch)`,
         );
     }
     return [op, r, how];
