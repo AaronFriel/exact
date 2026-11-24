@@ -67,6 +67,7 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("local-network"),
     recipe!("long-lists"),
     recipe!("long-text"),
+    recipe!("mac-binary-updates"),
     recipe!("mini-player"),
     recipe!("mobile-build"),
     recipe!("model-viewer"),
