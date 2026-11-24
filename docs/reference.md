@@ -4456,6 +4456,8 @@ OS floor) reaches an install only through its store. `@exact/store-update`
 (LLP 1133.038; [recipe](recipes/store-update.md)) says what the store has and
 opens it. It is not Exact's own signed updates: those are `exactDelivery()`
 and the update store (LLP 1030), which this package never touches.
+A Mac app distributed outside the Mac App Store updates its binary with
+Sparkle, as its own Swift ([recipe](recipes/mac-binary-updates.md)).
 
 `storeUpdateStatus()` is live, announced again on a return to the foreground
 and as a download moves:
