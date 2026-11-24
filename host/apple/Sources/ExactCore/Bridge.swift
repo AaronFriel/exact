@@ -1153,7 +1153,7 @@ package final class Runtime {
     }
     /// `ask`, read on the owner after the jobs queued before it and never
     /// waited for (LLP 1072 T3): `answer` runs there with the reply, the
-    /// `CACurrentMediaTime` it was read at and the owner's `jobsBegun` then;
+    /// `hostMediaTime` it was read at and the owner's `jobsBegun` then;
     /// the reply is nil for a runtime destroyed or replaced since. The read
     /// begins no work, so it is not counted among the owner's jobs.
     package func askLater(_ export: @escaping (ExactRuntime, Int) -> UInt32, _ request: String,
@@ -1161,9 +1161,9 @@ package final class Runtime {
         let lease = completionLease
         Owner.shared.post(counted: false) { [self] in
             let job = Owner.shared.jobsBegun
-            guard accepts(lease) else { return answer(nil, CACurrentMediaTime(), job) }
+            guard accepts(lease) else { return answer(nil, hostMediaTime(), job) }
             let len = export(rt, write(request))
-            answer(String(decoding: Data(bytes: exact_out(rt), count: Int(len)), as: UTF8.self), CACurrentMediaTime(), job)
+            answer(String(decoding: Data(bytes: exact_out(rt), count: Int(len)), as: UTF8.self), hostMediaTime(), job)
         }
     }
     /// A command's ruling (`share`, LLP 1069.003; `saveFile`, LLP 1069.010):
