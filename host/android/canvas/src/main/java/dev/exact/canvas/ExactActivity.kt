@@ -579,6 +579,7 @@ open class ExactActivity : Activity() {
             if (id == windowManager.defaultDisplay.displayId && Device.orientation(this@ExactActivity) != told?.orientation) configure()
         }
     }
+    private var stopContrastUpdates: (() -> Unit)? = null
     private val screenReaderChanged = android.view.accessibility.AccessibilityManager.TouchExplorationStateChangeListener { configure() }
 
     /** The device's colours as the host was last told them ([Palette]). */
@@ -639,6 +640,13 @@ open class ExactActivity : Activity() {
         nativeStarted = true
         modulePhase = 2; moduleOwners?.move(modulePhase)
         if (stopped) { stopped = false; take(); read() }
+        if (Build.VERSION.SDK_INT >= 34) {
+            getSystemService(android.app.UiModeManager::class.java)?.let { mode ->
+                val listener = android.app.UiModeManager.ContrastChangeListener { configure() }
+                mode.addContrastChangeListener(mainExecutor, listener)
+                stopContrastUpdates = { mode.removeContrastChangeListener(listener) }
+            }
+        }
         contentResolver.registerContentObserver(android.provider.Settings.Global.getUriFor(android.provider.Settings.Global.ANIMATOR_DURATION_SCALE), false, settings)
         contentResolver.registerContentObserver(android.provider.Settings.System.getUriFor(android.provider.Settings.System.TIME_12_24), false, settings)
         getSystemService(android.hardware.display.DisplayManager::class.java)?.registerDisplayListener(displayChanges, null)
@@ -698,6 +706,8 @@ open class ExactActivity : Activity() {
         if (!Exact.drainStore()) android.util.Log.w("exact", "the store's writes did not finish before the stop")
         Partitions.flush(natives?.profiles().orEmpty())
         if (reads() && !isChangingConfigurations) updateWidgets()
+        stopContrastUpdates?.invoke()
+        stopContrastUpdates = null
         contentResolver.unregisterContentObserver(settings)
         getSystemService(android.hardware.display.DisplayManager::class.java)?.unregisterDisplayListener(displayChanges)
         getSystemService(android.view.accessibility.AccessibilityManager::class.java)?.removeTouchExplorationStateChangeListener(screenReaderChanged)

@@ -80,6 +80,7 @@ pub(super) struct State {
     /// The kernel epoch the bars were last read at, whether the content
     /// had then scrolled, and what else they were measured for.
     read: Option<(u64, bool)>,
+    seed: Option<([u8; 3], f32)>,
     seen: Option<Seen>,
     authored: [BarColors; 2],
     /// The scroller the top bar's "on scroll" colour follows.
@@ -267,7 +268,11 @@ impl<D: DataSource> Presenter<D> {
                 crate::paint::look::ink_on(surface)
             })
         };
-        BarColors { container, ink }
+        BarColors {
+            container,
+            ink,
+            seed: None,
+        }
     }
 
     pub(super) fn bar_icon_appearance(&self) -> [Option<bool>; 2] {
@@ -465,7 +470,18 @@ impl<D: DataSource> Presenter<D> {
         // Each bar is in the scheme of the node it shows (LLP 1034 §8).
         let nodes = self.bar_nodes();
         let dark = nodes.map(|id| id.map_or(self.dark(), |id| self.dark_at(id)));
+        let seed = self.host.bars().root.and_then(|root| {
+            let node = self.host.kernel().node(root)?;
+            node.style
+                .accent_color
+                .filter(|_| node.style.written.has(exact_kernel::StyleId::AccentColor))
+                .map(|c| {
+                    let [r, g, b, _] = crate::paint::rgba(c.resolve(self.dark_at(root)));
+                    ([r, g, b], self.colors.material_contrast)
+                })
+        });
         let authored = std::array::from_fn(|i| self.bar_colors(nodes[i], dark[i]));
+        let seed_changed = self.bars.seed != seed;
         let epoch = self.host.kernel().epoch();
         if self.bars.read.map(|read| read.0) != Some(epoch) {
             // Only a route with a top bar has a scroller the bar follows.
@@ -506,7 +522,7 @@ impl<D: DataSource> Presenter<D> {
         // The same look as before: a bar that says the same is not
         // measured again, so a commit elsewhere in the tree shapes no text.
         let same = self.bars.seen.as_ref() == Some(&seen);
-        if same && self.bars.authored == authored && self.bars.read == Some(read) {
+        if same && !seed_changed && self.bars.authored == authored && self.bars.read == Some(read) {
             return;
         }
         let (top, bottom) = self.read_bars();
@@ -515,7 +531,10 @@ impl<D: DataSource> Presenter<D> {
             ..top
         });
         let inputs = |edge: f32, i: usize| Inputs {
-            colors: authored[i],
+            colors: BarColors {
+                seed,
+                ..authored[i]
+            },
             dark: dark[i],
             font_scale,
             width: window.0,
@@ -525,7 +544,21 @@ impl<D: DataSource> Presenter<D> {
         let text = self.text.clone();
         let top_changed = !same || self.bars.top.as_ref().map(|s| &s.plan) != top.as_ref();
         let bottom_changed = !same || self.bars.bottom.as_ref().map(|s| &s.plan) != bottom.as_ref();
-        if top_changed || self.bars.authored[0] != authored[0] {
+        let repaint_top = top_changed
+            || self.bars.authored[0] != authored[0]
+            || (seed_changed
+                && top.as_ref().is_some_and(|t| {
+                    t.leading.iter().chain(&t.trailing).any(|b| {
+                        b.enabled && b.symbol.is_none() && b.tint.is_none() && !b.destructive
+                    })
+                }));
+        let repaint_bottom = bottom_changed
+            || self.bars.authored[1] != authored[1]
+            || (seed_changed
+                && bottom
+                    .as_ref()
+                    .is_some_and(|b| b.tabs.iter().any(|t| t.selected)));
+        if repaint_top {
             self.bars.top = top.map(|plan| {
                 let layout = Layout::top(&mut text.borrow_mut(), &plan, &inputs(safe[0], 0));
                 let frame = [0.0, 0.0, layout.size.0, layout.size.1];
@@ -536,7 +569,7 @@ impl<D: DataSource> Presenter<D> {
                 }
             });
         }
-        if bottom_changed || self.bars.authored[1] != authored[1] {
+        if repaint_bottom {
             self.bars.bottom = bottom.map(|plan| {
                 let layout = Layout::bottom(&mut text.borrow_mut(), &plan, &inputs(safe[2], 1));
                 let frame = [0.0, window.1 - layout.size.1, layout.size.0, layout.size.1];
@@ -553,8 +586,9 @@ impl<D: DataSource> Presenter<D> {
             self.bars.focused = None;
             self.bars.ripple = None;
         }
-        if top_changed || bottom_changed || self.bars.authored != authored {
-            self.bars.authored = authored;
+        self.bars.authored = authored;
+        self.bars.seed = seed;
+        if repaint_top || repaint_bottom {
             self.bars.revision += 1;
         }
     }

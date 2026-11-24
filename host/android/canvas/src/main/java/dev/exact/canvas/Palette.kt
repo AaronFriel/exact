@@ -1,6 +1,7 @@
 package dev.exact.canvas
 
 import android.R.color as system
+import android.app.UiModeManager
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Resources
@@ -27,8 +28,17 @@ internal object Palette {
      * reads by its own names (LLP 1115.001.001 D2.3). */
     const val ROLES = 36
 
-    /** The roles light, then dark, ARGB. */
-    fun read(context: Context): IntArray = try {
+    /** The roles light, then dark, ARGB, followed by the contrast level for a scheme seeded by the app. */
+    fun read(context: Context): IntArray {
+        val contrast = try {
+            if (Build.VERSION.SDK_INT >= 34) context.getSystemService(UiModeManager::class.java)?.contrast ?: 0f else 0f
+        } catch (_: RuntimeException) {
+            0f
+        }
+        return deviceRoles(context) + contrast.toRawBits()
+    }
+
+    private fun deviceRoles(context: Context): IntArray = try {
         when {
             Build.VERSION.SDK_INT < 31 -> Legacy.palette()
             Build.VERSION.SDK_INT < 34 -> derived(context)

@@ -13,17 +13,17 @@ use exact_runner::DataSource;
 
 /// What the reader last said of the device's colours, for a host that
 /// boots after it said so.
-static PALETTE: std::sync::Mutex<Option<Palette>> = std::sync::Mutex::new(None);
+static PALETTE: std::sync::Mutex<Option<(Palette, f32)>> = std::sync::Mutex::new(None);
 
 /// Keep `palette` for the host that boots next (the reader's `colors`, from
 /// any thread; a running host is told on its own thread, by
 /// [`CanvasHost::set_colors`]).
-pub fn colors(palette: Palette) {
-    *PALETTE.lock().unwrap_or_else(|e| e.into_inner()) = Some(palette);
+pub fn colors(palette: Palette, contrast: f32) {
+    *PALETTE.lock().unwrap_or_else(|e| e.into_inner()) = Some((palette, contrast));
 }
 
 /// What the reader last said of the device's colours, if anything.
-pub(super) fn palette() -> Option<Palette> {
+pub(super) fn palette() -> Option<(Palette, f32)> {
     *PALETTE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -31,8 +31,8 @@ impl<D: DataSource + Default> CanvasHost<D> {
     /// The device's palette changed, or is told to a running host for the
     /// first time: every colour role resolves to it, and the next frame is
     /// a paint.
-    pub fn set_colors(&mut self, palette: &Palette) {
-        self.p.set_palette(palette);
+    pub fn set_colors(&mut self, palette: &Palette, contrast: f32) {
+        self.p.set_material_palette(palette, contrast);
         self.force = true;
     }
 }

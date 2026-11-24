@@ -57,8 +57,8 @@ impl<D: DataSource + Default> CanvasHost<D> {
         self.forget_chrome();
         // The device's colours as the new reader read them: a wallpaper
         // changed while the last one was stopped is a new palette (D4).
-        if let Some(palette) = colors::palette() {
-            self.p.set_palette(&palette);
+        if let Some((roles, contrast)) = colors::palette() {
+            self.p.set_material_palette(&roles, contrast);
         }
         match device::windowed(size, scale) {
             Some(told) => self.set_window(told),

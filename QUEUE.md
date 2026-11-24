@@ -4,10 +4,13 @@
 - On Android, start a second ExactActivity that takes the reader, then finish it and return to the first. The first activity releases its mounted module views when the second takes over. Check module state on that path separately from Home and return (#1574).
 - A fixture that sets `modulesDir` in `gradle.properties` can select a different Kotlin directory from the Android shell's Compose scan. Put a Compose import in the app's `modules/android`, point the Gradle property at plain Kotlin, and compare the runtime graph with the same path set through `ORG_GRADLE_PROJECT_modulesDir` (#1575).
 - On Android, place a translucent header over differently coloured page content under `viewport-fit="cover"`. Its automatic ink reads the window colour. Use a written `color` for the content showing through.
+- At maximum Android contrast with no root accent, select a tab containing only text. Its `secondary` label lies on the `secondaryContainer` indicator. Check that pair against the symbol-and-label layout, where the label sits on the bar (#1564).
+- Disable the selected Android tab on a page without a root accent. Its indicator stays at full opacity while its symbol and label take the faded unselected ink.
+- Hold a selected Android destination on a seeded indicator. Its state layer still takes the device’s on-surface ink. Compare its contrast with the selected symbol on that pill.
 - On Android, set `color` directly on the projected heading or a destination. Their individual tints are unused. A disabled header button also keeps the platform’s disabled treatment.
 - Override the `ButtonFace` role on Android with an unseeded root tablist. Its selected symbol still uses the device’s `onSecondaryContainer` and can lose contrast on the overridden indicator.
 - On a light Android page with three-button navigation, set only `color-scheme="dark"` on the root tablist. Its Material surface turns dark while the system icons follow the page.
-- On Android, show a tab badge and report a palette changing only `onError`. The navigation bar keeps the badge’s old ink.
+- On Android, change only the palette’s `onError` while a tab has a badge, or only `error` while a header shows a destructive text action. Both keep their old ink.
 - A gated resource keeps its answer across idleness, but Contract cannot read the arguments that answer belongs to. Check the same-account return and the changed-filter placeholder in the progressive-tabs recipe (#1549).
 - Trace a warm return on iOS from touch delivery through route commit to presentation, and from HTTP arrival through resource settlement to presentation. Check which joins and cache or retained-answer facts survive export. The web trace matches a separately observed epoch to a frame callback (#1549).
 - Windows has no update store. A manifest declaring `host.windows` without `deploy.store.windows` bakes level A, which the window refuses at launch. Refuse it at bake time and name `deploy.store.windows: "0"`.

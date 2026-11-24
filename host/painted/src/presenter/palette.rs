@@ -176,6 +176,20 @@ pub(crate) fn material_of(name: &str) -> Option<(Material, u32)> {
 }
 
 impl Palette {
+    /// Decode the reader's two role tables and its Material contrast level.
+    pub fn from_reader_words(words: &[i32]) -> Option<(Self, f32)> {
+        let (roles, level) = words.split_at_checked(2 * MATERIAL_ROLES)?;
+        let contrast = match level {
+            [] => 0.,
+            [bits] => f32::from_bits(*bits as u32),
+            _ => return None,
+        };
+        if !(-1.0..=1.0).contains(&contrast) {
+            return None;
+        }
+        Some((Palette::from_words(roles)?, contrast))
+    }
+
     /// A palette from the shell's colours, every role light and then
     /// every role dark; `None` for any other count.
     pub fn from_words(words: &[i32]) -> Option<Palette> {
@@ -264,6 +278,7 @@ pub(crate) fn reported_accent(dark: bool) -> Option<([u8; 4], [u8; 4])> {
 #[derive(Default)]
 pub(super) struct State {
     pub contrast: super::contrast::State,
+    pub material_contrast: f32,
     /// The reported table's generation this presenter last painted from,
     /// and the palette, whose roles past the table's (read by [`material`])
     /// can change while the table does not.
@@ -271,6 +286,15 @@ pub(super) struct State {
 }
 
 impl<D: DataSource> Presenter<D> {
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn set_material_palette(&mut self, palette: &Palette, contrast: f32) {
+        if self.colors.material_contrast != contrast {
+            self.colors.material_contrast = contrast;
+            self.dirty = true;
+        }
+        self.set_palette(palette);
+    }
+
     /// The device's palette, as its shell resolved it (LLP 1115.001 D4):
     /// told before the first frame and again, whole, whenever it changes (a
     /// new wallpaper changes the dynamic palette). Every role resolves to
@@ -294,6 +318,17 @@ impl<D: DataSource> Presenter<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn role_words_keep_the_device_palette_and_carry_optional_contrast() {
+        let mut roles = vec![0; 2 * MATERIAL_ROLES];
+        let palette = Palette::from_words(&roles).unwrap();
+        assert_eq!(Palette::from_reader_words(&roles), Some((palette, 0.)));
+        roles.push(0.5f32.to_bits() as i32);
+        assert_eq!(Palette::from_reader_words(&roles), Some((palette, 0.5)));
+        *roles.last_mut().unwrap() = f32::NAN.to_bits() as i32;
+        assert_eq!(Palette::from_reader_words(&roles), None);
+    }
 
     #[test]
     fn a_palette_is_every_material_role_light_then_dark_and_reads_by_its_name() {

@@ -39,7 +39,7 @@ object Native {
         formatLocale: String, screenReader: Int, orientation: Int,
     )
     /** The device's colours ([Palette], LLP 1115.001 D4): Material 3's colour roles as the reader resolved them for
-     * this device, twelve under the light scheme and then the same twelve under the dark one, ARGB. Before [start],
+     * this device, light then dark in ARGB, followed by the float bits of the system contrast level. Before [start],
      * from any thread, so the host boots resolving every colour role by them, and again on the host's thread whenever
      * one changes. */
     @JvmStatic external fun colors(roles: IntArray)

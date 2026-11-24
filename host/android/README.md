@@ -575,7 +575,7 @@ A palette has a swatch for tones 100, 99, 95, 90, 80 … 10 and 0 (`system_neutr
 them (98, 96, 94, 92, 6, 12, 17, 22) is the palette's colour at that lightness, which the platform computes
 (`ColorStateList.withLStar`).
 
-**The call.** `Native.colors(IntArray)`: the twelve roles light and then the same twelve dark, ARGB, in the order of
+**The call.** `Native.colors(IntArray)` carries 36 light roles and then 36 dark roles in ARGB, followed by the float bits of the system contrast level. The roles are in the order of
 the table (`presenter::Material`). Told before the host boots, so its first frame is in them, and again whenever what
 the reader reads is not what it last told: each time a reader is made (the activity made, or started after a stop) and
 on every configuration change. A new wallpaper changes the palette; the activity does not declare that change
@@ -588,7 +588,7 @@ blue) keeps its table pair.
 
 **One accent.** A control, a field's focused indicator and a filled button paint in the node's `accent-color` where it sets one, else
 in `AccentColor` as reported, with `AccentColorText` drawn on it (a check, a switch's thumb, a filled button's title):
-the device's `primary` and `onPrimary`. The painter's own blue is desktop Linux's alone, where nothing is reported.
+the device’s `primary` and `onPrimary`. Desktop Linux keeps the painter’s blue when no palette is reported. The root’s `accent-color` supplies the RGB seed for the bars’ Material tonal-spot scheme at the device’s contrast level.
 
 **An icon button is Material's** (D9; `host/painted/src/paint/icon_button.rs`): a button holding a symbol and no
 title is a round 40 dp container round a 24 dp icon (the `icon-button-` rows, Compose Material 3 1.4's
@@ -1121,7 +1121,7 @@ tabs by the rule and tells the kernel what the bars cover (`HostCover`, the Appl
 
 So the page's content starts under the top bar and ends at the navigation bar, and neither bar is in the page's stream. Both are over it: the top bar at the window's top, reaching under the status bar, whose area is the bar's own colour; the navigation bar at the window's bottom, reaching under the gesture bar. **A keyboard does not move the navigation bar.** It ends the page above itself and covers the bar, as it covers a Material app's, and the room the bar took of the routes goes to nothing while it is covered (`Presenter::fit_bars`).
 
-The title, Up arrow, action icons and unselected destinations use the bar element’s own `color`, or black or white on its authored background. An enabled button’s own `color` still wins. On translucent fills, automatic ink uses the window colour behind the band. Set `color` when page content shows through. The ink roles below are defaults.
+The title, Up arrow, action icons and unselected destinations use the bar element’s own `color`, or black or white on its authored background. An enabled button’s own `color` still wins. On a dark header in a light page, `color-scheme="dark"` selects the dark scheme’s `primary` for untinted text actions. On translucent fills, automatic ink uses the window colour behind the band. Set `color` when page content shows through. The ink roles below are defaults.
 
 **The top app bar** (Compose’s small `TopAppBar`)
 
@@ -1147,8 +1147,8 @@ A level-1 heading is the same small bar: Material's medium and large bars, which
 | Colour | The root tablist’s `background-color`, through the gesture bar. Defaults to `surfaceContainer` | `surfaceContainer` |
 | Destinations | the root tablist's tabs that name a panel, sharing the width 8 dp apart | 3 to 5, the same (`NavigationBarItemHorizontalPadding`) |
 | Symbol and label | a 24 dp symbol 16 dp from the top, its label under it (label-medium, 12/16 sp), 16 dp from the bottom | the same |
-| Active indicator | a 56 by 32 dp pill in `secondaryContainer` behind the selected symbol | the same |
-| Colours | the selected destination's symbol `onSecondaryContainer` and its label `secondary`; the others `onSurfaceVariant`, at 38 % when disabled | the same (`NavigationBarItemDefaults.colors`) |
+| Active indicator | a 56 by 32 dp pill in `secondaryContainer` behind the selected symbol or lone label, seeded by the root accent when written | 56 by 32 dp in the theme’s `secondaryContainer` |
+| Colours | the selected symbol uses `onSecondaryContainer` and its label uses `secondary` from the same seed. A lone label on a seeded indicator uses `onSecondaryContainer` when `secondary` falls below 4.5:1 against the pill. Unselected destinations use the tablist’s ink, defaulting to `onSurfaceVariant`, at 38 % when disabled | `NavigationBarItemDefaults.colors` reads the theme’s selected and unselected roles |
 | Badge | a tab's badge box (LLP 1075.003 §9.9): its text, label-small in `onError` on an `error` pill at least 16 dp square, 4 dp either side of the text, its start 12 dp before the symbol's end and 14 dp into it; not run on a device | `Badge` with content in a `BadgedBox` (`BadgeTokens`, `Badge.kt`, read at the pinned version) |
 
 "Here" in both tables is what was seen on a Pixel 10 Pro XL (Android 16, 2.4375 pixels a dp), from `state.bars`
