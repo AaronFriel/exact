@@ -4075,6 +4075,12 @@ grant beside this one: see [Push](#push).
   is `prompt` asks first; while `denied` it is refused. A post from a wake or
   a tool while `prompt` is refused `person-required`: ask from a person's
   press first (`requestNotificationPermission()`).
+- `notificationshow` on the root hears a local post presented while the page is visible.
+  Its handler takes the same arguments as a click, the tag and an optional
+  `NotificationEvent` carrying `tag`, `title`, `body` and `data`. The handler runs
+  with the device’s origin. iOS, macOS and the web raise the event. Android does not report it.
+  The agent emits it when its clock reaches `showTrigger`, or immediately for a post due now.
+  Push arrivals and posts delivered while hidden raise no event.
 - A plain click with `navigate=` opens that route location: one `navigate`
   event to the navigation root while the app runs, or the launch location when
   it starts the app. `navigate=` is reduced by the router's `location_of`
