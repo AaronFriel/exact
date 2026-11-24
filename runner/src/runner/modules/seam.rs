@@ -417,6 +417,15 @@ impl<D: DataSource> Modules<D> for LinkedModules {
         r.view_origin_linked(id, prop)
     }
 
+    fn observe_view_bindings(
+        &self,
+        r: &mut Runner<D>,
+        props: &[(&str, &str)],
+        observer: Option<crate::Announce>,
+    ) {
+        r.observe_view_bindings_linked(props, observer);
+    }
+
     fn views_committed(&self, r: &mut Runner<D>) {
         r.views_committed_linked()
     }

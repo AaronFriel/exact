@@ -752,6 +752,15 @@ pub trait Modules<D: DataSource> {
         None
     }
 
+    /// Install the host's observer of committed device bindings.
+    fn observe_view_bindings(
+        &self,
+        r: &mut Runner<D>,
+        props: &[(&str, &str)],
+        observer: Option<crate::Announce>,
+    ) {
+    }
+
     /// After a commit is applied: its origin is the one a change it made is
     /// reported with.
     fn views_committed(&self, r: &mut Runner<D>) {}

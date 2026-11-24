@@ -31,6 +31,8 @@ const APP: &str = r#"component App
     shown = false
   action hide
     hidden = true
+  action reveal
+    hidden = false
   action recolor
     tint = "blue"
   view
@@ -431,6 +433,96 @@ fn view_id(r: &Runner<Source>) -> u32 {
     let state = r.extensions_json().unwrap();
     let state: Json = serde_json::from_str(&state).unwrap();
     state["swatch"]["views"][0]["view"].as_u64().unwrap() as u32
+}
+
+#[test]
+fn device_bindings_follow_the_runner_node_through_both_orders_and_removal() {
+    let app = App::new("device-bindings", APP, &[]);
+    for (shown, bound, expected) in [
+        (CallOrigin::Tool, CallOrigin::App, "tool"),
+        (CallOrigin::App, CallOrigin::Tool, "tool"),
+        (CallOrigin::Action, CallOrigin::App, "action"),
+        (CallOrigin::App, CallOrigin::Wake, "wake"),
+    ] {
+        let (mut runner, _) = boot(&app);
+        runner.bind_extensions(&["swatch"], &[]);
+        let snapshots: Told = Arc::default();
+        let seen = snapshots.clone();
+        runner.observe_view_bindings(
+            &[("swatch-box", "tint")],
+            Some(Arc::new(move |body| {
+                seen.lock()
+                    .unwrap()
+                    .push(serde_json::from_str(body).unwrap());
+            })),
+        );
+        runner.act_from(shown, "show", Vec::new()).unwrap();
+        let id = view_id(&runner).to_string();
+        runner.act_from(bound, "recolor", Vec::new()).unwrap();
+        let last = || snapshots.lock().unwrap().last().unwrap().clone();
+        assert_eq!(
+            last()["swatch-box"][&id]["tint"],
+            json!({"value":"blue","origin":expected})
+        );
+        runner.act("unshow", Vec::new()).unwrap();
+        assert_eq!(last(), serde_json::json!({}));
+        runner.act("show", Vec::new()).unwrap();
+        assert_eq!(
+            last()["swatch-box"][view_id(&runner).to_string()]["tint"]["origin"],
+            "app"
+        );
+        runner.bind_extensions(&[], &[]);
+        assert_eq!(last(), serde_json::json!({}));
+    }
+}
+
+#[test]
+fn another_packages_string_binding_does_not_notify_the_track_observer() {
+    let app = App::new("track-filter", APP, &[]);
+    let (mut runner, _) = boot(&app);
+    runner.bind_extensions(&["swatch"], &[]);
+    let snapshots: Told = Arc::default();
+    let seen = snapshots.clone();
+    runner.observe_view_bindings(
+        &[("audio-waveform", "track")],
+        Some(Arc::new(move |body| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_str(body).unwrap());
+        })),
+    );
+    runner.act("show", Vec::new()).unwrap();
+    runner.act("recolor", Vec::new()).unwrap();
+    assert_eq!(*snapshots.lock().unwrap(), [json!({})]);
+}
+
+#[test]
+fn a_hidden_binding_keeps_its_origin_when_the_node_is_revealed() {
+    let app = App::new("binding-before-show", APP, &[]);
+    let (mut runner, _) = boot(&app);
+    runner.bind_extensions(&["swatch"], &[]);
+    let snapshots: Told = Arc::default();
+    let seen = snapshots.clone();
+    runner.observe_view_bindings(
+        &[("swatch-box", "tint")],
+        Some(Arc::new(move |body| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_str(body).unwrap());
+        })),
+    );
+    runner.act("show", Vec::new()).unwrap();
+    let id = view_id(&runner).to_string();
+    runner.act("hide", Vec::new()).unwrap();
+    runner
+        .act_from(CallOrigin::Tool, "recolor", Vec::new())
+        .unwrap();
+    assert_eq!(snapshots.lock().unwrap().last(), Some(&json!({})));
+    runner.act("reveal", Vec::new()).unwrap();
+    assert_eq!(
+        snapshots.lock().unwrap().last().unwrap()["swatch-box"][&id]["tint"],
+        json!({"value":"blue", "origin":"tool"})
+    );
 }
 
 /// The plan carries the view's row: its tag, the extension that makes it,

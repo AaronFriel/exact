@@ -31,6 +31,8 @@ use std::collections::BTreeMap;
 /// What the runner last saw of each package view.
 #[derive(Default)]
 pub(in crate::runner) struct Views {
+    observer: Option<crate::Announce>,
+    track_props: BTreeMap<String, Vec<String>>,
     /// Each package view node, by id.
     seen: BTreeMap<ViewId, Viewed>,
     /// The cause of the last commit applied: what a change found after it
@@ -107,12 +109,13 @@ impl<D: DataSource> Runner<D> {
                 .and_then(|p| serde_json::from_str(p).ok())
                 .unwrap_or_default();
             let shown = row.displayed && crate::wakelock::displayed(kernel, &self.scrolled, id);
-            let mut was = self
-                .extensions
-                .views
-                .seen
-                .remove(&id)
-                .filter(|v| v.tag == tag);
+            let mut was = self.extensions.views.seen.remove(&id);
+            if was.as_ref().is_some_and(|v| v.tag != tag) {
+                let gone = was.take().unwrap();
+                if gone.shown {
+                    said.push(json!({ "extension": gone.extension, "view": id.to_string(), "tag": gone.tag, "displayed": false, "origin": origin.word() }));
+                }
+            }
             let mut viewed = Viewed {
                 tag: tag.to_owned(),
                 extension,
@@ -155,6 +158,21 @@ impl<D: DataSource> Runner<D> {
             }
         }
         self.extensions.views.seen = now;
+        if self.extensions.views.observer.is_some()
+            && said.iter().any(|body| {
+                let Some(props) = body["tag"]
+                    .as_str()
+                    .and_then(|tag| self.extensions.views.track_props.get(tag))
+                else {
+                    return false;
+                };
+                body["bound"]
+                    .as_str()
+                    .is_none_or(|prop| props.iter().any(|p| p == prop))
+            })
+        {
+            self.publish_view_bindings();
+        }
         for body in said {
             self.tell_view(body);
         }
@@ -190,6 +208,54 @@ impl<D: DataSource> Runner<D> {
             Some(prop) => v.bound.get(prop).map(|(_, by)| *by),
             None => v.shown.then_some(v.shown_by),
         }
+    }
+
+    pub(super) fn observe_view_bindings_linked(
+        &mut self,
+        props: &[(&str, &str)],
+        observer: Option<crate::Announce>,
+    ) {
+        let views = &mut self.extensions.views;
+        views.track_props.clear();
+        for &(tag, prop) in props {
+            views
+                .track_props
+                .entry(tag.to_owned())
+                .or_default()
+                .push(prop.to_owned());
+        }
+        views.observer = observer;
+        self.publish_view_bindings();
+    }
+
+    /// A whole commit, including revocations, for a host that owns track readers.
+    pub(super) fn publish_view_bindings(&self) {
+        let Some(observer) = &self.extensions.views.observer else {
+            return;
+        };
+        let mut snapshot = json!({});
+        for (id, v) in &self.extensions.views.seen {
+            if !v.shown
+                || !(self.extensions.bound.contains(&v.extension)
+                    || self.extensions.agent.contains(&v.extension))
+            {
+                continue;
+            }
+            let Some(props) = self.extensions.views.track_props.get(&v.tag) else {
+                continue;
+            };
+            for prop in props {
+                let Some((value, cause)) = v.bound.get(prop) else {
+                    continue;
+                };
+                if let Ok(track) = serde_json::from_str::<String>(value) {
+                    let origin = self.join_causes(*cause, v.shown_by);
+                    snapshot[&v.tag][id.to_string()][prop] =
+                        json!({"value": track, "origin": origin.origin().word()});
+                }
+            }
+        }
+        observer(&snapshot.to_string());
     }
 
     /// `state.extensions`' `views` for `extension`: each view, whether it is

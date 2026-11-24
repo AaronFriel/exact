@@ -1257,12 +1257,18 @@ export function appleImplementations(app, target, extensions, contractSources = 
     const events=(i.declaration.names ?? []).some(n=>n.event);
     const credentialMembers = Object.entries(i.declaration.members ?? {}).flatMap(([owner, members]) =>
       Object.keys(members).map(option => `${owner.split('/').at(-1)}.${option}`));
+    const views = packageViewTags(i, impl);
+    const trackProps = Object.fromEntries(views.map(tag => {
+      const view = i.declaration.views?.[tag] ?? impl.json.views?.[tag];
+      return [tag, Object.entries(view?.props ?? {}).filter(([, prop]) =>
+        prop?.binds === true && ['handle<track>', 'option<handle<track>>'].includes(prop.type)).map(([name]) => name)];
+    }));
     return [{
       swiftPackages: impl.json.swiftPackages, swiftPackagesSource: resolve(impl.dir, 'exact.json'),
       privacyManifest: resolve(impl.dir, 'PrivacyInfo.xcprivacy'), extension,
       module: 'ExactPkg_' + extension.replace(/\W/g, '_'), className: impl.json.class,
       sources: files.map(f => resolve(impl.dir, f)), plist, plistKeys: impl.json.plistKeys ?? null,
-      hostEvents: impl.json.hostEvents ?? null, views: packageViewTags(i, impl), authenticator,
+      hostEvents: impl.json.hostEvents ?? null, views, trackProps, authenticator,
       start: i.declaration?.start === 'load', credentialMembers, frameworks: impl.json.frameworks ?? {},
       activity: impl.json.apple?.activity ?? null,
     }];

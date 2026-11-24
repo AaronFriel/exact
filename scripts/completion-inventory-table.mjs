@@ -539,7 +539,7 @@ export const classifications = [
     ["runner:runner/src/runner/module_seam/forward.rs", "Runner::bind_extensions"],
     ["runner:runner/src/runner/module_seam/forward.rs", "Runner::admit_picture Runner::check_picture Runner::picture_schemes Runner::set_module_target"],
     ["runner:runner/src/runner/module_seam/forward.rs", "Runner::polls_asking"],
-    ["runner:runner/src/runner/module_seam/forward.rs", "Runner::report_views"],
+    ["runner:runner/src/runner/module_seam/forward.rs", "Runner::report_views Runner::observe_view_bindings"],
     ["runner:runner/src/runner/processes.rs", "Runner::set_work_clock"],
     ["runner:runner/src/runner/provenance.rs", "Runner::act_from Runner::as_person Runner::view_origin"],
     ["runner:runner/src/runner/seams.rs", "Runner::call_agent Runner::call_tool Runner::intents_state Runner::place_controls Runner::press_control"],

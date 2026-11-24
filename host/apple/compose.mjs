@@ -121,7 +121,7 @@ export function composedModule(packages, ownModule, config = new Map()) {
   lines.push(`let exactPackageModules: [String: String] = [${packages.map(p => `${JSON.stringify(p.extension)}: ${JSON.stringify(p.module)}`).join(', ') || ':'}]`);
   const configured = packages.filter(p => Object.keys(config.get(p.extension) ?? {}).length);
   lines.push(`let exactPackageConfig: [String: String] = [${configured.map(p => `${JSON.stringify(p.extension)}: ${sourceString(JSON.stringify(config.get(p.extension)), 'swift')}`).join(', ') || ':'}]`);
-  const views = packages.flatMap(p => (p.views ?? []).map(tag => `${JSON.stringify(tag)}: ExactNativeFactory(package: { try ExactExtensions.view($0, ${JSON.stringify(p.extension)}, ${JSON.stringify(tag)}, id: $1, props: $2, events: $3) })`));
+  const views = packages.flatMap(p => (p.views ?? []).map(tag => `${JSON.stringify(tag)}: ExactNativeFactory(trackProps: ${JSON.stringify(p.trackProps?.[tag] ?? [])}, package: { try ExactExtensions.view($0, ${JSON.stringify(p.extension)}, ${JSON.stringify(tag)}, id: $1, props: $2, events: $3) })`));
   lines.push(`let exactPackageViews: [String: ExactNativeFactory] = [${views.join(', ') || ':'}]`);
   if (!ownModule) lines.push('final class ExactComposedModule: ExactModule {}', 'let exactModule: ExactModule.Type = ExactComposedModule.self');
   return lines.join('\n') + '\n';

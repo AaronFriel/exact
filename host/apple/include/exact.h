@@ -894,7 +894,10 @@ uint32_t exact_module_event(ExactRuntime rt, size_t len);
 /* @ref LLP 1133.001 D4: the extensions the app's module composes, one name a
  * line in the input buffer: the runner sends their names to the module. A
  * line `agent <name>` is an implementation bound under the agent, which
- * answers an interface that is its own substitute (LLP 1133.006 D8). */
+ * answers an interface that is its own substitute (LLP 1133.006 D8).
+ * A first line "view-bindings tag.prop ..." subscribes to those committed visible
+ * track bindings. The installed ExactAppCallFn receives each JSON snapshot with
+ * a null slot. Ordinary package calls always have a reply slot. */
 void exact_bind_extensions(ExactRuntime rt, size_t len);
 /* @ref LLP 1133.019 D11 item 1: an `img` source of a package's scheme, in the
  * input buffer, admitted as a read: the output is {"extension","scheme",

@@ -1466,6 +1466,7 @@ public final class ExactSession {
         guard state != .destroyed else { return }
         runtime.completions.close()
         state = .destroyed
+        natives.endViewBindings()
         agentPasteboard.map(AgentPasteboard.remove)
         let waiting = afterFill; afterFill.removeAll()
         waiting.forEach { $0.cancelled?() }

@@ -10,7 +10,7 @@
 // The table (`exact_native_abi()`, 64-bit layout; the module side is
 // `host/apple/modules/ExactNativeModule.swift`):
 //
-//   0  u32 major            4
+//   0  u32 major            4, or 5 for track views requiring committed bindings
 //   4  u32 size             104 or more
 //   8  const char *roster   JSON: {"tag": {"snapshot": bool, "reuse": bool,
 //                          "firstFrame": bool}, …}
@@ -71,6 +71,8 @@
 //        nullable: the session's root view, borrowed, or nil, each time it
 //        changes (LLP 1133.027 D17 item 3)
 //
+// 256  module_bindings(module, json, len)             size ≥ 264; committed track bindings
+//
 //   event(ctx, nonce, kind, bytes, len)          kind: EventKind 0–8 — press,
 //     change, hover, focus, blur, key, submit, load, message; change, key and
 //     message carry UTF-8, hover "true"/"false"; from any thread.
@@ -113,7 +115,7 @@ private struct NativeFailure: Error {
 
 /// The loaded table: the roster and the entries, read once.
 private final class NativeTable {
-    static let major: UInt32 = 4
+    static let major: UInt32 = 5
     /// The hatch words the module handles, or nil for one that does not say.
     var hatchWords: Set<String>?
     /// The modules' extensions the artifact composes (LLP 1133.001 D4).
@@ -172,6 +174,8 @@ private final class NativeTable {
     var authenticate: PresenceAuthenticateFn?
     /// A package picture (LLP 1133.019 D11 item 1), in one of 248 or more.
     var image: PackageImageFn?
+    typealias BindingsFn = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int) -> Void
+    var bindings: BindingsFn?
     /// The session's root view for packages (LLP 1133.027 D17 item 3), in one of 256 or more.
     var sessionView: SessionViewFn?
     typealias SessionViewFn = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?) -> Void
@@ -203,7 +207,7 @@ private final class NativeTable {
     /// A table in memory: the artifact's, or a test's.
     static func read(_ table: UnsafeRawPointer, path: String) -> Result<NativeTable, NativeFailure> {
         let major = table.load(as: UInt32.self), size = table.load(fromByteOffset: 4, as: UInt32.self)
-        guard major == NativeTable.major else {
+        guard major == 4 || major == NativeTable.major else {
             return .failure(NativeFailure(state: "unavailable", message: "module ABI \(major), host ABI \(NativeTable.major)"))
         }
         guard size >= NativeTable.size else { return .failure(NativeFailure(state: "unavailable", message: "module table of \(size) bytes, host needs \(NativeTable.size)")) }
@@ -260,6 +264,7 @@ private final class NativeTable {
         if size >= 240 { loaded.authenticate = pointer(232).map { unsafeBitCast($0, to: PresenceAuthenticateFn.self) } }
         if size >= 248 { loaded.image = pointer(240).map { unsafeBitCast($0, to: PackageImageFn.self) } }
         if size >= 256 { loaded.sessionView = pointer(248).map { unsafeBitCast($0, to: SessionViewFn.self) } }
+        if size >= 264 { loaded.bindings = pointer(256).map { unsafeBitCast($0, to: BindingsFn.self) } }
         return .success(loaded)
     }
 }
@@ -377,7 +382,7 @@ private let nativeLaterCallback: ExactAppLaterFn = { ctx, body, length, reply in
     let rt = ExactRuntime(UInt(bitPattern: ctx))
     let data = body.map { Data(bytes: $0, count: length) } ?? Data()
     DispatchQueue.main.async {
-        guard let natives = ExactSession.session(for: rt)?.nativeViews else {
+        guard let session = ExactSession.session(for: rt), session.state != .destroyed, let natives = session.nativeViews else {
             let bytes = Array("the session ended".utf8)
             return bytes.withUnsafeBufferPointer { exact_app_reply(reply, 503, $0.baseAddress, $0.count) }
         }
@@ -391,9 +396,16 @@ private let nativeLaterCallback: ExactAppLaterFn = { ctx, body, length, reply in
 // from a worker, a synchronous hop, since main never waits on a worker.
 private let nativeCallCallback: ExactAppCallFn = { ctx, body, length, slot in
     let rt = ExactRuntime(UInt(bitPattern: ctx))
+    if slot == nil {
+        Owner.shared.callMain {
+            guard let session = ExactSession.session(for: rt), session.state != .destroyed else { return }
+            session.nativeViews?.receiveBindings(body, length)
+        }
+        return
+    }
     let data = body.map { Data(bytes: $0, count: length) } ?? Data()
     let work = {
-        guard let natives = ExactSession.session(for: rt)?.nativeViews else {
+        guard let session = ExactSession.session(for: rt), session.state != .destroyed, let natives = session.nativeViews else {
             let bytes = Array("the session ended".utf8)
             return bytes.withUnsafeBufferPointer { exact_app_answer(slot, 503, $0.baseAddress, $0.count) }
         }
@@ -669,6 +681,7 @@ final class NativeViews: NativeModuleHosting {
     }
 
     var hasAppModule = false
+    private var prepared = false
 
     /// Why the loader refused the artifact the app ships (`dlopen`'s error
     /// names the library it could not find), or nil. Loads it if nothing
@@ -686,8 +699,8 @@ final class NativeViews: NativeModuleHosting {
     func prepareAppModule() {
         activateHatches()
         defer { if !hatchesConnected, pendingHatches == nil { session?.presenter.elements.releaseConfigurations() } } // they never will
-        guard hasAppModule, instance == nil, case .success(let table) = self.table() else { return }
-        _ = module(table)
+        guard hasAppModule, !prepared, case .success(let table) = self.table(), case .success = module(table) else { return }
+        prepared = true
         // Its extensions answer their names from now on, outside the agent.
         // Under the agent those the drive binds (`--bind`) answer as in
         // production, and the rest are told they run under the agent: they
@@ -696,8 +709,17 @@ final class NativeViews: NativeModuleHosting {
         let real = ExactEnv.agentMode ? table.extensions.filter(ExactEnv.agentBind.contains) : table.extensions
         let agent = ExactEnv.agentMode ? table.extensions.filter { !ExactEnv.agentBind.contains($0) } : []
         if !(real.isEmpty && agent.isEmpty), let session {
-            session.runtime.bindExtensions(real + agent.map { "agent " + $0 })
+            let props = table.roster.flatMap { tag, row in
+                (row["trackProps"] as? [String] ?? []).map { "\(tag).\($0)" }
+            }.sorted()
+            let header = table.bindings == nil || props.isEmpty ? [] : ["view-bindings " + props.joined(separator: " ")]
+            session.runtime.bindExtensions(header + real + agent.map { "agent " + $0 })
         }
+    }
+
+    fileprivate func receiveBindings(_ bytes: UnsafePointer<UInt8>?, _ length: Int) {
+        guard let instance, case .success(let table)? = NativeProcess.table else { return }
+        table.bindings?(instance, bytes, length)
     }
 
     /// A long call, on the main thread: the artifact loads, the instance is
@@ -787,6 +809,10 @@ final class NativeViews: NativeModuleHosting {
             Unmanaged<QuitWork>.fromOpaque(ctx).takeRetainedValue().finish()
         }
         log(work.pending ? "module quit work started" : "module quit work: none")
+    }
+
+    func endViewBindings() {
+        receiveBindings(nil, 0)
     }
 
     /// Session teardown, after the views and the runtime: the module goes last.

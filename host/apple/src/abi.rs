@@ -63,6 +63,8 @@ pub struct Bridge<D: DataSource> {
     /// activated source's native slot, so it outlives activations.
     app_module: Option<exact_runner::NativeHandler>,
     app_call: Option<exact_runner::NativeCall>,
+    binding_observer: Option<exact_runner::Announce>,
+    binding_target: Option<(usize, usize)>,
     /// The extensions the app's module binds (`bind_extensions`), as given.
     bound: Option<String>,
     /// The pan contact's velocity samples (LLP 1057 §10.6; `crate::pan_velocity`).
@@ -126,6 +128,8 @@ impl<D: DataSource> Bridge<D> {
             start_on_frame: false,
             app_module: None,
             app_call: None,
+            binding_observer: None,
+            binding_target: None,
             bound: None,
             pan: crate::pan_velocity::PanVelocity::new(),
             canvas_deferred: false,
@@ -501,22 +505,6 @@ impl<D: DataSource> Bridge<D> {
             .as_mut()
             .map_or_else(not_booted, |h| h.sync_delivery());
         self.emit(out)
-    }
-
-    /// The session's app module (LLP 1067.000): `later(ctx, body, len,
-    /// reply)` takes each long native call on the executor's thread and
-    /// answers it once ([`crate::app_module::reply`]); `call` answers a
-    /// `native.call` before it returns ([`crate::app_module::answer`]).
-    /// `None` removes each.
-    pub fn set_app_module(
-        &mut self,
-        later: Option<crate::app_module::LaterFn>,
-        call: Option<crate::app_module::CallFn>,
-        ctx: *mut c_void,
-    ) {
-        self.app_module = later.map(|later| crate::app_module::handler(later, ctx));
-        self.app_call = call.map(|call| crate::app_module::caller(call, ctx));
-        self.adopt_app_module();
     }
 
     /// The app module announced `topic` (LLP 1016.002): the live source's
@@ -921,10 +909,9 @@ impl<D: DataSource> Bridge<D> {
         self.wake = candidate.hooks.wake.map(|w| (w, candidate.hooks.wake_ctx));
         self.executor = executor;
         self.restore_window.clear();
-        let batch = Host::ending(self.host.replace(candidate.host), candidate.batch);
+        let batch = self.replace_host(candidate.host, candidate.batch);
         self.launch_layout.insets = None;
         self.adopt_app_module();
-        self.rebind();
         self.parked.clear();
         self.emit(batch)
     }

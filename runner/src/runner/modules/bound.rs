@@ -41,6 +41,7 @@ impl<D: DataSource> Runner<D> {
             .filter(|e| !real.contains(e))
             .map(|e| e.to_string())
             .collect();
+        self.publish_view_bindings();
         self.presence_rebound();
         if real.is_empty() && agent.is_empty() {
             return;

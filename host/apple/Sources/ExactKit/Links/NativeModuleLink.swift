@@ -63,6 +63,7 @@ package protocol NativeModuleHosting: AnyObject {
     func prepareAppModule()
     func activateAfterCommit(_ live: @escaping () -> Bool)
     func loadIfNeeded()
+    func endViewBindings()
     func destroyModule()
     func sessionViewChanged()
     func willQuit()
@@ -146,6 +147,7 @@ final class NoNativeModule: NativeModuleHosting {
     func prepareAppModule() {}
     func activateAfterCommit(_ live: @escaping () -> Bool) {}
     func loadIfNeeded() {}
+    func endViewBindings() {}
     func destroyModule() {}
     func sessionViewChanged() {}
     func willQuit() {}

@@ -3899,8 +3899,16 @@ makes it in each session, the same instance that answers its names: Swift
 `view(_:id:props:events:)` on the `ExactPackage` class, a `roster` of view classes from the
 web implementation, Kotlin `ExactExtension.view`; `id` is the node's. A view declared
 `"displayed": true` is told `displayed(id, shown, origin)` when it shows or hides, and a
-prop marked `"binds": true` `bound(id, prop, origin)` when it changes; `origin` is `app`,
-`tool` or `wake`, that of the commit that did it. Props and events must be declared;
+prop marked `"binds": true` `bound(id, prop, origin)` when it changes. Each report carries
+the origin of the commit that changed it. On Apple, a track view attaches its presentation through
+`context.tracks.present`. The first matching prop and committed binding subscribe under
+the less privileged of the display and binding origins. A replacement native view reads
+the held reader and its waveform history when the presentation registers. A track prop
+declares `"type": "handle<track>"` and `"binds": true`. For a development
+`EXACT_MODULES` override, rebuild the host and its module together.
+Hiding, removing or rebinding the runner node
+releases its reader. A commit can hand a running track directly to another node.
+Props and events must be declared;
 an undeclared attribute is `lower-native-attr`. Standard box attributes and the nine
 common module events remain available without a declaration. A declared prop may take
 a known non-layout attribute's name where it means what CSS means by it (`exact-camera`'s
