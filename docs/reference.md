@@ -2422,7 +2422,10 @@ is the person's action (origin `action`) everywhere, and starts at most the
 two captures below:
 
 - a `url`: `"intent": "open"`. The tile opens the app at the location,
-  unlocking first; on a cold launch it is the launch location.
+  asking for the device credential if needed. On a cold app launch the URL
+  is the launch location. On Android 14 and 15, a tap before the first PIN
+  unlock after reboot can leave Quick Settings open without asking for the
+  PIN. Unlock the device and tap the tile again.
 - a tool whose reach can start or restart a capture (the microphone, a
   recorder, or a capture its arguments decide): `"intent": "foreground"`. A
   tile grants no microphone, so the tile opens the app, and the press runs
