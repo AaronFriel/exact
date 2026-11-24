@@ -10,7 +10,7 @@
 - On Android, set `color` directly on the projected heading or a destination. Their individual tints are unused. A disabled header button also keeps the platform’s disabled treatment.
 - Override the `ButtonFace` role on Android with an unseeded root tablist. Its selected symbol still uses the device’s `onSecondaryContainer` and can lose contrast on the overridden indicator.
 - On a light Android page with three-button navigation, set only `color-scheme="dark"` on the root tablist. Its Material surface turns dark while the system icons follow the page.
-- On Android, change only the palette’s `onError` while a tab has a badge, or only `error` while a header shows a destructive text action. Both keep their old ink.
+- On Android, change only the palette’s `onError` while a tab has a badge. The badge keeps its old ink.
 - Contract cannot read the arguments of a gated resource’s retained answer. The progressive-tabs recipe returns the filter with the rows so a warm return can show them and a filter change can hide them (#1549).
 - An iOS warm-return trace joins a tab press and a request’s settlement to frame batches by epoch. Touch delivery, HTTP wire arrival and first physical presentation still lack timestamps. For the recipe’s component-owned rows, `state.resourceStatus` reported fallback and no pending request while `state.instances` held the rows and `state.pending` listed their refresh ticket (#1549).
 - Windows has no update store. A manifest declaring `host.windows` without `deploy.store.windows` bakes level A, which the window refuses at launch. Refuse it at bake time and name `deploy.store.windows: "0"`.

@@ -83,6 +83,8 @@ pub(super) struct State {
     seed: Option<([u8; 3], f32)>,
     seen: Option<Seen>,
     authored: [BarColors; 2],
+    device_inks: look::ink::DeviceInks,
+    ink_changed: [bool; 3],
     /// The scroller the top bar's "on scroll" colour follows.
     scroller: Option<ViewId>,
     top: Option<Shown<Top>>,
@@ -242,31 +244,23 @@ impl<D: DataSource> Presenter<D> {
         let _accent = crate::paint::accent_scope(&node);
         let written = node.style.written;
         let container = written.has(StyleId::BackgroundColor).then(|| {
-            crate::paint::rgba(
+            let paint = crate::paint::rgba(
                 node.style
                     .background_color
                     .unwrap_or_else(|| node.text_color())
                     .resolve(dark),
-            )
+            );
+            let ground = if paint[3] == 255 {
+                paint
+            } else {
+                look::ink::over(paint, self.window_background())
+            };
+            look::BarFill { paint, ground }
         });
         let ink = if written.has(StyleId::TextColor) {
             Some(crate::paint::rgba(node.text_color().resolve(dark)))
         } else {
-            container.map(|fill| {
-                // Keep the fill translucent and choose ink against the window behind its band.
-                let mut surface = fill;
-                surface[3] = 255;
-                if fill[3] < 255 {
-                    let window = self.window_background();
-                    let a = u32::from(fill[3]);
-                    for i in 0..3 {
-                        surface[i] =
-                            ((u32::from(fill[i]) * a + u32::from(window[i]) * (255 - a) + 127)
-                                / 255) as u8;
-                    }
-                }
-                crate::paint::look::ink_on(surface)
-            })
+            container.map(|fill| crate::paint::look::ink_on(fill.ground))
         };
         BarColors {
             container,
@@ -284,7 +278,7 @@ impl<D: DataSource> Presenter<D> {
             let ink = colors.ink?;
             let light = crate::paint::look::ink_on(ink)[0] == 0;
             // Preserve a legible midtone when Android can draw only white or black.
-            if let Some(fill) = colors.container.filter(|c| c[3] == 255) {
+            if let Some(fill) = colors.container.map(|f| f.paint).filter(|c| c[3] == 255) {
                 let ground = crate::paint::look::luminance(fill) + 0.05;
                 let foreground = crate::paint::look::luminance(ink) + 0.05;
                 let ratio = foreground.max(ground) / foreground.min(ground);
@@ -522,7 +516,13 @@ impl<D: DataSource> Presenter<D> {
         // The same look as before: a bar that says the same is not
         // measured again, so a commit elsewhere in the tree shapes no text.
         let same = self.bars.seen.as_ref() == Some(&seen);
-        if same && !seed_changed && self.bars.authored == authored && self.bars.read == Some(read) {
+        let inks = std::mem::take(&mut self.bars.ink_changed);
+        if same
+            && !inks.contains(&true)
+            && !seed_changed
+            && self.bars.authored == authored
+            && self.bars.read == Some(read)
+        {
             return;
         }
         let (top, bottom) = self.read_bars();
@@ -531,6 +531,7 @@ impl<D: DataSource> Presenter<D> {
             ..top
         });
         let inputs = |edge: f32, i: usize| Inputs {
+            device_inks: &self.bars.device_inks,
             colors: BarColors {
                 seed,
                 ..authored[i]
@@ -544,15 +545,25 @@ impl<D: DataSource> Presenter<D> {
         let text = self.text.clone();
         let top_changed = !same || self.bars.top.as_ref().map(|s| &s.plan) != top.as_ref();
         let bottom_changed = !same || self.bars.bottom.as_ref().map(|s| &s.plan) != bottom.as_ref();
+        let [primary, secondary, error] = inks;
+        let primary =
+            seed_changed || (primary && seed.is_none() && authored[0].container.is_some());
         let repaint_top = top_changed
             || self.bars.authored[0] != authored[0]
-            || (seed_changed
+            || ((primary || error)
                 && top.as_ref().is_some_and(|t| {
                     t.leading.iter().chain(&t.trailing).any(|b| {
-                        b.enabled && b.symbol.is_none() && b.tint.is_none() && !b.destructive
+                        b.enabled
+                            && b.tint.is_none()
+                            && if b.destructive {
+                                error && (b.symbol.is_none() || authored[0].ink.is_none())
+                            } else {
+                                primary && b.symbol.is_none()
+                            }
                     })
                 }));
         let repaint_bottom = bottom_changed
+            || (secondary && authored[1].container.is_some() && seed.is_none())
             || self.bars.authored[1] != authored[1]
             || (seed_changed
                 && bottom

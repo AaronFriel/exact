@@ -198,7 +198,7 @@ pub use painter::PainterBoot;
 pub use painter::SubmittedAppleFrame;
 pub use painter::{set_custom_painter, PainterChoice, PainterFactory, PainterInfo};
 pub(crate) use palette::reported_accent;
-pub use palette::{material, ContrastPalette, Material, Palette, MATERIAL_ROLES};
+pub use palette::{material, ContrastPalette, Material, Palette, ReaderPalette, MATERIAL_ROLES};
 pub use pointer::PointerKind;
 #[cfg(target_os = "android")]
 #[doc(hidden)]

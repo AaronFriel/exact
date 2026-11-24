@@ -41,6 +41,9 @@ use material_colors::{color::Rgb, dynamic_color::DynamicScheme, scheme::variant:
 use std::rc::Rc;
 use tiny_skia::Transform;
 
+pub(super) mod ink;
+use ink::Accent;
+
 const TITLE_LARGE: Type = Type(22.0, 28.0, 400, 0.0);
 const LABEL_MEDIUM: Type = Type(12.0, 16.0, 500, 0.5);
 const LABEL_SMALL: Type = Type(11.0, 16.0, 500, 0.5);
@@ -188,10 +191,17 @@ pub struct Bottom {
     pub tabs: Vec<Tab>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct BarFill {
+    pub paint: [u8; 4],
+    /// The fill over the window, as seen through the system band.
+    pub ground: [u8; 4],
+}
+
 /// CSS written on the element the bar replaces (LLP 1115.001 D11).
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub(super) struct BarColors {
-    pub container: Option<[u8; 4]>,
+    pub container: Option<BarFill>,
     pub ink: Option<[u8; 4]>,
     pub seed: Option<([u8; 3], f32)>,
 }
@@ -208,8 +218,9 @@ fn opaque(color: Rgb) -> [u8; 4] {
 }
 
 /// What a bar's look depends on besides what it says.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Inputs {
+#[derive(Clone, Copy)]
+pub struct Inputs<'a> {
+    pub(super) device_inks: &'a ink::DeviceInks,
     pub(super) colors: BarColors,
     /// The scheme is dark.
     pub dark: bool,
@@ -419,7 +430,10 @@ impl Layout {
         } else {
             Role::Surface
         };
-        let container = inputs.colors.container.unwrap_or_else(|| base.color(dark));
+        let container = inputs
+            .colors
+            .container
+            .map_or_else(|| base.color(dark), |f| f.paint);
         let content = inputs.colors.ink;
         let title_ink = content.unwrap_or_else(|| Role::OnSurface.color(dark));
         if top.up {
@@ -436,10 +450,12 @@ impl Layout {
         }
         // A button's box is its 48 target; what it draws sits in the middle.
         let primary = std::cell::LazyCell::new(|| {
-            inputs
-                .colors
-                .accent(dark)
-                .map_or_else(|| Role::Primary.color(dark), |s| opaque(s.primary()))
+            inputs.accent_ink(
+                inputs.colors.accent(dark).as_ref(),
+                Accent::Primary,
+                inputs.colors.container.map(|f| f.ground),
+                ink::TEXT,
+            )
         });
         let mut button = |b: &Button, x: Option<f32>, right: &mut f32, left: &mut f32| {
             let ink = match (b.enabled, b.tint, b.symbol.is_some(), content) {
@@ -447,7 +463,16 @@ impl Layout {
                 (false, ..) => Role::Disabled.color(dark),
                 (true, Some(tint), ..) => tint,
                 (true, _, true, Some(ink)) => ink,
-                _ if b.destructive => Role::Error.color(dark),
+                _ if b.destructive => inputs.accent_ink(
+                    None,
+                    Accent::Error,
+                    inputs.colors.container.map(|f| f.ground),
+                    if b.symbol.is_some() {
+                        ink::SYMBOL
+                    } else {
+                        ink::TEXT
+                    },
+                ),
                 (_, _, true, _) => Role::OnSurfaceVariant.color(dark),
                 _ => *primary,
             };
@@ -592,7 +617,7 @@ impl Layout {
         let container = inputs
             .colors
             .container
-            .unwrap_or_else(|| Role::SurfaceContainer.color(dark));
+            .map_or_else(|| Role::SurfaceContainer.color(dark), |f| f.paint);
         let accent = inputs.colors.accent(dark);
         let indicator = accent.as_ref().map_or_else(
             || Role::SecondaryContainer.color(dark),
@@ -606,38 +631,51 @@ impl Layout {
         for (index, tab) in bottom.tabs.iter().enumerate() {
             let x = inputs.sides.0 + (cell + nav.item_gap) * index as f32;
             let middle = x + cell / 2.0;
-            let (ink, text) = match (tab.enabled, tab.selected, &accent) {
-                (enabled, true, Some(scheme)) => {
-                    let on_indicator = scheme.on_secondary_container();
-                    let mut label = scheme.secondary();
-                    // A lone label sits inside the pill. At elevated contrast the two
-                    // secondary roles can converge, so use the pill's own on-colour.
-                    if tab.symbol.is_none()
-                        && material_colors::contrast::ratio_of_tones(
-                            label.as_lstar(),
-                            Rgb::new(indicator[0], indicator[1], indicator[2]).as_lstar(),
-                        ) < 4.5
-                    {
-                        label = on_indicator;
-                    }
-                    let pair = [opaque(on_indicator), opaque(label)];
-                    let [icon, text] = if enabled { pair } else { pair.map(disabled) };
-                    (icon, text)
+            let (ink, text) = if tab.selected && (tab.enabled || accent.is_some()) {
+                let bar_ground = inputs.colors.container.map(|f| f.ground);
+                // A translucent ButtonFace exposes the authored bar through the indicator.
+                let pill_ground = bar_ground
+                    .filter(|_| indicator[3] < 255)
+                    .map(|bar| ink::over(indicator, bar));
+                let symbol = inputs.accent_ink(
+                    accent.as_ref(),
+                    Accent::OnSecondaryContainer,
+                    pill_ground,
+                    ink::SYMBOL,
+                );
+                let label_ground = if tab.symbol.is_some() {
+                    bar_ground
+                } else {
+                    pill_ground
+                };
+                let mut label = inputs.accent_ink(
+                    accent.as_ref(),
+                    Accent::Secondary,
+                    label_ground.filter(|_| tab.enabled),
+                    ink::TEXT,
+                );
+                // On an opaque seeded indicator a lone label may need the pill's own on-colour.
+                if accent.is_some()
+                    && tab.symbol.is_none()
+                    && material_colors::contrast::ratio_of_tones(
+                        Rgb::new(label[0], label[1], label[2]).as_lstar(),
+                        Rgb::new(indicator[0], indicator[1], indicator[2]).as_lstar(),
+                    ) < f64::from(ink::TEXT)
+                {
+                    label = symbol;
                 }
-                (false, _, _) => {
-                    let faded = disabled(inactive);
-                    (faded, faded)
+                if tab.enabled {
+                    (symbol, label)
+                } else {
+                    (disabled(symbol), disabled(label))
                 }
-                (true, true, None) => (
-                    told(
-                        Material::OnSecondaryContainer,
-                        dark,
-                        0xFF1D_192B,
-                        0xFFE8_DEF8,
-                    ),
-                    told(Material::Secondary, dark, 0xFF62_5B71, 0xFFCC_C2DC),
-                ),
-                (true, false, _) => (inactive, inactive),
+            } else {
+                let ink = if tab.enabled {
+                    inactive
+                } else {
+                    disabled(inactive)
+                };
+                (ink, ink)
             };
             let label = (!tab.label.is_empty())
                 .then(|| line(engine, &tab.label, LABEL_MEDIUM, scale, cell, tab.direction));
@@ -730,6 +768,9 @@ impl Layout {
 }
 
 #[cfg(test)]
+mod ink_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -772,6 +813,7 @@ mod tests {
             ],
         };
         let inputs = Inputs {
+            device_inks: &Default::default(),
             colors: BarColors::default(),
             dark: false,
             font_scale: 1.0,
@@ -813,6 +855,7 @@ mod tests {
         };
         for font_scale in [1., 2.] {
             let inputs = Inputs {
+                device_inks: &Default::default(),
                 colors: BarColors::default(),
                 dark: false,
                 font_scale,
@@ -926,6 +969,7 @@ component App
             p.host.set_bar_room(Some((64., 80., 80.))).unwrap();
             let (top, bottom) = p.read_bars();
             let inputs = Inputs {
+                device_inks: &Default::default(),
                 colors: BarColors::default(),
                 dark: false,
                 font_scale: 1.,
@@ -1027,6 +1071,7 @@ component App
         // the inset (16) instead, the title would be cut.
         let width = wide + 4.0 + 48.0 + 4.0 + 8.0 + 2.0;
         let inputs = Inputs {
+            device_inks: &Default::default(),
             colors: BarColors::default(),
             dark: false,
             font_scale: 1.0,
@@ -1170,9 +1215,10 @@ component App
             &bottom.items[1],
             Item::Symbol(_, _, [0x35, 0x4b, 0x41, 255])
         ));
+        // Both secondary roles miss on #4c6358. Material's foreground tone is 86.28.
         assert!(matches!(
             &bottom.items[2],
-            Item::Text(_, _, [0x4c, 0x63, 0x58, 255], _)
+            Item::Text(_, _, [0xc5, 0xde, 0xcf, 255], _)
         ));
     }
 

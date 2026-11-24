@@ -575,7 +575,7 @@ A palette has a swatch for tones 100, 99, 95, 90, 80 … 10 and 0 (`system_neutr
 them (98, 96, 94, 92, 6, 12, 17, 22) is the palette's colour at that lightness, which the platform computes
 (`ColorStateList.withLStar`).
 
-**The call.** `Native.colors(IntArray)` carries 36 light roles and then 36 dark roles in ARGB, followed by the float bits of the system contrast level. The roles are in the order of
+**The call.** `Native.colors(IntArray)` carries 36 light roles and then 36 dark roles in ARGB, followed by the float bits of the system contrast level and, from Android 12, eleven swatches and the light and dark palette keys for each of primary, secondary and error (zero where unavailable). The roles are in the order of
 the table (`presenter::Material`). Told before the host boots, so its first frame is in them, and again whenever what
 the reader reads is not what it last told: each time a reader is made (the activity made, or started after a stop) and
 on every configuration change. A new wallpaper changes the palette; the activity does not declare that change
@@ -1121,7 +1121,7 @@ tabs by the rule and tells the kernel what the bars cover (`HostCover`, the Appl
 
 So the page's content starts under the top bar and ends at the navigation bar, and neither bar is in the page's stream. Both are over it: the top bar at the window's top, reaching under the status bar, whose area is the bar's own colour; the navigation bar at the window's bottom, reaching under the gesture bar. **A keyboard does not move the navigation bar.** It ends the page above itself and covers the bar, as it covers a Material app's, and the room the bar took of the routes goes to nothing while it is covered (`Presenter::fit_bars`).
 
-The title, Up arrow, action icons and unselected destinations use the bar element’s own `color`, or black or white on its authored background. An enabled button’s own `color` still wins. On a dark header in a light page, `color-scheme="dark"` selects the dark scheme’s `primary` for untinted text actions. On translucent fills, automatic ink uses the window colour behind the band. Set `color` when page content shows through. The ink roles below are defaults.
+The title, Up arrow, action icons and unselected destinations use the bar element’s own `color`, or black or white on its authored background. An enabled button’s own `color` still wins. On an authored bar background, accent ink below [4.5:1 for text](https://www.w3.org/TR/WCAG22/#contrast-minimum) or [3:1 for symbols](https://www.w3.org/TR/WCAG22/#non-text-contrast) takes the other scheme’s role, then another readable tone of the same hue if needed. On translucent fills, automatic ink uses the window colour behind the band. Set `color` when page content shows through. The ink roles below are defaults.
 
 **The top app bar** (Compose’s small `TopAppBar`)
 
