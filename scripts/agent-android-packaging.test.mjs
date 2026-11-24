@@ -4,8 +4,32 @@ import {createHash} from 'node:crypto';
 import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {basename, resolve} from 'node:path';
-import {androidJavaEnv, androidSdk, androidSdkPackages, loadAlignment} from './agent-android.mjs';
+import {androidJavaEnv, androidSdk, androidSdkPackages, composeArgs, loadAlignment} from './agent-android.mjs';
 import {ANDROID_TARGET, androidBakeLibraryName, androidToolchainEnv, stageAndroidBake} from './android-abi.mjs';
+
+test('Compose follows the plan and the Kotlin source directories Gradle compiles', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'exact-compose-'));
+  const app = resolve(root, 'app'), module = resolve(app, 'modules/android'), pkg = resolve(root, 'pkg');
+  const bound = [{ dirs: [pkg] }];
+  try {
+    mkdirSync(pkg);
+    expect(composeArgs([], app, bound, {})).toEqual([]);
+    expect(composeArgs(['dates'], app, bound, {})).toEqual(['-Pcompose=1']);
+    expect(composeArgs(['dates'], app, bound, { ORG_GRADLE_PROJECT_compose: '0' })).toEqual(['-Pcompose=1']);
+    mkdirSync(resolve(module, 'ui'), { recursive: true });
+    const source = resolve(module, 'ui/Hello.kt');
+    writeFileSync(source, 'import /* UI */ androidx.compose.ui.platform.ComposeView as Host');
+    expect(composeArgs([], app, bound, {})).toEqual(['-Pcompose=1']);
+    expect(composeArgs([], app, bound, { ORG_GRADLE_PROJECT_compose: '0' })).toEqual([]);
+    expect(composeArgs([], app, bound, { ORG_GRADLE_PROJECT_compose: '' })).toEqual(['-Pcompose=1']);
+    expect(composeArgs([], app, bound, { ORG_GRADLE_PROJECT_modulesDir: pkg })).toEqual([]);
+    writeFileSync(source, 'import androidx.composeish.Widget');
+    writeFileSync(resolve(pkg, 'README.md'), '@Composable');
+    expect(composeArgs([], app, bound, {})).toEqual([]);
+    writeFileSync(resolve(pkg, 'Panel.kt'), '@Composable fun Panel() {}');
+    expect(composeArgs([], app, bound, {})).toEqual(['-Pcompose=1']);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 test('only development-trust APKs at the dev profile request shrink-only packaging', async () => {
   const {developmentApkArgs} = await import('./agent-android.mjs');

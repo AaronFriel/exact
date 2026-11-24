@@ -1,34 +1,19 @@
-// The Android carrier (LLP 1107): an app's Linux host built for a phone's ABI
-// (`aarch64-linux-android`, the host's Android-gated code, bionic, the phone's
-// own fonts) and run headless under `adb shell`, where the agent protocol is
-// the Linux host's own (LLP 1012 over stdio, `host/painted/src/agent.rs`). It
-// drives the app's runner, kernel and painter on Android; it is not the Canvas
-// reader (LLP 1076 §3.3, `host/android`), which paints through its own Kotlin
-// view. `--reader` drives that one instead (LLP 1107 D1): the APK, installed
-// and launched, answering the same protocol in its own process
-// (`host/painted/src/canvas/agent.rs`) over a socket adb forwards.
-//
-//   bun scripts/agent-android.mjs build <app>              build the app's Linux crate for Android
-//   bun scripts/agent.mjs android --app <app> …            drive it on the first adb device or emulator
-//   bun scripts/agent-android.mjs build <app> --apk        the app on the Canvas reader, as an APK (host/android/README.md;
-//                                                          --release: the release profile, for measuring;
-//                                                          --write-locks: write the lock and checksums of the
-//                                                          Maven libraries the app's modules name;
-//                                                          --install: then onto the device; --run: and launch it)
-//   bun scripts/agent.mjs android --reader --app <app> …   drive that APK (EXACT_ANDROID_BIN names another)
+// The Android carrier (LLP 1107) drives the headless Linux host over adb (LLP 1012, host/painted/src/agent.rs).
+// The Canvas reader (LLP 1076 §3.3) answers the same protocol in Kotlin's process over a forwarded socket.
+//   bun scripts/agent-android.mjs build <app> [--apk] [--release] [--write-locks] [--install] [--run]
+//   bun scripts/agent.mjs android --reader --app <app> …  (EXACT_ANDROID_BIN selects an alternate APK)
+//   bun scripts/agent.mjs android --app <app> …  (drive the Linux host built for the phone's ABI)
 //
 // An `exact new` app's `bun exact.mjs android` is `build <app> --apk --install` (`--headless`: the Linux host), and its
 // `agent android` and `test android` drive the APK.
 //
-// An app with a TypeScript data module also needs the Android Hermes bundle, which `exact setup` installs from the
-// pinned Ibex release (or one built from an Ibex checkout, scripts/hermes-android.mjs).
+// For a TypeScript data module, `exact setup` installs Android Hermes from the pinned Ibex release.
+// To build the bundle from an Ibex checkout, use scripts/hermes-android.mjs.
 //
 // The NDK comes from ANDROID_NDK_HOME, else the newest under the SDK's ndk/
 // (ANDROID_HOME, else ~/Library/Android/sdk or ~/Android/Sdk); ANDROID_SERIAL
-// picks a device. Fonts are the phone's (/system/fonts) unless the drive names
-// EXACT_FONTS. The painter is the CPU one unless EXACT_PAINTER says
-// otherwise: the GPU painter needs a real GPU's Vulkan (an emulator's
-// SwiftShader crashes it).
+// picks a device. EXACT_FONTS overrides /system/fonts. EXACT_PAINTER overrides the CPU painter;
+// the GPU painter needs a real GPU's Vulkan (an emulator's SwiftShader crashes it).
 import { writeFormaNames } from './forma-names.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -796,6 +781,22 @@ export function loadAlignment(path) {
 /** The capabilities the plan uses (LLP 1047 D2), one a line in `uses.txt`; none when the crate writes none. */
 const planUses = (out) => out && existsSync(resolve(out, 'uses.txt')) ? readFileSync(resolve(out, 'uses.txt'), 'utf8').split('\n').filter(Boolean) : [];
 
+/** Leave an explicit Gradle property to Gradle. Otherwise select the graph from the sources it compiles. */
+export function composeArgs(uses, appDir, bound, env) {
+  if (uses.includes('dates')) return ['-Pcompose=1'];
+  if (['0', '1'].includes(env.ORG_GRADLE_PROJECT_compose)) return [];
+  const modules = env.ORG_GRADLE_PROJECT_modulesDir ?? resolve(appDir, 'modules/android');
+  const kotlin = new Bun.Glob('**/*.kt');
+  for (const dir of [resolve(READER, 'app', modules), ...bound.flatMap(b => b.dirs)]) {
+    if (!existsSync(dir)) continue;
+    for (const path of kotlin.scanSync({ cwd: dir, absolute: true, dot: true, followSymlinks: true })) {
+      const source = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+      if (/\bimport\s+androidx\s*\.\s*compose\s*\.|@Composable\b/.test(source)) return ['-Pcompose=1'];
+    }
+  }
+  return [];
+}
+
 /** How the reader's Gradle wrapper starts on `platform`. Windows cannot run the POSIX `gradlew`, and Bun starts a `.bat`
  * only through cmd.exe, which would reparse every argument: there the JDK runs the wrapper jar with the arguments
  * `gradlew` gives it, JAVA_OPTS and GRADLE_OPTS among them (JAVA_HOME's java, else the one on PATH). */
@@ -1163,8 +1164,7 @@ function assembleApk(app, env, profile, writeLocks, bundle, abis, dirs) {
   copyStaticTreeIfPresent(resolve(app.dir, 'assets'), resolve(staged, 'assets/app/assets'));
   // The modules' shader text (LLP 1030 D8), which the host registers from `shaders/` under the asset root.
   if (gpu.length) copyShaders(app, resolve(staged, 'assets/app/shaders'));
-  // A date or time control's picker is Compose Material 3's, linked only for a plan that has one (LLP 1115.001.000 D2).
-  const compose = uses.includes('dates') ? ['-Pcompose=1'] : [];
+  const compose = composeArgs(uses, app.dir, bound, env);
   const compat = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')), development = compat.embedded?.trust !== 'production';
   // The library's baked identity is the one the APK installs under, as `assertAppleIdentity` holds an Apple build to it
   // (LLP 1030.008 D2): the JavaScript and the Rust readers resolved the same variant.

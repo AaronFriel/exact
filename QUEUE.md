@@ -1,5 +1,6 @@
 # Queue
 
+- A fixture that sets `modulesDir` in `gradle.properties` can select a different Kotlin directory from the Android shell's Compose scan. Put a Compose import in the app's `modules/android`, point the Gradle property at plain Kotlin, and compare the runtime graph with the same path set through `ORG_GRADLE_PROJECT_modulesDir` (#1575).
 - A gated resource keeps its answer across idleness, but Contract cannot read the arguments that answer belongs to. Check the same-account return and the changed-filter placeholder in the progressive-tabs recipe (#1549).
 - Trace a warm return on iOS from touch delivery through route commit to presentation, and from HTTP arrival through resource settlement to presentation. Check which joins and cache or retained-answer facts survive export. The web trace matches a separately observed epoch to a frame callback (#1549).
 - Windows has no update store. A manifest declaring `host.windows` without `deploy.store.windows` bakes level A, which the window refuses at launch. Refuse it at bake time and name `deploy.store.windows: "0"`.

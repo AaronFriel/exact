@@ -9,8 +9,7 @@ plugins { id("com.android.application") }
 
 val developmentApk = providers.gradleProperty("developmentApk").orNull == "1"
 
-// -Pcompose=1: the app's plan has a date or time control, and its picker is Compose Material 3's (LLP 1115.001.000
-// D1-D2; `agent-android.mjs` reads the plan's uses). Without it the framework's dialogs show, and Compose is not linked.
+// The plan's pickers or an app's Kotlin use Compose (LLP 1115.001.000 D2).
 val compose = providers.gradleProperty("compose").orNull == "1"
 if (compose) apply(plugin = "org.jetbrains.kotlin.plugin.compose")
 // -Pvideo=1: the plan has a `video` or an `audio`, or the build is a development one, and Media3's player (`:video`) is

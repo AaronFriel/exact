@@ -132,8 +132,8 @@ The build:
 4. runs `./gradlew :app:assembleRelease -Papp=<app> -PappDir=<the app's directory>` here (for a game also
    `-PappManifest=<its .shells/app.json>`, the manifest its shells resolved), with `-PappIcon` and `-PappBanner` naming the icon and banner it wrote, with
    `-PgpuModules=<file>,<file>…` naming the GPU modules: the APK then extracts its libraries and leaves
-   the modules unstripped, since the host opens each by path and checks its digest; with `-Pcompose=1` when the plan's
-   uses name `dates` (a date or time control), which links Compose Material 3 for its pickers; and with the Kotlin
+   the modules unstripped, since the host opens each by path and checks its digest; with `-Pcompose=1` for a date or time control
+   or [Kotlin that uses Compose](#compose-module-views), which links Material 3; and with the Kotlin
    in the app's `modules/android`, its hatches and module roster, compiled in,
 
 and prints the APK's path, `outputs/apk/release/app-release.apk` under the shell's build directory.
@@ -795,7 +795,7 @@ object HelloCompose : NativeModule {
 }
 ```
 
-Register it as `"hello-compose"` in `exact.app.Modules.modules` and app.json's `modules`, then write `hello-compose width="100%" height=48` in Contract. The shell enables the Compose compiler and links Material 3 with `-Pcompose=1` when the plan uses a date or time control; a build using Compose only in a hatch or module view needs `ORG_GRADLE_PROJECT_compose=1`. Only further Compose libraries go under `host.android.maven`; the [Maven instructions](#maven-libraries-one-locked-verified-gradle-graph-llp-1133008-d8-item-5) cover the lock and verification files. Give each ComposeView a stable, unique Android view ID when using `rememberSaveable` across activity recreation. A module should dispose its composition in `destroy`, since its lifetime can end before the activity's.
+Register it as `"hello-compose"` in `exact.app.Modules.modules` and app.json's `modules`, then write `hello-compose width="100%" height=48` in Contract. The shell enables the Compose compiler and links Material 3 with `-Pcompose=1` for a date or time control, or when a Kotlin file in the app's `modules/android` or a bound package's Android sources imports `androidx.compose` or uses `@Composable`. The text scan can also match comments or strings. A fully qualified use without an import or the annotation needs `ORG_GRADLE_PROJECT_compose=1`. The environment property accepts `1` or `0` to override Kotlin detection. A date or time control always selects Material 3. With neither use, the default APK links no Compose. Further libraries go under `host.android.maven`; the [Maven instructions](#maven-libraries-one-locked-verified-gradle-graph-llp-1133008-d8-item-5) cover the lock and verification files. Give each ComposeView a stable, unique Android view ID when using `rememberSaveable` across activity recreation. A module should dispose its composition in `destroy`, since its lifetime can end before the activity's.
 
 After a stop, the reader recreates its module views on return (`read()` calls `destroyAll`; `NativeModule.reset` returns false by default). Their `remember` state is lost. Keep state that must survive in a ViewModel or in the module's lifecycle saved bundle. All module views share one ViewModelStore, retained across configuration recreation with `Activity.onRetainNonConfigurationInstance` and cleared on any destroy that is not a configuration change. Use distinct ViewModel keys for independent views. Saved-state providers are written through the activity's saved bundle; `rememberSaveable` can restore after activity recreation, but does not preserve a removed composition on an ordinary stop and return.
 
