@@ -566,6 +566,8 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         if (coverTrace && painted) traceNewRows()
         moved = !painted
         quiet = painted && allQuiet && move == null
+        // The root display list stands. All of its changed children have published their new placements.
+        if (quiet) { nativeOrigins.publishing = false; natives?.placeFrames() }
         timerApplied = publication
         if (any) { ingestBegan = began; ingestEnded = System.nanoTime() }
         timerReport()

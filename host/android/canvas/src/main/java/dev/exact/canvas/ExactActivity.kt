@@ -251,6 +251,7 @@ open class ExactActivity : Activity() {
         if (!on && asked) return
         if (on == root.accessible && !on) return
         root.accessible = on
+        view.natives?.accessible(on)
         if (!on) { root.access.clear(); requests.surfaces?.access(null) }
         val owner = view.owner
         if (owner != null) owner.access(on) else view.accessible(on)
@@ -428,7 +429,7 @@ open class ExactActivity : Activity() {
         nativeState = null
         if (nativeStarted) elements.lifecycle.event(ViewLifecycle.START)
         if (nativeResumed) elements.lifecycle.event(ViewLifecycle.RESUME)
-        elements.hatched = { node, context -> hatchReader?.made(node, context) }
+        if (HatchReader.appType != null) elements.hatched = { node, context -> hatchReader?.made(node, context) }
         view.natives = elements
         elements.reader = view
         // The app's text fields (LLP 1115.001 D8) outlive a reader made again: a field keeps its view, and with it
