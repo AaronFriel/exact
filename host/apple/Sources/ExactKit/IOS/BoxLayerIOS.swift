@@ -517,6 +517,17 @@ extension NodeView {
         } else {
             host.insertSublayer(l, at: 0)
         }
+        // A late raster must sit above the material's whole branch so the
+        // effect never treats the paragraph's ink as part of its backdrop.
+        if l === textBoxLayer, let view = specs?.rasterView, view.superview === self,
+           let material = glassSlot ?? materialView, material.superview === self {
+            var backdrop = material.layer
+            while let parent = backdrop.superlayer, parent !== host { backdrop = parent }
+            if let layers = host.sublayers, let ink = layers.firstIndex(where: { $0 === l }),
+               let effect = layers.firstIndex(where: { $0 === backdrop }), ink < effect {
+                insertSubview(view, aboveSubview: material)
+            }
+        }
     }
 
     /// Where the box's picture paints, its fill, gradients, inset shadow and an image's picture: the extension's
