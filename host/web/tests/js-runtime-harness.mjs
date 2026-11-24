@@ -2,11 +2,11 @@
 // run, beside stand-ins for the rest (stand-ins.mjs). A suite writes its own stubs into `dir` before it imports
 // anything from there: the loader reads the directory once.
 import { afterAll } from 'bun:test';
-import { copyFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { standIns } from './stand-ins.mjs';
+import { stageRuntime } from './stand-ins.mjs';
 
 export const webJs = name => resolve(fileURLToPath(new URL(`../../web-js/${name}`, import.meta.url)));
 
@@ -27,15 +27,11 @@ const STATED = {
  * gone before a second file used it.
  */
 export function runtimeHarness() {
-  // modules.js imports the web host's `../web/address-space.js` and mount.js its `../web/faults.js`, stood in
   const root = mkdtempSync(resolve(tmpdir(), 'exact-js-baked-')), dir = resolve(root, 'web-js');
   afterAll(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(dir);
-  mkdirSync(resolve(root, 'web'));
-  writeFileSync(resolve(root, 'web/address-space.js'), 'export const setSpaceState = () => {};');
-  writeFileSync(resolve(root, 'web/faults.js'), 'export const checkpointFaults = () => [];');
-  for (const f of REAL) copyFileSync(webJs(f), resolve(dir, f));
-  for (const [file, source] of standIns([...REAL, 'ts-data.js'], STATED)) writeFileSync(resolve(dir, file), source);
+  // The suite writes its own ts-data.js (js-runtime.test.mjs).
+  stageRuntime(dir, REAL, STATED, ['ts-data.js']);
   // A view transition that holds every tree update (shared.js's commit returns before its callback).
   writeFileSync(resolve(dir, 'shared.js'), 'export const commit = (tail) => { globalThis.heldTail = tail; return true; };');
   writeFileSync(resolve(dir, 'presence-glue.js'), 'globalThis.exact.presence = () => ({ before() {}, after() {}, exit() {} });');
