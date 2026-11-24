@@ -976,9 +976,9 @@ tree, so it is written twice; it belongs in shared Rust.
   the actions as written, on a second line where they do not fit one; a `destructive` action in the error role.
 - *A menu*: a popover that is no confirmation, each `button` row with a `press` an item. Opened by a button's
   `popovertarget`, or by holding a node that names it with `contextPopover` (its `contextmenu` runs first). Material's
-  menu: `surfaceContainer`, 4 dp corners, 3 dp of elevation (the window's own shadow), 112 to 280 dp wide, 48 dp
-  rows, a leading symbol where the row's button has one (a check where it is `aria-checked`), a `destructive` row in
-  the error role, a line where the author wrote `hr`. It hangs under its invoker from the invoker's start, ends at
+  menu: `surfaceContainer`, 4 dp corners, 3 dp of elevation (the window's own shadow), 112 to 280 dp wide. Rows start at 48 dp and grow with the subtitle,
+  in body-medium and on-surface-variant. A checked row keeps its symbol leading and shows its check trailing, or shows
+  a leading check when it has no symbol. A destructive action uses the error role. An `hr` draws a divider. It hangs under its invoker from the invoker's start, ends at
   the invoker's end where that does not fit, and opens upward where there is no room below (Compose's
   `DropdownMenuPositionProvider`); a context menu opens where the finger is.
 - *A dialog whose author painted its surface* (its own `background-color` or `background-image`, of any rows, a field
@@ -1062,7 +1062,7 @@ Not built of D10:
   `alertdialog` today, so the two cannot be told apart (LLP 1115.000 D13.4).
 - The arrow keys reach a surface; nothing else of D7.6's hardware keys is built for the page.
 
-Not checked on a phone in this menu/dialog qualification: Shelf itself (its Android crate is `apps/shelf/android`; the fixture uses its shapes); an `alertdialog` written as a popover, and an `aria-checked` row (neither is in a test either); a font scale changed with a menu open; rotation with a surface open; a second display; TalkBack. The dialog's width between its limits is the window less 24 dp a side, which was not compared with a Compose dialog on the same phone, and no screenshot here was compared with a reference app's.
+Not checked on a phone in this menu/dialog qualification: Shelf itself (its Android crate is `apps/shelf/android`; the fixture uses its shapes); an `alertdialog` written as a popover (also absent from the tests); a font scale changed with a menu open; rotation with a surface open; a second display; TalkBack. The dialog's width between its limits is the window less 24 dp a side, which was not compared with a Compose dialog on the same phone, and no screenshot here was compared with a reference app's.
 
 ## Sheets and route motion (LLP 1115.001 D10, D12)
 

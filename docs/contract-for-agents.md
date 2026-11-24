@@ -5665,10 +5665,14 @@ makes it the default button.) Only the alert's shape takes
 one field at a time: with it, a cancel and at most three buttons, no `for`
 (`lower-alertdialog` says which row breaks it).
 
-A menu row's second `text` is its item's grey subtitle on iOS when it is a line
-under the first (two texts in a block `button`, or a `flex-direction="column"`
-one), with or without an `if` around it; two texts side by side in a row, or one
-positioned `absolute` (a count at the corner), stay one title.
+On iOS and Android, a native menu button's second `text` is its subtitle.
+In a custom `button`, two block texts in a block button or two texts in a flex
+column supply the title and subtitle. The second may sit inside an `if`.
+Side-by-side texts or an absolutely positioned count form one title.
+On Android a checked item keeps its symbol leading and shows the check trailing.
+Without a symbol, the check is leading. An Android menu button’s `aria-label` names
+the action for accessibility. Otherwise the reader uses its exposed text, falling
+back to the painted title and subtitle when all the text is decorative.
 
 A submenu is a row whose `popovertarget` names another menu popover (`Copy ▸
 path / link`): a submenu `NSMenuItem` on macOS, a nested `UIMenu` on iOS, and

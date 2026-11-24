@@ -992,7 +992,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/requests.rs", "Haptic::named"],
     ["painted:host/painted/src/presenter/snap.rs", "area flicked resnap rest"],
     ["painted:host/painted/src/presenter/top/look.rs", "Layout::desktop Layout::of Layout::paint Layout::target_at Layout::texts origin place"],
-    ["painted:host/painted/src/presenter/top/shape.rs", "alert is_confirmation menu Plan::rows"],
+    ["painted:host/painted/src/presenter/top/shape.rs", "alert is_confirmation menu Plan::rows Presenter::menu_row"],
     ["painted:host/painted/src/raster/geometry.rs", "rounded_rect"],
     ["painted:host/painted/src/surfaces/android.rs", "buffer_frame window_ready"],
     ["painted:host/painted/src/surfaces/retry.rs", "Rest::due Rest::rendered Retry::begin Retry::eligible Retry::recorded"],

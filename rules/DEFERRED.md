@@ -721,6 +721,8 @@ commands, writes on the location (`todo add milk`), and printing a GUI app
   No take was named; the ruling stands as its own waiver until Charlie names
   one.
 
+  **Menu rows** (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"): LLP 1115.001 D10 admits a supporting line and a trailing check beside a leading symbol on Android (panel 4–0), and a supporting line with the check before the symbol in Windows flyouts (panel 3–1).
+
   **Expanded (Charlie, 2026-10-23, LLP 1115.001.003 §5):** Android TV is
   admitted as a variant of the Android phone host, as tvOS is of the iOS
   presenter: the same APK, Canvas reader and presenter, which tell a TV by
