@@ -318,7 +318,8 @@ extension Agent {
     /// mounted for it. Observations, never a second model; a stale id is
     /// refused by name. An inline run's geometry is its fragment union.
     func layout(_ req: [String: Any]) -> [String: Any] {
-        var reply = layout()
+        let bars = drawnBarBoxes()
+        var reply = layout(bars: bars)
         guard let id = req["id"] as? Int else { return reply }
         // A flat leaf (FlatLeavesIOS) is a layer in the view it is drawn in: answered as one, its own id kept.
         let leaf = presenter.textHost(UInt32(id)) == nil ? presenter.flats.leaves[UInt32(id)] : nil
@@ -441,6 +442,27 @@ extension Agent {
             var symbol: [String: Any] = ["renderer": String(describing: Swift.type(of: leaf)), "source": source, "name": name, "found": host.symbolFound, "intrinsic": [Agent.r2(size.width), Agent.r2(size.height)], "frame": rect(box(leaf))]
             if !host.symbolFound { symbol["reason"] = source == "symbol:sf/" || source == "symbol:" ? "empty" : name.isEmpty ? "role" : "os" }
             native["symbol"] = symbol
+        }
+        if let drawn = bars[UInt32(id)], let window = drawn.view.window {
+            let shift = PresentedScrolls(vp).shift(of: drawn.view)
+            let from = vp.convert(CGPoint.zero, to: window), to = vp.convert(shift, to: window)
+            let frame = drawn.view.convert(drawn.region, to: window).offsetBy(dx: to.x - from.x, dy: to.y - from.y)
+            let viewport = box(drawn.view, region: drawn.region).offsetBy(dx: shift.x, dy: shift.y)
+            node["space"] = ["viewport": rect(viewport), "window": rect(frame),
+                             "screen": rect(window.convert(frame, to: window.screen.coordinateSpace)),
+                             "local": ["w": Agent.r2(drawn.region.width), "h": Agent.r2(drawn.region.height)],
+                             "capture": ["scale": Agent.r2(window.screen.scale)]]
+            let shown = self.visibility(of: drawn.view, region: drawn.region, box: viewport, hidden: drawn.region.isEmpty)
+            node.merge(shown.facts) { _, new in new }
+            if v.disabled || v.inert, var visible = node["visible"] as? [String: Any] {
+                visible["inert"] = true
+                node["visible"] = visible
+            }
+            node.removeValue(forKey: "geometry")
+            node.removeValue(forKey: "radii")
+            native["view"] = drawn.name
+            native["accessibilityLabel"] = drawn.view.accessibilityLabel
+            if let editor = drawn.view as? UITextField { native["firstResponder"] = editor.isFirstResponder }
         }
         node["native"] = native
         node["observed"] = ["clock": session.now(), "wall": Date().timeIntervalSince1970 * 1000]
