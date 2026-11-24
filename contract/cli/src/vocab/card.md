@@ -53,8 +53,9 @@ text | markup | selectionchange
 image | alt | load
 button | disabled buttonStyle destructive | press
 link | href | press
-input | value type inputmode min max step maxlength placeholder enterkeyhint autocomplete autocapitalize autofocus disabled readonly checked name accept multiple | input change submit select selectionchange beforeinput
-textarea | value placeholder maxlength enterkeyhint | input change select selectionchange beforeinput
+input textarea | value placeholder maxlength inputmode enterkeyhint autocomplete autocapitalize autocorrect spellcheck autofocus disabled readonly emojiPicker | input change select selectionchange beforeinput
+input | type min max step checked name accept multiple | submit
+textarea | rows markup
 select | value disabled | change
 option | value
 time | datetime format
