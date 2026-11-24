@@ -3,6 +3,9 @@ import { admitsNetwork, admitsSecret, coversPath, createGrantSet, grantError, gr
 import { answeredFetch, countFault, delayFixture, faultMessage, matchFault } from '../web/faults.js';
 import { redirectFor, reachRefusal, UNATTRIBUTED } from '../web/address-space.js';
 export { socketProtocols, admitsNetwork, admitsSecret, coversPath, createGrantSet, grantError, grantWords, hasGrant, rawGrantText, trimGrant, sameGrantDeclaration, scopedGrantSet, unionGrantSets } from '../web/grant-admission.js';
+// A driver's fixtures and faults answer only where the agent may drive the page: a release has none, and its bundle
+// drops their code (agent-gate.mjs writes this false).
+const AGENT_ADMITTED = true;
 
 // Captured while the entry graph loads. App source injection never replaces
 // the page global, so separately loaded host modules retain browser authority.
@@ -101,7 +104,7 @@ export async function fetchWith(set, input, init = {}, expires = null, redirect 
   // @ref LLP 1103 D1, D2 — a driver fault: the refused connection's failure, never sent.
   const suppliedMethod = init.method;
   const method = suppliedMethod === undefined ? input?.method ?? 'GET' : String(suppliedMethod);
-  const fixture = !asset && matchFault(value, true, /^(get|post|put|head|delete|options)$/i.test(method) ? method.toUpperCase() : method);
+  const fixture = AGENT_ADMITTED && !asset ? matchFault(value, true, /^(get|post|put|head|delete|options)$/i.test(method) ? method.toUpperCase() : method) : null;
   const delay = fixture?.response?.afterMs ?? 0;
   const timeout = delay && deadline && deadline.ms <= delay ? deadline.ms : 0;
   const due = delay && (rt.clock?.now ?? 0) + (timeout || delay);
