@@ -176,6 +176,8 @@ pub mod flag {
     pub const DRAG: i32 = 1 << 16;
     /// An authored tabindex makes the element a keyboard focus target.
     pub const FOCUSABLE: i32 = 1 << 17;
+    /// An explicit `aria-live="off"` on this node or a transparent ancestor.
+    pub const LIVE_OFF: i32 = 1 << 18;
 }
 
 /// What changed of a node since the last statement.
@@ -362,6 +364,7 @@ struct Scope {
     inside: bool,
     /// The nearest `aria-disabled` said above.
     disabled: bool,
+    live: i32,
 }
 
 /// A tree being built.
@@ -551,24 +554,6 @@ impl<D: DataSource> Presenter<D> {
         }
     }
 
-    fn access_inline_controls(&self, b: &mut Build, node: &NodeRef<'_>, scope: Scope) {
-        if node.props.str(PropId::Text).is_some() {
-            return;
-        }
-        for child in node.child_nodes().filter(|n| n.node_type == NodeType::Text) {
-            if child.style.display == Display::None
-                || child.props.bool(PropId::AccessibilityElementsHidden) == Some(true)
-            {
-                continue;
-            }
-            if self.access_pressable(&child) || self.action_group(&child) {
-                self.access_walk(b, child.id, scope);
-            } else {
-                self.access_inline_controls(b, &child, scope);
-            }
-        }
-    }
-
     /// A node's accessible name: its label, else a button's face, else its
     /// words, else its `title` (accname's tooltip attribute, step 2I).
     fn access_name(&self, node: &NodeRef<'_>) -> String {
@@ -582,22 +567,6 @@ impl<D: DataSource> Presenter<D> {
         match node.props.str(PropId::Title) {
             Some(title) if words.trim().is_empty() && !title.is_empty() => title.to_string(),
             _ => words,
-        }
-    }
-
-    /// How a live region speaks: its `aria-live`, else its role's
-    /// (`status` polite, `alert` assertive).
-    fn access_live(node: &NodeRef<'_>) -> i32 {
-        let role = node.props.str(PropId::AccessibilityRole);
-        let live = node.props.str(PropId::AccessibilityLive).or(match role {
-            Some("status") => Some("polite"),
-            Some("alert") => Some("assertive"),
-            _ => None,
-        });
-        match live {
-            Some("polite") => flag::POLITE,
-            Some("assertive") => flag::ASSERTIVE,
-            _ => 0,
         }
     }
 
@@ -629,7 +598,7 @@ impl<D: DataSource> Presenter<D> {
             painted.rect.3,
         );
         let shows = intersect(rect, scope.clip)
-            .or_else(|| walk::empty_item_bounds(rect, scope.clip, node, role))?;
+            .or_else(|| walk::empty_bounds(rect, scope.clip, node, role, scope.live))?;
         let (name, value) = words()?;
         let id = b.unique(match scope.hash {
             Some(hash) => rowed(hash),
@@ -646,7 +615,7 @@ impl<D: DataSource> Presenter<D> {
         if node.props.get(PropId::TabIndex).is_some() && self.focusable(node.id) {
             flags |= flag::FOCUSABLE;
         }
-        flags |= Self::access_live(node);
+        flags |= scope.live;
         b.out.push(Node {
             id,
             parent: scope.parent,
@@ -1023,6 +992,7 @@ impl<D: DataSource> Presenter<D> {
                     clip: viewport,
                     inside: false,
                     disabled: false,
+                    live: 0,
                 },
             );
             self.access_menu(&mut b);
@@ -1043,6 +1013,7 @@ impl<D: DataSource> Presenter<D> {
             clip: viewport,
             inside: false,
             disabled: false,
+            live: 0,
         };
         if page.axes.0 || page.axes.1 {
             // The page itself scrolls: it is the scroller everything is in.
@@ -1172,19 +1143,35 @@ impl<D: DataSource> Presenter<D> {
         let region = |id: i32| {
             std::iter::once(id)
                 .chain(above(id))
-                .find(|id| new.get(id).is_some_and(|n| live(n)))
+                .map_while(|id| {
+                    new.get(&id)
+                        .copied()
+                        .filter(|n| n.flags & flag::LIVE_OFF == 0)
+                })
+                .find(|n| live(n))
+                .map(|n| n.id)
         };
         for (id, (what, ..)) in &changed {
-            if what & (change::TEXT | change::SUBTREE) != 0 {
+            let children_changed =
+                what & change::SUBTREE != 0
+                    && were
+                        .get(id)
+                        .into_iter()
+                        .flatten()
+                        .filter(|id| old.get(id).is_some_and(|n| n.flags & flag::LIVE_OFF == 0))
+                        .ne(are.get(id).into_iter().flatten().filter(|id| {
+                            new.get(id).is_some_and(|n| n.flags & flag::LIVE_OFF == 0)
+                        }));
+            if what & change::TEXT != 0 || children_changed {
                 spoken.extend(region(*id));
             }
         }
         for id in now
             .iter()
-            .filter(|n| !old.contains_key(&n.id))
-            .map(|n| n.id)
+            .filter(|n| !old.contains_key(&n.id) && n.flags & flag::LIVE_OFF == 0)
+            .map(|n| n.parent)
         {
-            spoken.extend(above(id).find(|id| new.get(id).is_some_and(|n| live(n))));
+            spoken.extend(region(id));
         }
         // What is under a node whose subtree changed is not told apart.
         let covered = |id: i32| {

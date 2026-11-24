@@ -106,3 +106,47 @@ fn focus_click_and_caret_requests_address_the_published_controls() {
     assert!(preview.supports_action(Action::Focus));
     assert!(!preview.supports_action(Action::Click));
 }
+
+#[test]
+fn status_alert_and_explicit_live_settings_reach_both_desktop_adapters() {
+    let mut p = window(
+        r#"component App
+  view
+    column
+      text "Status" role="status"
+      text "Alert" role="alert"
+      text "Slow alert" role="alert" aria-live="polite"
+      text "Explicit" aria-live="assertive"
+      text "Ordinary"
+      column aria-live="assertive" aria-label="Updates"
+        column aria-live="off"
+          text "Muted"
+          text "Resumed" role="status"
+      text role="status"
+        text "Items"
+        text "Inline muted" aria-live="off"
+"#,
+    );
+    let frame = p.display_frame().unwrap();
+    p.display_complete(&frame);
+    let first = update(&mut WindowTree::default(), &mut p).unwrap();
+    use ::accesskit::Live;
+    for (name, expected) in [
+        ("Status", Some(Live::Polite)),
+        ("Alert", Some(Live::Assertive)),
+        ("Slow alert", Some(Live::Polite)),
+        ("Explicit", Some(Live::Assertive)),
+        ("Ordinary", None),
+        ("Muted", Some(Live::Off)),
+        ("Inline muted", Some(Live::Off)),
+        ("Resumed", Some(Live::Polite)),
+    ] {
+        let node = &first
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some(name))
+            .unwrap()
+            .1;
+        assert_eq!(node.live(), expected, "{name}");
+    }
+}

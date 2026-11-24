@@ -123,6 +123,8 @@ pub fn map_node(
         node.set_live(Live::Assertive);
     } else if flags & flag::POLITE != 0 {
         node.set_live(Live::Polite);
+    } else if flags & flag::LIVE_OFF != 0 {
+        node.set_live(Live::Off);
     }
     if source.set.0 > 0 {
         node.set_position_in_set(source.set.0 as usize);
