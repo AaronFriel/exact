@@ -5665,11 +5665,20 @@ other style kept: its in-flow content, plus its padding and border, within its
 `min-height` and `max-height`, and the height opposing `top` and `bottom` insets
 give an absolutely positioned box. So a navigation root whose children are all
 absolutely positioned, with no padding, border or `min-height` of its own,
-measures 0 however tall it is laid out. Read a laid-out
+measures 0 however tall it is laid out. Motion in flight does not count on
+any host: `measure` reads a `height` transition at its end and a
+`-exact-layout-transition` at the laid-out box, and the motion plays on, so a box
+mounted under a parent that is still growing reads its settled size in its first
+`resize`. Read a laid-out
 size, the screen's included, with `frame`, and size a sheet as a share of the
 screen with `navigationDetent="45%"`. Before the first layout both answer
 `unavailable` with zeros, as on the web until the page's geometry code loads after
 first paint; natively a mount task's `after(1, …)` runs after that layout.
+`measure` is also `unavailable` for a box with no single size (an inline run, or
+one under `display: none`); on the web while a `keyframes` animation of a font's
+weight, stretch or variation settings plays in the box or above it, with no
+event when it ends; and, natively, while the tree has a change not yet laid
+out or a Mac entry has content regions registered.
 Neither is a computed style binding to run every render.
 `elementFromPoint(x, y)` names the front-most of the same boxes at a viewport
 point by its nearest `id` (`option<string>`), through the same transforms. For a
