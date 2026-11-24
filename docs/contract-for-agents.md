@@ -5583,7 +5583,11 @@ For the Mac menu bar, put `-exact-menu="app"` on an ordinary button to add
 an item without a shortcut. Literal destinations are `about` (directly under
 About, where Check for Updates… goes), `app`, `file`, `edit`, `view`, `go`,
 `window`, `help`, and `none` (no item: the chord stays a shortcut);
-explicit placement overrides the usual `aria-keyshortcuts` chord filing. Its
+explicit placement overrides the usual `aria-keyshortcuts` chord filing. A
+placed item shows and takes the button's chord holding ⌘, or else one holding ⌃
+(`aria-keyshortcuts="Control+Space"`); a chord of ⌥ or ⇧ alone stays out of
+the menu, since those type. ⌃Space is macOS's default shortcut for Select the
+Previous Input Source, and where it is on the system takes it first. Its
 accessible label or text titles it, and `disabled` disables it. An item in the
 app menu or Help is the app's, so it stays enabled while no window is key and
 under a sheet or a Contract modal dialog. Keep the button reachable: the agent taps it,

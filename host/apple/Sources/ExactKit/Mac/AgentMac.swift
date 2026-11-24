@@ -1144,7 +1144,8 @@ extension Agent {
                 releaseHeard()
                 return ["typed": Int(v.id), "key": chord, "delivery": "platform"]
             }
-            if phase != "up", modifiers.contains(.command), v.performKeyEquivalent(with: down) || NSApp.mainMenu?.performKeyEquivalent(with: down) == true {
+            // A chord holding ⌘ or ⌃ asks the window and then the menu bar, as AppKit does.
+            if phase != "up", !modifiers.isDisjoint(with: [.command, .control]), v.performKeyEquivalent(with: down) || NSApp.mainMenu?.performKeyEquivalent(with: down) == true {
                 releaseHeard()
                 return ["typed": Int(v.id), "key": chord]
             }

@@ -3084,8 +3084,13 @@ the virtual clock).
   Settings…), `file`, `edit`, `view`, `go`, `window`, `help`, and `none`, which
   shows no item and keeps the chord a shortcut (a host item with that chord
   keeps its place without it); they are independent of localized menu titles
-  and override chord filing. The label remains the button's `aria-label` or
-  text. `disabled`/inert disable the item; hidden or removed buttons leave the
+  and override chord filing. A placed item shows and takes the button's first
+  chord holding ⌘, or else its first holding ⌃ (`Control+Space`,
+  `Control+Meta+1`); a chord of ⌥ or ⇧ alone stays out of the menu, since those
+  type, and one press runs the command once whichever of the window and the
+  menu takes it. ⌃Space is macOS's default shortcut for Select the Previous
+  Input Source; where it is on, the system takes it before the app. The label
+  remains the button's `aria-label` or text. `disabled`/inert disable the item; hidden or removed buttons leave the
   menu. An item in the app menu or Help (`about`, `app`, `help`, and Settings…)
   is the app's, not its window's: it stays enabled, and its chord works, while
   no window is key, under a sheet and under a Contract modal dialog, as in a
