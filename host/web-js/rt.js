@@ -11,7 +11,7 @@ import { resourceInspection, retainedAnswer } from './resource-inspection.js';
 export { canvasColor } from './said.js';
 import { rt as Link } from './rt-link.js';
 export { liveTime } from './live-time.js';
-import { liveById, installFits } from './navigation.js';
+import { liveById, installFits, installSymbolEffects } from './navigation.js';
 // synced animations (LLP 1055.002, emit.rs `clocks`)
 export { animationClocks, launchLocation, launchVisits } from './navigation.js';
 export { fontFamily } from './font-family.js';
@@ -673,6 +673,8 @@ export const After = [],
   Clocked = [];
 /** `-exact-fit` (LLP 1116.001 D1.4): fitted texts are scaled after each tree update (navigation.js `fitText`). */
 export const fitTexts = () => installFits(After);
+/** SF Symbol effects' stand-ins (LLP 1077 D12) play after each tree update (navigation.js `playSymbolEffects`). */
+export const symbolEffects = () => installSymbolEffects(After);
 /** Authored scroll offsets (`scrollTop`, `scrollLeft`), set once the commit's tree is in place, as the web host's
  * `pendingScrolls` (a virtualized list builds the rows there first: `$jump`, list.js); and a select's committed
  * `$value` once written or its options change, as glue.js `settleValue` (a reader's pick stands until its action). */

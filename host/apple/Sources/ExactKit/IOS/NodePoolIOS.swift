@@ -555,6 +555,8 @@ extension NodeView {
         buttonRasterView = nil
         raster = nil; imageSource = nil
         if symbolView == nil { image = nil }
+        // Its effect is the last row's: the next row's starts afresh (LLP 1077 D12).
+        if let leaf = symbolView { SymbolEffectState.of(leaf).endEffect(on: leaf) }
         symbolRefusal = nil
         inlinePressed = nil
         // The next node's hatch decides again.

@@ -1429,6 +1429,31 @@ component App
       text `${n}`
 ```
 
+## symbol-effect: a symbol that bounces or pulses, once per change or while set
+names: -exact-symbol-effect, symbolEffectValue, symbolEffect, addSymbolEffect, SymbolEffect
+
+`-exact-symbol-effect` on a `symbol:` image plays an SF Symbol effect: `bounce`, `pulse`,
+`wiggle`, `breathe`, `rotate`, `variable-color` or `scale` (`replace` plays when the source
+changes). `symbolEffectValue` picks the form, as SwiftUI's `value:` and `isActive:` do. With
+it, the effect plays once each time the value changes; without it, the effect runs while it
+is set. `scale` has no once form, so it holds while set either way; `bounce`, `wiggle`,
+`breathe` and `rotate` need iOS 18 or macOS 15 to run while set, and `wiggle`, `breathe` and
+`rotate` to play at all. The web stands in for `bounce`, `pulse` and `scale`; Android, Linux
+and Windows draw none.
+
+```contract
+component App
+  state taps = 0
+  action tap
+    taps = taps + 1
+  view
+    column
+      image "symbol:sf/bell.fill" -exact-symbol-effect="bounce" symbolEffectValue=`${taps}` testId="bell"
+      image "symbol:sf/wifi" -exact-symbol-effect="pulse" testId="waiting"
+      button press=tap testId="ring"
+        text "Ring"
+```
+
 ## status-bar: the phone's status bar icons, and hiding the system bars
 names: status bar, statusbar, setStatusBarStyle, UIStatusBarStyle, preferredStatusBarStyle, expo-status-bar, system-bars-hidden, statusBarHidden, prefersStatusBarHidden, prefersHomeIndicatorAutoHidden, autoHideHomeIndicator, immersive
 

@@ -968,11 +968,7 @@ impl Em<'_> {
             let _ = write!(self.out, "{press}();");
         }
         self.clocks_in(&presence);
-        // A fitted text (LLP 1116.001 D1.4): the runtime scales it after each tree update.
-        if presence.contains("--exact-fit:") {
-            let fit = self.uses.rt("fitTexts");
-            let _ = write!(self.out, "{fit}();");
-        }
+        self.after_updates_in(&presence);
         if element == "a" {
             attrs.push(("data-view".into(), String::new()));
         }

@@ -1119,7 +1119,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         swipeOwner = props["swipeContent"] != nil
         if isParagraph, ["textOffset", "textLeft", "textWidth"].contains(where: { set[$0] != nil || clear.contains($0) }) { textRasterGeometryChanged() }
         if set["groupedSeparator"] != nil || clear.contains("groupedSeparator") { applyGroupedSeparator() }
-        if set["symbolEffectValue"] != nil || set["symbolColorWritten"] != nil || clear.contains("symbolColorWritten")
+        if set["symbolEffectValue"] != nil || clear.contains("symbolEffectValue") || set["symbolColorWritten"] != nil || clear.contains("symbolColorWritten")
             || set["symbolFillRule"] != nil || clear.contains("symbolFillRule")
             || set["symbolAsset"] != nil || clear.contains("symbolAsset") { updateSymbol() }
         if (pendingScrollLeft ?? 0) != 0 || (pendingScrollTop ?? 0) != 0 { needScroll() }
