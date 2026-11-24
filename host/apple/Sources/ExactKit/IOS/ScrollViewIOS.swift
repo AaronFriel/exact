@@ -92,7 +92,7 @@ package class ScrollView: UIScrollView {
     /// masks, else none. It moves as a difference, as the keyboard's and a page band's terms do
     /// (`KeyboardAvoidanceIOS.swift`, `PageEdgesIOS.swift`), so each leaves the others' in place and the insets are
     /// as they were once the border goes. D14's writer, which writes them whole, adds it (`ScrollInsetsIOS.write`).
-    private(set) var paddingInset = UIEdgeInsets.zero {
+    var paddingInset = UIEdgeInsets.zero {
         didSet {
             guard paddingInset != oldValue else { return }
             let moved = UIEdgeInsets(top: paddingInset.top - oldValue.top, left: paddingInset.left - oldValue.left,

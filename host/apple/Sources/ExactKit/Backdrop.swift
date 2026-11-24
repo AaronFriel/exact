@@ -236,6 +236,7 @@ extension NodeView {
         if radius > 0, layer.maskedCorners != corners { layer.maskedCorners = corners }
         // A layout transition's surface masks the scroll view itself until it ends (`Surface.swift`).
         if surface == nil { scroll.clip(toPaddingEdge: edge, inset: border) }
+        else { scroll.paddingInset = border }
     }
     #endif
 

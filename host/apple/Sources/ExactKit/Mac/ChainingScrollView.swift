@@ -88,7 +88,7 @@ package final class ChainingScrollView: NSScrollView {
     /// (`clip(toPaddingEdge:inset:)`). The scrollers, which the mask would cut where they lie over the border, keep
     /// inside it (`insetScrollersFromChrome`), between the border and the padding edge, where
     /// [CSS has a scrollbar](https://drafts.csswg.org/css-overflow-3/#scrollbar-gutter-property).
-    private(set) var clipInsets = NSEdgeInsetsZero {
+    var clipInsets = NSEdgeInsetsZero {
         didSet { if !NSEdgeInsetsEqual(clipInsets, oldValue) { insetScrollersFromChrome() } }
     }
     /// Its node's padding edge, in the node's coordinates, while a border puts that edge inside this view

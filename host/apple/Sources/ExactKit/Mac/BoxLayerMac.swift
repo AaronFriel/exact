@@ -270,7 +270,7 @@ extension NodeView {
     /// not the children. The scroll view stays the node's own subview, at the border box. A layout transition's
     /// surface masks the scroll view itself until it ends (`Surface.swift`).
     func syncScrollCorner() {
-        guard let scroll, surface == nil else { return }
+        guard let scroll else { return }
         var radius: CGFloat = 0, curve = CALayerCornerCurve.circular, widths: [CGFloat] = [0, 0, 0, 0]
         if materialView != nil, paintedMenuRadius != nil {
             radius = effectiveCornerSizes(in: bounds).first?.width ?? 0
@@ -278,6 +278,11 @@ extension NodeView {
             let p = boxPlan
             (radius, curve) = (p.scrollRadius, p.scrollRadius > 0 ? p.curve : .circular)
             if radius > 0 { widths = p.widths.map(devicePixels) }
+        }
+        let inset = NSEdgeInsets(top: widths[0], left: widths[3], bottom: widths[2], right: widths[1])
+        if surface != nil {
+            scroll.clipInsets = inset
+            return
         }
         var edge: CGPath?
         if widths.contains(where: { $0 > 0 }) {
@@ -288,7 +293,7 @@ extension NodeView {
                                            shape: CornerShape(style["corner_shape"]))
             radius = 0
         }
-        scroll.clip(toPaddingEdge: edge, inset: NSEdgeInsets(top: widths[0], left: widths[3], bottom: widths[2], right: widths[1]))
+        scroll.clip(toPaddingEdge: edge, inset: inset)
         guard radius > 0 || (scroll.layer?.cornerRadius ?? 0) > 0 else { return }
         scroll.wantsLayer = true
         scroll.layer?.cornerRadius = radius
