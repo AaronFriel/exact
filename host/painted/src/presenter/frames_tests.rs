@@ -185,3 +185,100 @@ fn whether_partitions_are_kept_is_asked_once_by_the_first_plan_with_a_frame() {
     p.reload(&crate::test_plan(FRAMED), ()).unwrap();
     assert!(!kept(&p));
 }
+
+/// Where the reader keeps partitions, the four commands that move a frame
+/// reach a partitioned frame's reader in its props, numbered; an
+/// unpartitioned frame refuses them as Apple's does, and a capture or the
+/// inspector is still refused.
+#[test]
+fn a_kept_partition_takes_its_commands_in_its_props() {
+    const TWO: &str = r#"component App
+  state heard = ""
+  state part = "persist:a"
+  action failed(e: FrameNavigation)
+    heard = heard + e.error + " " + e.message + "; "
+  action go
+    navigate("guest", "https://example.com/b")
+    traverseHistory("guest", -1)
+    reload("guest", ignoreCache=true)
+    stopLoading("guest")
+    captureScreenshot("guest", "app:/tmp/shot.png")
+    reload("plain")
+  action move
+    part = "persist:b"
+  view
+    column
+      iframe id="guest" src="https://example.com/" partition=part navigateerror=failed width=300 height=100 testId="guest"
+      iframe id="plain" src="https://example.com/" navigateerror=failed width=300 height=100
+      button press=go testId="go" height=30
+        text "Go"
+      button press=move testId="move" height=30
+        text "Move"
+      text heard testId="heard"
+"#;
+    let (mut p, error) = Presenter::boot_with(
+        &crate::test_plan(TWO),
+        (),
+        (400., 800.),
+        1.,
+        PathBuf::new(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    assert!(error.is_none(), "{error:?}");
+    let kept = exact_runner::Page {
+        iframe_partition: true,
+        ..p.host.runner().page()
+    };
+    assert!(p.prefer_page(kept, true).is_none());
+    let node = |p: &Presenter<()>, test_id: &str| {
+        let kernel = p.host().kernel();
+        let node = kernel
+            .node_by_key(kernel.find_by_test_id(test_id)[0])
+            .unwrap();
+        (node.id, node.key)
+    };
+    p.tap(node(&p, "go").0).unwrap();
+    p.run_commands(|| ());
+    let key = node(&p, "guest").1;
+    let sent = &p.brush.media.frames[&key];
+    assert_eq!(
+        serde_json::Value::from(sent.list.iter().cloned().collect::<Vec<_>>()),
+        serde_json::json!([
+            [1, "navigate", "https://example.com/b"],
+            [2, "traverseHistory", -1.0],
+            [3, "reload", true],
+            [4, "stopLoading"]
+        ])
+    );
+    let tree = crate::agent::handle(&mut p, r#"{"op":"tree"}"#);
+    assert!(
+        tree.contains("reload: iframe plain has no partition"),
+        "{tree}"
+    );
+    let journal = crate::agent::handle(&mut p, r#"{"op":"logs"}"#);
+    assert!(
+        journal.contains("captureScreenshot: iframe \\\"guest\\\": this host does not yet capture"),
+        "{journal}"
+    );
+    // A new partition is a new web view: it runs none of the old ones.
+    p.tap(node(&p, "move").0).unwrap();
+    p.tap(node(&p, "go").0).unwrap();
+    p.run_commands(|| ());
+    let sent = &p.brush.media.frames[&key];
+    assert_eq!((sent.partition.as_str(), sent.list.len()), ("persist:b", 4));
+    assert_eq!(sent.list[0][0], 5);
+}
+
+#[test]
+fn a_frame_keeps_its_newest_commands() {
+    let mut c = crate::paint::native::FrameCommands::default();
+    for _ in 0..20 {
+        c.push("persist:a", "stopLoading", &[]);
+    }
+    assert_eq!(c.list.len(), crate::paint::native::FrameCommands::KEPT);
+    assert_eq!(
+        (c.list[0][0].as_u64(), c.list[15][0].as_u64()),
+        (Some(5), Some(20))
+    );
+}

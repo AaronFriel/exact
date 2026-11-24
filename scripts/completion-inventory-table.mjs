@@ -428,7 +428,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/clock.rs", "Presenter::background_due_ms"],
     ["painted:host/painted/src/presenter/collection/anchoring.rs", "Presenter::publish_scroll"],
     ["painted:host/painted/src/presenter/commands.rs", "Presenter::refuse_picture_in_picture"],
-    ["painted:host/painted/src/presenter/frames.rs", "Presenter::frame_by_id Presenter::frame_command Presenter::frame_event with_partitions"],
+    ["painted:host/painted/src/presenter/frames.rs", "Presenter::frame_by_id Presenter::frame_command Presenter::frame_event Presenter::moved_by_reader with_partitions"],
     ["painted:host/painted/src/presenter/device.rs", "Presenter::device"],
     ["painted:host/painted/src/presenter/display_frame.rs", "Presenter::activation_refused Presenter::display_input_mapping"],
     ["painted:host/painted/src/presenter/feedback.rs", "Presenter::feedback_at"],
