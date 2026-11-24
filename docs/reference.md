@@ -2444,13 +2444,34 @@ Recorder's `record` control is the device run's subject.
 ## Apple bundle metadata
 
 Exact writes Info.plist keys and entitlements from grants, named manifest fields,
-packages and build inputs. Entitlements remain derived (LLP 1069.008 D4).
-The `host.ios` and `host.macos` dictionaries `infoPlist` and `entitlements` refuse
-all supplied keys together; their values never enter a bundle. Diagnostics give
-specific grant advice only where tests apply those lines, including companion
-grants, through the bake and platform writer. Other derived keys cannot be set
-there. For a key Exact never writes, record a `bun exact.mjs feedback note` from
-the app directory naming the key and what the native module needs.
+packages and build inputs (LLP 1069.008 D4). Every `host.ios.entitlements` and
+`host.macos.entitlements` key is refused.
+
+`host.ios.infoPlist` and `host.macos.infoPlist` take a vendor SDK's configuration
+keys, the ones a library the app links reads from its bundle:
+
+```json
+"host": { "macos": { "infoPlist": {
+  "SUFeedURL": "https://example.com/appcast.xml",
+  "SUPublicEDKey": "<your EdDSA public key>"
+} } }
+```
+
+- A value is written as given: a string, number, boolean, array or dictionary.
+  It is public in the bundle, so it is no place for a secret.
+- The iOS keys go into the iOS and tvOS apps, not an App Clip.
+- A key in Apple's namespaces is refused: `NS`, `UI`, `LS`, `CF`, `UT`, `CA`, `GC`,
+  `GK`, `MK`, `BG`, `WK`, `IN`, `NFC`, `ITS`, `SK`, `CK`, `AV`, `PH`, `QL` and `DT`, each
+  followed by a capital, and `MinimumOSVersion` and `BuildMachineOSBuild`. So are an
+  `Exact` key and any key Exact writes itself. The refusal names the grant line or
+  field that writes the key. For an Apple key Exact never writes, it asks for a
+  `bun exact.mjs feedback note` from the app directory naming the key and what the
+  native module needs.
+- A key a package's Apple implementation writes is refused here.
+- The keys are binary inputs: changing one needs a new binary, and `exact deploy`
+  says so. They do not move the compatibility id, so installed binaries keep taking
+  updates. The deploy table and the install page list each key under what the app
+  can reach.
 
 ### Language and direction on macOS
 
