@@ -708,7 +708,8 @@
     {
       "id": 74,
       "name": "toolbarPlacement",
-      "kind": "str"
+      "kind": "str",
+      "_literalWords": ["window", "keyboard", "navigation", "bottom"]
     },
     {
       "id": 75,

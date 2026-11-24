@@ -420,7 +420,12 @@ route pushed while the authored tablist is, no bar for a route with no
 header, and a named scroller under an inline title's bar (LLP 1075.003
 §9.10). The Signal Clone's conversation header and photo viewer are the
 consumer. Unblocks them with no module. Take: none offered; waived by
-Charlie's approval. No new attribute, no title menu, no bar added by a route.
+Charlie's approval. No new attribute or title menu.
+**Expanded (Charlie, 2026-11-24, "recs ok"):** one bottom toolbar row directly
+inside the route's column supplies its UIKit buttons and flexible spaces
+(LLP 1123 C11b). Every other host draws the row where the column places it
+(Charlie, 2026-11-24, "ask panel about questions then follow recs of panel";
+panel 4–0). Android's Material bottom app bar waits for an Android consumer.
 **Clarified (James Ide, 2026-11-24, for Exact Chat's contact menu):** "no
 title menu" is UIKit's title pull-down. A pressable title's group keeps the
 `contextPopover` it has on the page when the bar draws it (LLP 1021 §5.1),
