@@ -116,10 +116,10 @@ public final class ExactLaunch: NSObject {
         watchInterruption()
         guard suppressed == nil, !ExactEnv.agentMode else { return }
         link = mainDisplayLink(self, #selector(tick(_:)))
-        // What held it is what the last answer read; one on its way ends first (`readOutstanding`).
+        // What held it is what the last answer read: a read still on its way is not waited for.
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.ttiTimeout) { [weak self] in
             guard let self, ttiOutcome == nil, suppressed == nil else { return }
-            if reads == 0 { finish("timeout") } else { timedOut = true }
+            finish("timeout")
         }
     }
 
@@ -319,27 +319,25 @@ public final class ExactLaunch: NSObject {
         }
     }
 
-    /// Reads of outstanding work on their way, and whether the deadline
-    /// passed meanwhile: the last of them to land then ends startup there.
+    /// Reads of outstanding work on their way.
     private(set) var reads = 0
-    private var timedOut = false
 
     /// The launch session's outstanding work, from the runner and the host,
-    /// and when the owner read it; empty when the screen can be used, nil
-    /// when there is none to read. While the data source is prepared on the
-    /// owner only activation is outstanding (LLP 1027.008 D2).
-    private func readOutstanding(_ then: @escaping (_ outstanding: [String]?, _ at: Double) -> Void) {
-        guard let session = launchSession else { return then(nil, CACurrentMediaTime()) }
-        if session.dataPreparing { return then(["activation"], CACurrentMediaTime()) }
+    /// when the owner read it, and whether no work ended on main meanwhile
+    /// (`Ledger.quiet`); empty when the screen can be used, nil when there
+    /// is none to read or startup has ended. While the data source is
+    /// prepared on the owner only activation is outstanding (LLP 1027.008 D2).
+    private func readOutstanding(_ then: @escaping (_ outstanding: [String]?, _ at: Double, _ quiet: Bool) -> Void) {
+        guard let session = launchSession else { return then(nil, CACurrentMediaTime(), true) }
+        if session.dataPreparing { return then(["activation"], CACurrentMediaTime(), true) }
         reads += 1
-        Self.readLedger(session) { [weak self] ledger in
+        Self.readLedger(session, while: { [weak self] in self?.ttiOutcome == nil && self?.suppressed == nil }) { [weak self] ledger in
             guard let self else { return }
             reads -= 1
-            defer { if reads == 0, timedOut, ttiOutcome == nil { finish("timeout") } }
-            guard let ledger, ttiOutcome == nil, suppressed == nil else { return then(nil, CACurrentMediaTime()) }
-            if ledger.poisoned { finish("logic_failed"); return then(nil, ledger.at) }
+            guard let ledger, ttiOutcome == nil, suppressed == nil else { return then(nil, CACurrentMediaTime(), true) }
+            if ledger.poisoned { finish("logic_failed"); return then(nil, ledger.at, ledger.quiet) }
             failedResources = ledger.failed
-            then(ledger.items + (activation != "ready" ? ["activation"] : []), ledger.at)
+            then(ledger.items + (activation != "ready" ? ["activation"] : []), ledger.at, ledger.quiet)
         }
     }
 
@@ -364,17 +362,27 @@ public final class ExactLaunch: NSObject {
     /// T3): a first build on the owner delays the answer, not the frames.
     /// Its time is when the owner read it, or when main last finished landing
     /// work before the answer if later: what that work published was not
-    /// on screen when the owner read. An empty answer that another owner job
-    /// followed or waits behind (a landing's own call, an advance it posted)
-    /// may miss what that job begins, and is read again; one that lists work
-    /// stands, as it can only hold a mark back. Nil when there is none to read.
-    static func readLedger(_ session: ExactSession, since ended: Double? = nil, then: @escaping (Ledger?) -> Void) {
+    /// on screen when the owner read. An empty answer timed so by a landing
+    /// after the read, which another owner job followed or waits behind (the
+    /// landing's own call, an advance it posted), may miss what that job
+    /// begins, and is read again. Any other answer stands: with no landing
+    /// after the read, what follows the read begins after its time, and one
+    /// that lists work can only hold a mark back. A metric's read is not
+    /// counted among the jobs that follow, so two never make each other read
+    /// again. An answer from a runner replaced since the ask is read again.
+    /// Nil when there is none to read, or once `live` no longer holds.
+    static func readLedger(_ session: ExactSession, since ended: Double? = nil, while live: @escaping () -> Bool = { true },
+                           then: @escaping (Ledger?) -> Void) {
         guard session.state != .destroyed else { return then(nil) }
-        let ended = ended ?? session.workEndedAt
+        let ended = ended ?? session.workEndedAt, lease = session.runtime.completionLease
         session.runtime.askLater(exact_outstanding, "") { [weak session] reply, at, job in
             DispatchQueue.main.async {
-                guard let session, let reply, var ledger = ledger(session, reply: reply, at: max(at, session.workEndedAt)) else { return then(nil) }
-                if ledger.items.isEmpty, Owner.shared.jobsAsked != job { return readLedger(session, since: ended, then: then) }
+                guard let session, session.state != .destroyed, live() else { return then(nil) }
+                guard session.runtime.accepts(lease) else { return readLedger(session, since: ended, while: live, then: then) }
+                guard let reply, var ledger = ledger(session, reply: reply, at: max(at, session.workEndedAt)) else { return then(nil) }
+                if ledger.items.isEmpty, session.workEndedAt > at, Owner.shared.jobsAsked != job {
+                    return readLedger(session, since: ended, while: live, then: then)
+                }
                 ledger.quiet = session.workEndedAt == ended
                 then(ledger)
             }
@@ -408,7 +416,7 @@ public final class ExactLaunch: NSObject {
         guard ttiOutcome == nil, suppressed == nil else { return }
         guard !evaluating else { evaluateAgain = true; return }
         evaluating = true
-        readOutstanding { [weak self] outstanding, at in
+        readOutstanding { [weak self] outstanding, at, _ in
             guard let self else { return }
             evaluating = false
             settle(outstanding, at: at)
@@ -450,13 +458,14 @@ public final class ExactLaunch: NSObject {
     private func confirmCandidate() {
         guard let target = candidate, let v = vsync, v.at >= target, ttiOutcome == nil, !confirming else { return }
         confirming = true
-        readOutstanding { [weak self] outstanding, _ in
+        readOutstanding { [weak self] outstanding, _, quiet in
             guard let self else { return }
             confirming = false
             // A batch that changed the screen meanwhile cleared it (`applied`).
             guard candidate == target, ttiOutcome == nil, suppressed == nil else { return }
             candidate = nil
-            guard let outstanding, outstanding.isEmpty else { return scheduleEvaluate() }
+            // Work that ended meanwhile without a batch (an SVG picture installed) may show after the candidate.
+            guard let outstanding, outstanding.isEmpty, quiet else { return scheduleEvaluate() }
             contentDirty = false
             interactive(at: target)
         }

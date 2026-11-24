@@ -128,6 +128,19 @@ final class LaunchServiceTests: XCTestCase {
         XCTAssertEqual(launch.marks[.interactive], moved)
     }
 
+    /// LLP 1072 T3: two metric reads on the way at once each answer, with
+    /// nothing outstanding: neither is work that follows the other.
+    func testTwoLedgerReadsAtOnceBothAnswer() throws {
+        let session = ExactApp.shared.makeSession(label: "two-ledger-reads")
+        defer { session.destroy() }
+        XCTAssertNil(session.boot(plan: try fixturePlan("STILL_PAGE"), size: CGSize(width: 400, height: 800)).error)
+        settleViewlessSession(session)
+        var answers: [ExactLaunch.Ledger?] = []
+        for _ in 0..<2 { ExactLaunch.readLedger(session) { answers.append($0) } }
+        waitFor("both reads answer", cap: 10) { answers.count == 2 }
+        XCTAssertEqual(answers.compactMap { $0?.items }, [[], []])
+    }
+
     /// The evaluation that ended work asks for: its turn, then the owner's
     /// answers to its reads.
     private func waitForEvaluation(_ what: String, _ launch: ExactLaunch) {

@@ -1153,13 +1153,13 @@ package final class Runtime {
     }
     /// `ask`, read on the owner after the jobs queued before it and never
     /// waited for (LLP 1072 T3): `answer` runs there with the reply, the
-    /// `CACurrentMediaTime` it was read at and its job's number
-    /// (`Owner.jobsBegun`); the reply is nil for a runtime destroyed or
-    /// replaced since.
+    /// `CACurrentMediaTime` it was read at and the owner's `jobsBegun` then;
+    /// the reply is nil for a runtime destroyed or replaced since. The read
+    /// begins no work, so it is not counted among the owner's jobs.
     package func askLater(_ export: @escaping (ExactRuntime, Int) -> UInt32, _ request: String,
                           answer: @escaping (_ reply: String?, _ at: Double, _ job: UInt64) -> Void) {
         let lease = completionLease
-        Owner.shared.post { [self] in
+        Owner.shared.post(counted: false) { [self] in
             let job = Owner.shared.jobsBegun
             guard accepts(lease) else { return answer(nil, CACurrentMediaTime(), job) }
             let len = export(rt, write(request))
