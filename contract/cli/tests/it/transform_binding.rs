@@ -556,6 +556,52 @@ fn transform_diagnostics_name_statically_inert_or_disabled_path_elements() {
 }
 
 #[test]
+fn transform_diagnostics_keep_delete_disabled_on_the_action() {
+    for grouped in [false, true] {
+        let base = eligibility_source(CLIP, FULL)
+            .replace("  view\n", "  action del()\n    value = 3\n  view\n");
+        let ancestor = under(&base, "column delete=del disabled=true");
+        let list = if grouped {
+            under(&under(&ancestor, "section"), "list appearance=\"auto\"")
+        } else {
+            under(&ancestor, "list")
+        };
+        let handle = if grouped {
+            base.replace(
+                "        column testId",
+                "        list appearance=\"auto\"\n          section\n            column testId",
+            )
+        } else {
+            base.replace(
+                "        column testId",
+                "        list\n          column testId",
+            )
+        }
+        .replace(
+            "testId=\"handle\"",
+            "testId=\"handle\" delete=del disabled=true",
+        );
+        for src in [list, handle] {
+            assert!(eligibility(&src, true).is_empty(), "{src}");
+            for attr in ["inert=true", "display=\"none\""] {
+                let blocked = src.replace("disabled=true", attr);
+                let warnings = eligibility(&blocked, false);
+                assert!(
+                    warnings.iter().any(|w| w.message.contains(attr)),
+                    "{warnings:?}\n{blocked}"
+                );
+            }
+        }
+    }
+    let stray = eligibility_source(CLIP, FULL)
+        .replace("  view\n", "  action del()\n    value = 3\n  view\n")
+        .replace("id=\"photo\"", "id=\"photo\" delete=del disabled=true");
+    assert!(eligibility(&stray, false)
+        .iter()
+        .any(|w| w.message.contains("disabled=true")));
+}
+
+#[test]
 fn transform_diagnostics_check_authored_rows_below_controls_and_collections() {
     for parent in [
         "button appearance=\"none\"",

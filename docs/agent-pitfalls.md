@@ -1272,6 +1272,14 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   longer exists (declared in LLP 1005). Fix: keep the pressed node across the state
   change (change its contents, not which branch renders it).
   **Candidate diagnostic:** the runtime could log a dropped up in development.
+- **A `heightDragFor` handle does nothing.** Its target must be the handle's
+  unique strict ancestor with that `id`, with `box-sizing="border-box"` and a
+  finite nonnegative point height (`height=200`, or a number binding).
+  The CSS default is content-box; a percentage, `auto` or an omitted height also
+  prevents binding. The handle and its ancestors must also be displayed,
+  enabled and non-inert (`kernel/src/motion.rs`). The compiler warns with
+  `lower-height-drag-ineligible` when it can prove a requirement fails, naming
+  the element and repair. Computed values remain runtime checks.
 - **A `transformDragFor` handle does nothing.** The binding resolves only for a
   strict shape (`kernel/src/transform.rs`). The compiler warns with
   `lower-transform-drag-ineligible` when it can prove a target, clip or path
