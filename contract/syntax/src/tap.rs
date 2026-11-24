@@ -9,6 +9,8 @@ pub enum TapForm {
     Hover,
     /// `dblclick`: two presses, the second a double click (feed F10).
     Dblclick,
+    /// `dblclick touch`: two finger taps.
+    DoubleTap,
     /// `contextmenu`: a secondary press.
     Contextmenu,
     /// `into "key"`: a virtualized list's row brought into view by its key

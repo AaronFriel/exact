@@ -336,7 +336,22 @@ impl<D: DataSource> Presenter<D> {
                 Candidate::Arrange(_) => (false, false),
                 Candidate::Height { .. } => (false, true),
                 Candidate::Swipe(_) => (true, false),
-                Candidate::Transform(_) | Candidate::Group(_) => (true, true),
+                Candidate::Transform(b) => {
+                    kernel.node_by_key(b.handle).map_or((false, false), |n| {
+                        let action = n.style.touch_action;
+                        if matches!(
+                            action,
+                            exact_kernel::TouchAction::Auto
+                                | exact_kernel::TouchAction::Manipulation
+                        ) {
+                            (true, true)
+                        } else {
+                            let (x, y) = gives(action);
+                            (!x, !y)
+                        }
+                    })
+                }
+                Candidate::Group(_) => (true, true),
                 // A `pan` hears what its `touch-action` does not give to
                 // scrolling, as a browser cancels a pointer it pans with.
                 Candidate::Pan(key) => kernel.node_by_key(key).map_or((false, false), |n| {
@@ -664,12 +679,18 @@ impl<D: DataSource> Presenter<D> {
         {
             out[0] |= 64;
         }
-        let tapped =
-            (self.hit(x / scale, y / scale)).and_then(|hit| self.double_tap_container(hit));
+        let hit = self.hit(x / scale, y / scale);
+        let tapped = hit.and_then(|hit| self.double_tap_container(hit));
         for s in &under.chain {
+            let allows_pinch = hit.is_some_and(|hit| self.allows_touch_zoom(hit, Some(s.id)));
             let rev = self.reader_revision(s);
             let tap = if tapped == Some(s.id) { DOUBLE_TAP } else { 0 };
-            out.extend([s.id as i32, self.reader_flags(s) | tap, rev as i32]);
+            let flags = self.reader_flags(s);
+            out.extend([
+                s.id as i32,
+                (if allows_pinch { flags } else { flags & !ZOOM }) | tap,
+                rev as i32,
+            ]);
             let px = [s.offset.0, s.offset.1, s.max.0, s.max.1];
             out.extend(px.iter().chain(&s.port).map(|v| bits(v * scale)));
         }

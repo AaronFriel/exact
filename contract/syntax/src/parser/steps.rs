@@ -585,6 +585,7 @@ impl Parser {
                         self.next();
                         match w.as_str() {
                             "hover" => TapForm::Hover,
+                            "dblclick" if self.at_ident("touch") => { self.next(); TapForm::DoubleTap }
                             "dblclick" => TapForm::Dblclick,
                             "contextmenu" => TapForm::Contextmenu,
                             "pinch" => {

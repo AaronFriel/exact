@@ -741,8 +741,11 @@ macro_rules! canvas_jni {
                 id: jint,
                 x: jfloat,
                 y: jfloat,
+                tool: jint,
+                at: jlong,
+                primary_x: jfloat, primary_y: jfloat,
             ) {
-                with(|h| h.finger(action, id, x, y));
+                with(|h| h.finger(action, id, x, y, tool, at, (primary_x,primary_y)));
             }
 
             /// What happened in the window the reader made for surface

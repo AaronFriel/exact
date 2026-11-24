@@ -142,6 +142,7 @@ export const classifications = [
       "Presenter::pointer_abandoned Presenter::pointer_lost Presenter::pointer_move Presenter::pointer_up " +
       "Presenter::pointerdown_prevents_focus Presenter::press_lifted"],
     ["painted:host/painted/src/presenter/contact/mouse.rs", "Presenter::pointer_down_with_clicks"],
+    ["painted:host/painted/src/presenter/contact/pinch.rs", "Presenter::allows_touch_zoom Presenter::begin_transform_pinch Presenter::drive_transform_pinch Presenter::pinch_binding Presenter::tracking_transform_pinch Presenter::transform_finger"],
     ["painted:host/painted/src/presenter/control.rs", "Presenter::commit_control_value Presenter::key_click Presenter::toggle_control Presenter::toggle_control_with_press"],
     ["painted:host/painted/src/presenter/desktop_access.rs",
       "FieldTextLayout::runs FieldTextLayout::same_shape Presenter::access_focus Presenter::access_focus_node Presenter::access_origin Presenter::access_scroll_text_line Presenter::access_select Presenter::access_selection Presenter::access_editor Presenter::accessible_field_view Presenter::enabled_access_view Presenter::access_text_layout " +
@@ -200,7 +201,7 @@ export const classifications = [
     ["painted:host/painted/src/canvas/jni_scroll.rs", "Java_dev_exact_canvas_Native_zoom Java_dev_exact_canvas_Native_zoomTap Java_dev_exact_canvas_Native_zoomWheel"],
     ["painted:host/painted/src/canvas/scroll.rs", "CanvasHost::zoom CanvasHost::zoom_tap CanvasHost::zoom_wheel"],
     ["painted:host/painted/src/presenter/zoom.rs",
-      "Presenter::double_tap_container Presenter::double_tap_zoom Presenter::scroll_container_to Presenter::tap_waits Presenter::wheel_zoom " +
+      "Presenter::double_tap_container Presenter::double_tap_listener Presenter::double_tap_zoom Presenter::press_and_double_tap Presenter::scroll_container_to Presenter::tap_waits Presenter::wheel_zoom " +
       "Presenter::zoom_double_tap Presenter::zoom_pinch_began Presenter::zoom_pinch_ended Presenter::zoom_pinched Presenter::zoom_tap_down " +
       "Presenter::zoomable_from Presenter::zoomable_under"],
   ]),

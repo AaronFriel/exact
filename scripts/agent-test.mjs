@@ -1079,6 +1079,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
           case 'tap': {
             const opts = st.form === 'into' ? { into: { key: st.key } }
               : st.form === 'pinch' ? { pinch: st.scale, ...(st.at ? { at: st.at } : {}) }
+              : st.form === 'dblclick' && st.touch ? { dblclick: true, touch: true }
               : st.form === 'wheel' ? { wheel: st.wheel }
               : st.form === 'history' ? { history: st.history }
               : st.form === 'drop' ? { drop: st.files.map((f) => resolve(dirname(file), f)), ...(st.text != null ? { text: st.text } : {}), ...(st.url != null ? { url: st.url } : {}) }

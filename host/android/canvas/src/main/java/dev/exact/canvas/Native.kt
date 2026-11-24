@@ -204,8 +204,8 @@ object Native {
     @JvmStatic external fun touch(action: Int, x: Float, y: Float, tool: Int, at: Long)
     /** A finger past the touch's first ([Fingers]): 0 down, 1 up, 2 move, 3 cancel, at the view's pixels, by its pointer
      * [id] ([android.view.MotionEvent.getPointerId]). The canvas holding the touch takes it where it lands on that
-     * canvas; where no canvas holds the touch, a second finger cancels it. */
-    @JvmStatic external fun finger(action: Int, id: Int, x: Float, y: Float)
+     * canvas. A transform binding takes both positions from this event while both fingers are down. */
+    @JvmStatic external fun finger(action: Int, id: Int, x: Float, y: Float, tool: Int, at: Long, primaryX: Float, primaryY: Float)
     /** Whether a finger, a pen or a mouse button is down on the view: true at the touch's down, before the reader
      * routes it, and false at its last lift or the system's cancel. A scroll, a field or a hosted view takes a touch
      * that is still down, and exact2 then hears a cancel and no up ([touch]); a replacement waits for the finger

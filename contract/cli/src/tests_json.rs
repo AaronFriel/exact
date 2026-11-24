@@ -93,6 +93,7 @@ fn step_json(step: &Step, s: &mut String) {
             match form {
                 TapForm::Press => s.push_str("\"press\""),
                 TapForm::Hover => s.push_str("\"hover\""),
+                TapForm::DoubleTap => s.push_str("\"dblclick\",\"touch\":true"),
                 TapForm::Dblclick => s.push_str("\"dblclick\""),
                 TapForm::Contextmenu => s.push_str("\"contextmenu\""),
                 TapForm::History(delta) => s.push_str(&format!("\"history\",\"history\":{delta}")),

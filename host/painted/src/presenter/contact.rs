@@ -2,6 +2,7 @@
 use super::*;
 mod hold;
 mod mouse;
+mod pinch;
 mod time;
 use crate::host::press::Edge;
 use exact_kernel::{NodeKey, TransformDragBinding};
@@ -48,6 +49,7 @@ pub(super) enum HeldKind {
     Transform {
         binding: TransformDragBinding,
         pair: exact_motion::TransformHold,
+        time_offset: f64,
         revision: u64,
     },
     Swipe {
@@ -73,6 +75,7 @@ pub(super) struct Contact {
     last_ms: f64,
     event_ms: f64,
     pub(super) hold: Option<Hold>,
+    pinch: Option<pinch::Pinch>,
     /// A grouped row lifted: its ghost follows (`group.rs`).
     group: bool,
     panning: bool,
@@ -151,6 +154,7 @@ impl<D: DataSource> Presenter<D> {
                             binding,
                             pair,
                             revision,
+                            ..
                         } => {
                             self.host.transform_hold_live(pair, binding)
                                 && self.transform_revision(binding) == Some(revision)
@@ -517,7 +521,7 @@ impl<D: DataSource> Presenter<D> {
         }
         let mark = self.hatch_pointer_mark(crate::hatches::Phase::Down, x, y);
         // The presenter's double-tap deadline runs on the session clock.
-        self.zoom_contact_down((x, y), now_ms);
+        self.zoom_contact_down((x, y), now_ms, event_ms);
         let result = match self.contact_down(x, y, now_ms, event_ms) {
             Ok(taken) => {
                 // Keep the down target's identity before its handler can remove it.
@@ -638,6 +642,7 @@ impl<D: DataSource> Presenter<D> {
                     last_ms: now_ms,
                     event_ms,
                     hold: None,
+                    pinch: None,
                     group: false,
                     retained: Some(retained),
                     feedback: None,
@@ -707,6 +712,7 @@ impl<D: DataSource> Presenter<D> {
                 last_ms: now_ms,
                 event_ms,
                 hold: None,
+                pinch: None,
                 group: false,
                 panning: false,
                 pan_velocity: VelocityTracker::new(),
@@ -763,6 +769,7 @@ impl<D: DataSource> Presenter<D> {
             last_ms: now_ms,
             event_ms,
             hold: None,
+            pinch: None,
             group: false,
             panning: false,
             pan_velocity,
@@ -807,6 +814,7 @@ impl<D: DataSource> Presenter<D> {
         now_ms: f64,
         event_ms: f64,
     ) -> Result<bool, String> {
+        self.handler_tap_moved((x, y), event_ms);
         if self.brush.winui_focus {
             self.brush.pointer_modality = true;
         }
@@ -1092,6 +1100,7 @@ impl<D: DataSource> Presenter<D> {
                     y: y as f64 - contact.origin.1 as f64,
                     ..Value::ZERO
                 },
+                contact.pinch.map(|pinch| pinch.position()),
                 now_ms,
                 event_ms,
             ),
@@ -1192,7 +1201,9 @@ impl<D: DataSource> Presenter<D> {
                         self.end_arrange(token, Some(&held.velocity), now_ms)
                     }
                     HeldKind::Height { .. } => self.finish_height_drag(&held, now_ms),
-                    HeldKind::Transform { .. } => self.finish_transform_drag(&held, now_ms),
+                    HeldKind::Transform { .. } => {
+                        self.finish_transform_drag(&held, contact.pinch.is_some(), now_ms)
+                    }
                     HeldKind::Swipe { ways, .. } => {
                         let current = self
                             .host
@@ -1271,7 +1282,7 @@ impl<D: DataSource> Presenter<D> {
             self.hold_press(container, contact, (x, y), now_ms);
             Ok(false)
         } else {
-            self.press_lifted(contact, x, y, now_ms)
+            self.press_and_double_tap(contact, x, y, now_ms, event_ms)
         };
         // Resolve the lift and its caret before the quick tap can change paint geometry.
         if let Some(key) = feedback {

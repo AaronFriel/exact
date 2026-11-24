@@ -472,7 +472,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
     }
 
     /** A finger past the touch's first ([Native.finger]) on the exact thread, waiting as a touch does. */
-    fun finger(action: Int, id: Int, x: Float, y: Float, waitMs: Long): Boolean = answer(waitMs) { Native.finger(action, id, x, y) }
+    fun finger(action: Int, id: Int, x: Float, y: Float, tool: Int, at: Long, primaryX: Float, primaryY: Float, waitMs: Long): Boolean = answer(waitMs) { Native.finger(action, id, x, y, tool, at, primaryX, primaryY) }
 
     /** [Native.touching] on the exact thread, in order with the touch's own events and waiting for nothing: a
      * replacement the finger held applies in the frame this then produces. */
