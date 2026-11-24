@@ -921,7 +921,6 @@ export const classifications = [
       "Images::assets Images::diagnostics Images::fit Images::has_refusals Images::new Images::paint_with Images::pending Images::poll Images::renew Images::reset " +
       "Images::resolve Images::retry_due_in Images::stats Images::sync Images::wait"],
     ["painted:host/painted/src/image/assets.rs", "Assets::embedded Assets::path Assets::read Assets::read_asset Assets::root Assets::selected Assets::take_refusal"],
-    ["painted:host/painted/src/host_canvas.rs", "Host::load_canvas_picture"],
     ["painted:host/painted/src/package.rs", "Context::publish_image Notifier::picture_changed Notifier::publish_image"],
     ["painted:host/painted/src/image/published.rs", "PublishedImage::new"],
     ["painted:host/painted/src/image/bitmap.rs", "Bitmap::animation_file Bitmap::bytes Bitmap::crop Bitmap::hardware Bitmap::height Bitmap::natural Bitmap::pixels Bitmap::placed Bitmap::shared Bitmap::width"],
