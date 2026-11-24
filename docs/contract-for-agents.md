@@ -2737,7 +2737,9 @@ flick moves one card; short of the first `always` position past where it was
 released; and for proximity only within a third of the snapport. iOS applies it
 to UIKit's projected rest when a drag ends; macOS eases there when a trackpad
 lifts (from where its momentum would carry the scroll) or once a mouse wheel
-stops; Android aims its fling there; a Linux or Windows wheel moves one position
+stops, on a scroller that has its `scroll-snap-type` when it first shows (one
+that gains it later, or a reused list row that lacked it, glides as AppKit
+flings it); Android aims its fling there; a Linux or Windows wheel moves one position
 a notch, finer ticks adding up to a notch first. On iOS, areas whose snap
 positions (alignment and `scroll-margin` applied) are each multiple of the
 scrollport, every one `scroll-snap-stop="always"` with nothing insetting the

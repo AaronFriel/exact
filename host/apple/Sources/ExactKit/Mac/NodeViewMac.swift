@@ -1148,7 +1148,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         let ownScroller = kind == "text" || isTextControl
         let ox = ownScroller ? "visible" : s["overflow_x"]?.string ?? "visible", oy = ownScroller ? "visible" : s["overflow_y"]?.string ?? "visible"
         if ((ox == "scroll" || ox == "auto") || (oy == "scroll" || oy == "auto")) && scroll == nil {
-            let sv = ChainingScrollView(frame: bounds)
+            let sv = ChainingScrollView(frame: bounds, everyWheelEvent: needsEveryWheelEvent)
             sv.pointerOwner = self
             sv.collectionWillScroll = { [weak self] in
                 guard let self else { return }

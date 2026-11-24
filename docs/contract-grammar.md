@@ -2465,7 +2465,11 @@ right), `deltaMode` (0 pixels) and the four modifiers. A trackpad's pinch is a
 wheel with `ctrlKey` and `deltaY` of -100 × its magnification, as browsers
 deliver one. An action that calls `stopPropagation()` stops the wheel at its
 handler and leaves the scroll alone; one that calls `preventDefault()` keeps
-the scroll from happening (web, macOS, Linux; iOS has none):
+the scroll from happening (web, macOS, Linux; iOS has none). On macOS a
+trackpad gesture that a scroller scrolls reaches the handler only in its first
+events, since AppKit runs the rest on its scrolling thread, unless the handler
+prevents them or the scroller snaps or has a `scrolldragstart` or
+`scrolldragend` handler:
 
 ```text
 action wheeled(e: WheelEvent)

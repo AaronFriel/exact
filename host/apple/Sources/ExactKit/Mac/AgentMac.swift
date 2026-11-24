@@ -804,7 +804,9 @@ extension Agent {
                 var r: [String: Any] = ["tapped": Int(v.id), "at": at, "pid": Int(getpid()), "window": win.windowNumber,
                                         "point": [p.x, win.frame.height - p.y], "screen": [screen.x, (NSScreen.screens.first?.frame.height ?? 0) - screen.y],
                                         "mark": ChainingScrollView.driverMark, "delivered": ChainingScrollView.driverWheels]
-                if let owner, let id = owner.pointerOwner?.id { r["scroller"] = Int(id); r["offset"] = [owner.contentView.bounds.origin.x, owner.contentView.bounds.origin.y] }
+                // The page is no node: it is named `page`.
+                let scroller: Any? = owner is PageScrollView ? "page" : (owner as? ChainingScrollView)?.pointerOwner.map { Int($0.id) }
+                if let owner, owner.window === win, let scroller { r["scroller"] = scroller; r["offset"] = [owner.contentView.bounds.origin.x, owner.contentView.bounds.origin.y] }
                 return r
             }
             guard Agent.privateEvents else { return Agent.developmentOnly("tap wheel") }

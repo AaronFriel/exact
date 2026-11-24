@@ -12,7 +12,9 @@ package final class PageScrollView: NSScrollView {
 
     package override init(frame: NSRect) {
         super.init(frame: frame)
-        NotificationCenter.default.addObserver(self, selector: #selector(liveScrollStarted), name: NSScrollView.willStartLiveScrollNotification, object: self)
+        for name in [NSScrollView.willStartLiveScrollNotification, NSScrollView.didLiveScrollNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(liveScrolled), name: name, object: self)
+        }
         followScrollerStyle()
         styleObserver = NotificationCenter.default.addObserver(forName: NSScroller.preferredScrollerStyleDidChangeNotification,
             object: nil, queue: .main) { [weak self] _ in self?.followScrollerStyle() }
@@ -88,9 +90,18 @@ package final class PageScrollView: NSScrollView {
     package override func mouseMoved(with event: NSEvent) { pointerTracking?(event) }
     package override func mouseExited(with event: NSEvent) { pointerTracking?(event) }
 
-    @objc private func liveScrollStarted() { personScrolled?() }
+    /// A live scroll's start and each of its moves, which AppKit posts on the
+    /// main thread though it runs the scroll on its own.
+    @objc private func liveScrolled() { personScrolled?() }
+    /// Compatible: the page, and each scroller inside it, moves on AppKit's
+    /// scrolling thread. AppKit withdraws responsive scrolling from every
+    /// scroll view inside one that is not. The override reads nothing past a
+    /// gesture's first event, which is all AppKit then sends here: the live
+    /// scroll's notifications say the rest (`liveScrolled`).
+    package override class var isCompatibleWithResponsiveScrolling: Bool { true }
     package override func scrollWheel(with event: NSEvent) {
         personScrolled?() // A mouse wheel's notches need not begin a live scroll.
+        if event.cgEvent?.getIntegerValueField(.eventSourceUserData) == ChainingScrollView.driverMark { ChainingScrollView.handedDriverWheel(self) }
         super.scrollWheel(with: event)
     }
 
