@@ -52,6 +52,7 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("fetch-loading-error"),
     recipe!("files-and-grants"),
     recipe!("first-launch"),
+    recipe!("floating-window"),
     recipe!("foldables"),
     recipe!("functions"),
     recipe!("gpu-module"),
