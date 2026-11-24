@@ -649,7 +649,7 @@ fn cyclic(block: HostBlock, s: &mut taffy::style::Style) {
     let cyclic = |d: taffy::Dimension| {
         let raw = d.into_raw();
         raw.tag() == CompactLength::PERCENT_TAG
-            || (raw.is_calc() && calc_has_percent(raw.calc_value()))
+            || (raw.has_calc() && calc_has_percent(raw.calc_value()))
     };
     let clear =
         |size: &mut taffy::Dimension, min: &mut taffy::Dimension, max: &mut taffy::Dimension| {
