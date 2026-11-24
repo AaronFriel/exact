@@ -65,7 +65,7 @@ scroll | scrollTop scrollZoom navigationScroll keyboardDismissMode | scroll scro
 dialog | closedby | cancel close
 
 ## rules
-- An event's payload follows captured arguments: text for a field, `select` or date; a bool for a checkbox or switch; a number for a range; none for `press` and `submit`. `change=set(i.id)` calls `set(id, payload)`.
+- After captured arguments, fields, selects and dates pass text. Checkboxes and switches pass bools. Ranges pass numbers. `press` and `submit` pass none. `change=set(i.id)` calls `set(id, payload)`.
 
 ```contract
 component App
@@ -185,7 +185,7 @@ test "a pick survives a relaunch"
   expect text "n" == "1"
 ```
 ### composing a screen
-One focal point. Emphasis is a part, not paint on a `button`; the main action is `buttonStyle="filled"`. Search: `input type="search"` in the `header`, live. A form is a grouped list (`grouped-form`); no rows, an `EmptyState`, its `button` indented under it.
+One focal point. Use a part for emphasis, `buttonStyle="filled"` for the main action and live `input type="search"` in the `header`. Forms use grouped lists (`grouped-form`). If empty, indent the `button` under `EmptyState`.
 ```contract
 use SummaryCard from "exact:content"
 column gap=16 padding=16
