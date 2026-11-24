@@ -23,6 +23,7 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.annotation.LooperMode
+import org.robolectric.shadows.ShadowChoreographer
 import org.robolectric.util.ReflectionHelpers.ClassParameter
 import org.robolectric.util.ReflectionHelpers.callInstanceMethod
 import org.robolectric.util.ReflectionHelpers.getField
@@ -99,6 +100,11 @@ class OwnerBackgroundTest {
     }
 
     @Test fun aStepThatOnlyMovesMakesNoFrameAndStillDoesWhatFollowsOne() {
+        // The turn the move posts runs only when this test moves the clock. Unpaused, Robolectric delivers a vsync
+        // the moment one is asked for, so the turn could run, and run again while a frame is demanded, before the
+        // counts below are read.
+        val wasPaused = ShadowChoreographer.isPaused()
+        ShadowChoreographer.setPaused(true)
         Host.due = SystemClock.uptimeMillis() + 30000
         val owner = Owner(false, false, 0) { "0" }
         val thread = Owner::class.java.getDeclaredField("thread").apply { isAccessible = true }.get(owner) as HandlerThread
@@ -160,6 +166,7 @@ class OwnerBackgroundTest {
             }
             handler.removeCallbacksAndMessages(null)
             thread.quitSafely(); thread.join(5000)
+            ShadowChoreographer.setPaused(wasPaused)
             assertFalse(thread.isAlive)
         }
     }
