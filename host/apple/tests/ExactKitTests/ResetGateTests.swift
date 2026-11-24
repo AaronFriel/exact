@@ -1,6 +1,8 @@
 #if os(iOS) || os(macOS)
 #if os(iOS)
 import UIKit
+import ExactCollections
+@testable import ExactGroupedLists
 #else
 import AppKit
 #endif
@@ -120,6 +122,72 @@ final class ResetGateTests: XCTestCase {
         XCTAssertEqual(ResetGate.replays(held), [.advance, .covers, .page, .collections], "each replay once, in order; a focus dropped")
         XCTAssertEqual(ResetGate.replays(["focus(_:now:)", "change(_:_:selection:now:)", "unlisted(_:)"]), [], "dropped, and an unlisted call with them")
     }
+
+    #if os(iOS)
+    func testAQueuedGroupedRowDropIsDiscardedAtRestart() throws {
+        guard hostedWindowScene() != nil else { throw missing("scene", "UIKit moves a row in a visible collection") }
+        ExactCollections.install()
+        ExactGroupedLists.install()
+        let (session, plan) = try boot("GROUPED_SETTINGS")
+        waitForActivation(session)
+        let host = try XCTUnwrap(session.presenter.groupedLists as? GroupedListHost)
+        let old = try XCTUnwrap(host.lists.values.first)
+        func order(_ list: GroupedListView) -> [String] {
+            list.source.snapshot().itemIdentifiers.compactMap { list.rows[$0]?.reorderKey }
+        }
+        func moveFirst(_ list: GroupedListView, to item: Int) throws {
+            let collection = list.collection
+            collection.layoutIfNeeded()
+            let target = try XCTUnwrap(collection.layoutAttributesForItem(at: IndexPath(item: item, section: 0)))
+            XCTAssertTrue(collection.beginInteractiveMovementForItem(at: IndexPath(item: 0, section: 0)))
+            collection.updateInteractiveMovementTargetPosition(target.center)
+            waitFor("UIKit proposes the move") { list.proposedMove }
+            collection.endInteractiveMovement()
+        }
+
+        let original = ["Account", "Privacy", "Notifications", "Display", "Sound", "Network", "Language", "Storage"]
+        let moved = ["Privacy", "Notifications", "Account"] + original.dropFirst(3)
+        XCTAssertEqual(order(old), original)
+        var seen: [ResetGate.Seen] = []
+        ResetGate.spy = { seen.append($0) }
+        let since = CACurrentMediaTime()
+        try moveFirst(old, to: 2)
+        XCTAssertEqual(order(old), moved, "UIKit finished its move")
+        let committed = "Account in settings to settings"
+        XCTAssertFalse(try words(session).contains(committed), "the drop reached the old runtime")
+        weak var movement = old.movement
+        XCTAssertNotNil(movement, "the drop is still queued")
+        XCTAssertNil(session.boot(plan: plan, size: session.presenter.viewport.bounds.size).error)
+        XCTAssertNil(movement, "the queued callback retained the retired drag")
+        waitForMainQueue()
+        let call = "drop(before:)"
+        guard case let .reset(entered, calls)? = seen.first else { return XCTFail("no reset: \(seen)") }
+        XCTAssertEqual(entered, 0)
+        XCTAssertEqual(calls.filter { $0 == call }, [call])
+        let replayed = seen.flatMap { entry -> [ResetGate.Replay] in
+            if case let .replayed(kinds, _) = entry { return kinds }
+            return []
+        }
+        XCTAssertEqual(replayed, ResetGate.replays(calls.filter { $0 != call }))
+        XCTAssertEqual(session.runtime.heldCalls, [])
+        XCTAssertNil(old.movement)
+        XCTAssertNil(old.movingRow)
+        XCTAssertFalse(session.presenter.reorders.groupActive)
+        let journal = ExactJournal.shared.events.filter { $0.at >= since && $0.kind == "reset.drop" && $0.fields["call"] as? String == call }
+        XCTAssertEqual(journal.compactMap { $0.fields["reason"] as? String }, [try XCTUnwrap(ResetGate.dropped[call])])
+
+        let replacement = try XCTUnwrap(host.lists.values.first)
+        XCTAssertFalse(replacement === old)
+        XCTAssertEqual(order(replacement), original)
+        try moveFirst(replacement, to: original.count - 1)
+        let atEnd = Array(original.dropFirst()) + ["Account"]
+        waitFor("the next drag commits") {
+            replacement.movement == nil && replacement.model.sections.first?.rows.compactMap(\.reorderKey) == atEnd
+        }
+        XCTAssertEqual(order(replacement), atEnd)
+        XCTAssertTrue(try words(session).contains(committed))
+    }
+    #endif
 
     /// The spy test: over a real restart nothing reaches the runtime, every held call is listed, and what is replayed
     /// is replayed once, in order, after the committed batch, reaching the new runtime; the timer due over the reset
