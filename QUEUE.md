@@ -1469,6 +1469,10 @@ sits on that list carries the trade it would take.
 
 ## Cheap, any time
 
+- Run the affected Cargo suites together. The `exact-js-bake` producer test has failed at “unchanged logic keeps matching resource answers” and then passed in isolation with the same executable.
+
+- Build a routed app with a TypeScript provider using `web-build --wasm` and open it in an iframe with `sandbox="allow-scripts"`. The main-thread provider cannot attach listeners to its child window, so input stays busy (expo/exact#1534, also reproduced on its parent).
+
 - A rendered page needs a reload after a failed entry import. Serve the entry as 404 on the first press, restore the file and press again. The capture script keeps the rejected promise.
 
 - An app-set window frame is saved like any other (#1412). Expand with `setBounds`, quit and relaunch: the window reopens expanded. To restore the saved compact frame after quitting during or after expansion, the host needs to distinguish a person’s move or resize (including through Accessibility) from AppKit correcting the app’s animation between vertically offset displays. Only the person’s change should replace the saved frame.
