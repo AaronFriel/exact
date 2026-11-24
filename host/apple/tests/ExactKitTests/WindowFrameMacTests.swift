@@ -1,12 +1,15 @@
 #if os(macOS)
 import AppKit
 import XCTest
+import ObjectiveC
 @testable import ExactKit
 import ExactCore
 
 /// A window's frame changed in steps: an animation a module's call asks for
-/// (expo/exact#1412).
+/// (expo/exact#1412), and a person's live resize, each step a frame change.
 final class WindowFrameMacTests: XCTestCase {
+    @objc private class func legacyScrollers() -> NSScroller.Style { .legacy }
+
     /// A session on a page whose root fills and clips the window, in Exact's window.
     private func page(_ size: NSSize) throws -> (ExactSession, ExactView, ExactSessionWindow) {
         _ = NSApplication.shared
@@ -102,6 +105,33 @@ final class WindowFrameMacTests: XCTestCase {
     private func drain(_ seconds: TimeInterval, until done: () -> Bool = { false }) {
         let end = Date().addingTimeInterval(seconds)
         while !done(), Date() < end { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+    }
+
+    /// A person's live resize shrinking the window, each step laid out as it
+    /// is made: no step shows a scroller, and no step's layout is told a
+    /// viewport one narrowed.
+    func testShrinkStepsOfAClippedRootOfferNoGutter() throws {
+        // Scrollers that take room, whatever this Mac's setting.
+        let original = try XCTUnwrap(class_getClassMethod(NSScroller.self, #selector(getter: NSScroller.preferredScrollerStyle)))
+        let replacement = try XCTUnwrap(class_getClassMethod(Self.self, #selector(Self.legacyScrollers)))
+        method_exchangeImplementations(original, replacement)
+        defer { method_exchangeImplementations(original, replacement) }
+        let (session, view, window) = try page(NSSize(width: 600, height: 400))
+        defer { window.close(); session.destroy() }
+        let p = session.presenter
+        var told: [NSSize] = []
+        let fit = p.viewport.visibleSizeChanged
+        p.viewport.visibleSizeChanged = { told.append(p.viewportSize); fit?() }
+        let sizes = (1...6).map { NSSize(width: 600 - CGFloat($0) * 9, height: 400 - CGFloat($0) * 7) }
+        for size in sizes {
+            window.setContentSize(size)
+            view.layoutSubtreeIfNeeded()
+            XCTAssertEqual(p.viewportSize, size)
+            XCTAssertTrue(p.viewport.verticalScroller!.isHidden)
+            XCTAssertTrue(p.viewport.horizontalScroller!.isHidden)
+        }
+        XCTAssertFalse(told.isEmpty)
+        XCTAssertTrue(told.allSatisfy(sizes.contains), "no step is told a viewport a gutter narrowed: \(told)")
     }
 }
 #endif
