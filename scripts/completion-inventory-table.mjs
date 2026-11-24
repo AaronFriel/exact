@@ -80,7 +80,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/scrollbar.rs", "Presenter::set_scrollbars"],
     ["painted:host/painted/src/presenter/top.rs", "Presenter::present"],
     ["painted:host/painted/src/presenter/top/status.rs", "Presenter::sync_status_images"],
-    ["painted:host/painted/src/presenter/window.rs", "Presenter::chrome Presenter::set_window"],
+    ["painted:host/painted/src/presenter/window.rs", "Presenter::chrome Presenter::set_window Presenter::window_background"],
     ["painted:host/painted/src/scale.rs", "Host::apply_live Host::set_display_scale Host::set_modes Host::set_root_font_size Host::set_view"],
     ["painted:host/painted/src/surfaces.rs", "Presenter::sync_surfaces_with_canvas_tick"],
     ["painted:host/painted/src/forma.rs", "Host::forma_json"],
@@ -1219,7 +1219,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/arrange.rs", "Presenter::prepare_arrange_down Presenter::tick_arrange"],
     ["painted:host/painted/src/presenter/arrive.rs", "Presenter::arrive Presenter::autofocus Presenter::lands Presenter::note_press_from Presenter::presses Presenter::release_focus Presenter::route_title"],
     ["painted:host/painted/src/presenter/back.rs", "Presenter::back_key_down"],
-    ["painted:host/painted/src/presenter/bars.rs", "Presenter::bar_button Presenter::content_scroller Presenter::read_bars"],
+    ["painted:host/painted/src/presenter/bars.rs", "Presenter::bar_button Presenter::bar_colors Presenter::content_scroller Presenter::read_bars"],
     ["painted:host/painted/src/presenter/contact.rs",
       "Presenter::canvas_input_live Presenter::contact_down Presenter::depth Presenter::feedback_contains Presenter::focus_on_down Presenter::input_live " +
       "Presenter::pointer_lift Presenter::pointer_moved Presenter::retire_acknowledged_pointer Presenter::retire_pointer"],

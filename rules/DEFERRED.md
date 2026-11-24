@@ -713,8 +713,8 @@ commands, writes on the location (`todo add milk`), and printing a GUI app
   real. amend that." Unblocks Android as a supported host instead of work
   below the line:
   - **Its host work:** the Canvas host (LLP 1076 §3.3) and the GPU painter.
-    Most of it is already merged into main from `android/explore`; the
-    branch keeps landing.
+    **Expanded (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"; panel 4–0).**
+    Pocket Lab may colour Android’s bars through their elements and the root accent (LLP 1115.001 D11).
   - **Parley's Android arm** (`text/parley-android`, LLP 1085.000).
   - **A place in the sweep.**
 

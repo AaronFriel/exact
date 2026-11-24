@@ -1121,12 +1121,14 @@ tabs by the rule and tells the kernel what the bars cover (`HostCover`, the Appl
 
 So the page's content starts under the top bar and ends at the navigation bar, and neither bar is in the page's stream. Both are over it: the top bar at the window's top, reaching under the status bar, whose area is the bar's own colour; the navigation bar at the window's bottom, reaching under the gesture bar. **A keyboard does not move the navigation bar.** It ends the page above itself and covers the bar, as it covers a Material app's, and the room the bar took of the routes goes to nothing while it is covered (`Presenter::fit_bars`).
 
-**The top app bar** (Material's small one; Compose's `TopAppBar`):
+The title, Up arrow, action icons and unselected destinations use the bar element’s own `color`, or black or white on its authored background. An enabled button’s own `color` still wins. On translucent fills, automatic ink uses the window colour behind the band. Set `color` when page content shows through. The ink roles below are defaults.
+
+**The top app bar** (Compose’s small `TopAppBar`)
 
 | | Here | Material 3 |
 |---|---|---|
 | Height | 64 dp, under the status bar | 64 dp |
-| Colour | `surface`; `surfaceContainer` once the route's content has scrolled; the status bar's area the same | the same two (`OnScrollContainerColor`) |
+| Colour | The header’s `background-color`, through the status bar. By default, `surface` at rest and `surfaceContainer` on scroll | the same two (`OnScrollContainerColor`) |
 | Title | the heading, title-large (22/28 sp, regular), `onSurface`, one line cut with an ellipsis; 16 dp from the side, or 4 dp after what leads it (56 dp after the Up arrow) | the same (`TopAppBarLayout`: the title's box at `TopAppBarTitleInset` or after the navigation icon, its own 4 dp padding) |
 | Up arrow | on a pushed route: Material Symbols' `arrow_back`, 24 dp in a 48 dp target 4 dp from the side, `onSurface` | the same |
 | Buttons | the header's, at the trailing side, 4 dp from it: a 24 dp symbol in a 48 dp target (`onSurfaceVariant`) where the button has a symbol, else a text button (label-large, `primary`, 12 dp padding, at least 58 dp wide) | icon buttons and text buttons, the same metrics |
@@ -1142,7 +1144,7 @@ A level-1 heading is the same small bar: Material's medium and large bars, which
 | | Here | Material 3 |
 |---|---|---|
 | Height | 80 dp, over the gesture bar | 80 dp |
-| Colour | `surfaceContainer`, the gesture bar's area the same | `surfaceContainer` |
+| Colour | The root tablist’s `background-color`, through the gesture bar. Defaults to `surfaceContainer` | `surfaceContainer` |
 | Destinations | the root tablist's tabs that name a panel, sharing the width 8 dp apart | 3 to 5, the same (`NavigationBarItemHorizontalPadding`) |
 | Symbol and label | a 24 dp symbol 16 dp from the top, its label under it (label-medium, 12/16 sp), 16 dp from the bottom | the same |
 | Active indicator | a 56 by 32 dp pill in `secondaryContainer` behind the selected symbol | the same |
@@ -1399,8 +1401,8 @@ The cut was the smallest one. Left in the reader:
     page is, what colour is behind it and each bar's icon appearance (`Native.chrome`); the reader puts the view
     there and makes that colour the window's background. `status-bar-style="light-content"` requests light status
     bar icons, `"dark-content"` dark icons, and `"auto"` the scheme where the winning declaration sits (LLP 1105 D7).
-    An invalid bound value counts as unset; without a declaration the status bar follows the page's scheme.
-    Navigation bar icons always follow the page's scheme. The sixth chrome word packs the dark scheme in bit 0
+    An invalid bound value counts as unset. The independent `navigation-bar-style` request uses the same rules.
+    Without a request, each bar follows its projected element’s ink, then the page’s scheme. The sixth chrome word packs light navigation icons in bit 0
     and light status bar icons in bit 1, without changing the JNI array's size. Both API 30's appearance flags and
     API 29's system UI flags apply the two independently.
 

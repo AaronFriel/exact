@@ -12,7 +12,7 @@ use std::rc::Rc;
 /// Shelf's data, as much as its screens read: a library of two books, no
 /// works for a subject, no book for an ISBN, and the clock. The fixture below asks for none.
 #[derive(Default)]
-struct Nothing;
+pub(super) struct Nothing;
 impl DataSource for Nothing {
     fn query(&mut self, name: &str, _: &[Value]) -> Result<Value, DataError> {
         let book = |id: &str, title: &str| {
@@ -62,7 +62,7 @@ impl DataSource for Nothing {
 /// list taller than the screen. Detail, pushed: the Back control, a
 /// heading, a text button. Bare, pushed: no header. Quiet, pushed: a header
 /// its route says is no bar's. Other: a heading alone.
-const APP: &str = r#"routes nav
+pub(super) const APP: &str = r#"routes nav
   tab home "/"
     detail "/detail"
     bare "/bare"
@@ -182,7 +182,7 @@ fn boot(source: &str) -> Presenter<Nothing> {
 
 /// A presenter whose shell shows bars, in a phone's window, and the
 /// pictures it recorded.
-fn barred(source: &str) -> (Presenter<Nothing>, Rc<RefCell<Vec<Pixmap>>>) {
+pub(super) fn barred(source: &str) -> (Presenter<Nothing>, Rc<RefCell<Vec<Pixmap>>>) {
     let mut p = boot(source);
     let pictures = Rc::new(RefCell::new(Vec::new()));
     p.serve_requests();

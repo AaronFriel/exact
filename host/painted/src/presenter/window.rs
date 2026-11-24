@@ -302,14 +302,9 @@ impl<D: DataSource> Presenter<D> {
             })
     }
 
-    /// What the shell draws around the page; on a host that told no window,
-    /// the viewport at the origin.
-    pub fn chrome(&self) -> Chrome {
-        let _roles = self.host.runner().bind_roles(); // Its session's (LLP 1121 stage 5).
-        let dark = self.dark();
+    pub(super) fn window_background(&self) -> [u8; 4] {
         let kernel = self.host.kernel();
-        let authored = self
-            .host
+        self.host
             .runner()
             .roots()
             .first()
@@ -321,15 +316,22 @@ impl<D: DataSource> Presenter<D> {
                     .background_color
                     .map(|c| crate::paint::rgba(c.resolve(self.dark_at(n.id))))
             })
-            .filter(|c| c[3] == 255);
+            .filter(|c| c[3] == 255)
+            .unwrap_or_else(|| crate::paint::page_color(self.dark()))
+    }
+
+    /// What the shell draws around the page; on a host that told no window,
+    /// the viewport at the origin.
+    pub fn chrome(&self) -> Chrome {
+        let _roles = self.host.runner().bind_roles(); // Its session's (LLP 1121 stage 5).
         let bars = self.status_bar();
         Chrome {
             frame: self
                 .window
                 .frame
                 .unwrap_or([0.0, 0.0, self.viewport.0, self.viewport.1]),
-            background: authored.unwrap_or_else(|| crate::paint::page_color(dark)),
-            dark,
+            background: self.window_background(),
+            dark: self.dark(),
             status_light_icons: bars.light_icons,
             navigation_light_icons: bars.navigation_light_icons,
             bars_hidden: bars.hidden,

@@ -39,8 +39,8 @@ use super::*;
 
 mod look;
 use crate::paint::ripple::Ripple;
+use look::{BarColors, Inputs, Layout, Lit};
 pub use look::{Bottom, Button, Tab, Target, Top, What};
-use look::{Inputs, Layout, Lit};
 
 /// The top app bar, as the shell names it.
 pub const TOP: i32 = 1;
@@ -60,7 +60,7 @@ struct Shown<P> {
 #[derive(Debug, Clone, PartialEq)]
 struct Seen {
     /// The top bar's scheme and the bottom bar's: each its node's.
-    dark: (bool, bool),
+    dark: [bool; 2],
     font_scale: f32,
     window: (f32, f32),
     edges: [f32; 4],
@@ -81,6 +81,7 @@ pub(super) struct State {
     /// had then scrolled, and what else they were measured for.
     read: Option<(u64, bool)>,
     seen: Option<Seen>,
+    authored: [BarColors; 2],
     /// The scroller the top bar's "on scroll" colour follows.
     scroller: Option<ViewId>,
     top: Option<Shown<Top>>,
@@ -220,6 +221,77 @@ impl<D: DataSource> Presenter<D> {
             .find(barred)
     }
 
+    fn bar_header(&self) -> Option<&crate::navigation::RouteBar> {
+        let route = self.bar_route()?;
+        self.host.bars().routes.iter().find(|r| r.route == route)
+    }
+
+    fn bar_nodes(&self) -> [Option<ViewId>; 2] {
+        [
+            self.bar_header().map(|r| r.shape.header),
+            self.host.bars().tabs.as_ref().map(|t| t.tablist),
+        ]
+    }
+
+    fn bar_colors(&self, id: Option<ViewId>, dark: bool) -> BarColors {
+        let Some(node) = id.and_then(|id| self.host.kernel().node(id)) else {
+            return BarColors::default();
+        };
+        use exact_kernel::StyleId;
+        let _accent = crate::paint::accent_scope(&node);
+        let written = node.style.written;
+        let container = written.has(StyleId::BackgroundColor).then(|| {
+            crate::paint::rgba(
+                node.style
+                    .background_color
+                    .unwrap_or_else(|| node.text_color())
+                    .resolve(dark),
+            )
+        });
+        let ink = if written.has(StyleId::TextColor) {
+            Some(crate::paint::rgba(node.text_color().resolve(dark)))
+        } else {
+            container.map(|fill| {
+                // Keep the fill translucent and choose ink against the window behind its band.
+                let mut surface = fill;
+                surface[3] = 255;
+                if fill[3] < 255 {
+                    let window = self.window_background();
+                    let a = u32::from(fill[3]);
+                    for i in 0..3 {
+                        surface[i] =
+                            ((u32::from(fill[i]) * a + u32::from(window[i]) * (255 - a) + 127)
+                                / 255) as u8;
+                    }
+                }
+                crate::paint::look::ink_on(surface)
+            })
+        };
+        BarColors { container, ink }
+    }
+
+    pub(super) fn bar_icon_appearance(&self) -> [Option<bool>; 2] {
+        let [top, bottom] = self.bar_nodes();
+        // A sheet covers the navigation band with its own foot.
+        [top, bottom.filter(|_| !self.sheet_open())].map(|id| {
+            let id = id?;
+            let colors = self.bar_colors(Some(id), self.dark_at(id));
+            let ink = colors.ink?;
+            let light = crate::paint::look::ink_on(ink)[0] == 0;
+            // Preserve a legible midtone when Android can draw only white or black.
+            if let Some(fill) = colors.container.filter(|c| c[3] == 255) {
+                let ground = crate::paint::look::luminance(fill) + 0.05;
+                let foreground = crate::paint::look::luminance(ink) + 0.05;
+                let ratio = foreground.max(ground) / foreground.min(ground);
+                let binary_ratio = if light { 1.05 / ground } else { ground / 0.05 };
+                if binary_ratio < 3.0 && ratio >= 3.0 {
+                    return Some(!light);
+                }
+            }
+            Some(light)
+        })
+    }
+
     /// A route's content scroller (LLP 1115.000 D11.1, the iOS host's
     /// `contentScroller`): the one its `navigationScroll` names, else the
     /// shallowest node under it that scrolls up and down, in tree order at
@@ -323,41 +395,38 @@ impl<D: DataSource> Presenter<D> {
     fn read_bars(&self) -> (Option<Top>, Option<Bottom>) {
         let kernel = self.host.kernel();
         let bars = self.host.bars();
-        let route = self.bar_route();
-        let top = (bars.routes.iter())
-            .find(|r| Some(r.route) == route)
-            .map(|r| {
-                // A readout (`role="status"`, LLP 1075.003 §9.15) is no
-                // button, and Material's top app bar has no item for it.
-                let buttons = |ids: &[ViewId]| -> Vec<Button> {
-                    (ids.iter())
-                        .filter(|id| r.shape.items.contains(id))
-                        .filter_map(|id| self.bar_button(*id, self.dark_at(*id)))
-                        .collect()
-                };
-                Top {
-                    route: r.route,
-                    heading: r.shape.heading,
-                    direction: kernel
-                        .node(r.shape.header)
-                        .unwrap()
-                        .computed_row(exact_kernel::StyleId::Direction, |s| s.direction),
-                    title: (r.shape.heading)
-                        .and_then(|heading| kernel.bar_text(heading))
-                        .unwrap_or_default(),
-                    title_direction: r
-                        .shape
-                        .heading
-                        .and_then(|id| kernel.node(id))
-                        .map_or(exact_kernel::Direction::Ltr, |node| {
-                            node.computed_row(exact_kernel::StyleId::Direction, |s| s.direction)
-                        }),
-                    up: r.pushed,
-                    leading: buttons(&r.shape.leading),
-                    trailing: buttons(&r.shape.trailing),
-                    scrolled: false,
-                }
-            });
+        let top = self.bar_header().map(|r| {
+            // A readout (`role="status"`, LLP 1075.003 §9.15) is no
+            // button, and Material's top app bar has no item for it.
+            let buttons = |ids: &[ViewId]| -> Vec<Button> {
+                (ids.iter())
+                    .filter(|id| r.shape.items.contains(id))
+                    .filter_map(|id| self.bar_button(*id, self.dark_at(*id)))
+                    .collect()
+            };
+            Top {
+                route: r.route,
+                heading: r.shape.heading,
+                direction: kernel
+                    .node(r.shape.header)
+                    .unwrap()
+                    .computed_row(exact_kernel::StyleId::Direction, |s| s.direction),
+                title: (r.shape.heading)
+                    .and_then(|heading| kernel.bar_text(heading))
+                    .unwrap_or_default(),
+                title_direction: r
+                    .shape
+                    .heading
+                    .and_then(|id| kernel.node(id))
+                    .map_or(exact_kernel::Direction::Ltr, |node| {
+                        node.computed_row(exact_kernel::StyleId::Direction, |s| s.direction)
+                    }),
+                up: r.pushed,
+                leading: buttons(&r.shape.leading),
+                trailing: buttons(&r.shape.trailing),
+                scrolled: false,
+            }
+        });
         let bottom = bars.tabs.as_ref().map(|tabs| Bottom {
             tablist: tabs.tablist,
             direction: kernel
@@ -394,13 +463,9 @@ impl<D: DataSource> Presenter<D> {
         let (window, safe, _) = self.bar_window();
         let font_scale = self.bar_font_scale();
         // Each bar is in the scheme of the node it shows (LLP 1034 §8).
-        let bars = self.host.bars();
-        let route = self.bar_route();
-        let header = (bars.routes.iter()).find(|r| Some(r.route) == route);
-        let dark = (
-            header.map_or(self.dark(), |r| self.dark_at(r.shape.header)),
-            (bars.tabs.as_ref()).map_or(self.dark(), |t| self.dark_at(t.tablist)),
-        );
+        let nodes = self.bar_nodes();
+        let dark = nodes.map(|id| id.map_or(self.dark(), |id| self.dark_at(id)));
+        let authored = std::array::from_fn(|i| self.bar_colors(nodes[i], dark[i]));
         let epoch = self.host.kernel().epoch();
         if self.bars.read.map(|read| read.0) != Some(epoch) {
             // Only a route with a top bar has a scroller the bar follows.
@@ -441,7 +506,7 @@ impl<D: DataSource> Presenter<D> {
         // The same look as before: a bar that says the same is not
         // measured again, so a commit elsewhere in the tree shapes no text.
         let same = self.bars.seen.as_ref() == Some(&seen);
-        if same && self.bars.read == Some(read) {
+        if same && self.bars.authored == authored && self.bars.read == Some(read) {
             return;
         }
         let (top, bottom) = self.read_bars();
@@ -449,18 +514,20 @@ impl<D: DataSource> Presenter<D> {
             scrolled: read.1,
             ..top
         });
-        let inputs = |edge: f32, dark: bool| Inputs {
-            dark,
+        let inputs = |edge: f32, i: usize| Inputs {
+            colors: authored[i],
+            dark: dark[i],
             font_scale,
             width: window.0,
             edge,
             sides: (safe[3], safe[1]),
         };
         let text = self.text.clone();
-        let mut changed = false;
-        if !same || self.bars.top.as_ref().map(|s| &s.plan) != top.as_ref() {
+        let top_changed = !same || self.bars.top.as_ref().map(|s| &s.plan) != top.as_ref();
+        let bottom_changed = !same || self.bars.bottom.as_ref().map(|s| &s.plan) != bottom.as_ref();
+        if top_changed || self.bars.authored[0] != authored[0] {
             self.bars.top = top.map(|plan| {
-                let layout = Layout::top(&mut text.borrow_mut(), &plan, &inputs(safe[0], dark.0));
+                let layout = Layout::top(&mut text.borrow_mut(), &plan, &inputs(safe[0], 0));
                 let frame = [0.0, 0.0, layout.size.0, layout.size.1];
                 Shown {
                     plan,
@@ -468,12 +535,10 @@ impl<D: DataSource> Presenter<D> {
                     frame,
                 }
             });
-            changed = true;
         }
-        if !same || self.bars.bottom.as_ref().map(|s| &s.plan) != bottom.as_ref() {
+        if bottom_changed || self.bars.authored[1] != authored[1] {
             self.bars.bottom = bottom.map(|plan| {
-                let layout =
-                    Layout::bottom(&mut text.borrow_mut(), &plan, &inputs(safe[2], dark.1));
+                let layout = Layout::bottom(&mut text.borrow_mut(), &plan, &inputs(safe[2], 1));
                 let frame = [0.0, window.1 - layout.size.1, layout.size.0, layout.size.1];
                 Shown {
                     plan,
@@ -481,15 +546,15 @@ impl<D: DataSource> Presenter<D> {
                     frame,
                 }
             });
-            changed = true;
         }
         (self.bars.read, self.bars.seen) = (Some(read), Some(seen));
-        if changed {
-            // A target measured again is another target: nothing is held,
-            // and the ripple of the one that was goes with it.
+        if top_changed || bottom_changed {
             self.bars.pressed = None;
             self.bars.focused = None;
             self.bars.ripple = None;
+        }
+        if top_changed || bottom_changed || self.bars.authored != authored {
+            self.bars.authored = authored;
             self.bars.revision += 1;
         }
     }

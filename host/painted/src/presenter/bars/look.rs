@@ -3,14 +3,14 @@
 //! widgets: each bar is a view of the reader's, and what is in it is drawn
 //! here from the reference's own metrics, the Compose Material 3 library's
 //! (1.4: `TopAppBar` with `TopAppBarSmallTokens`, `NavigationBar` and
-//! `NavigationBarItem` with `NavigationBarTokens`), in the device's colours.
+//! `NavigationBarItem` with `NavigationBarTokens`), using device roles wherever the bar leaves its colours unsaid.
 //!
 //! Lengths are dp, which are this host's points. Type is sp, a point times
 //! the person's font scale, taken linearly, as the top layer's is
 //! (`top/look.rs`).
 //!
 //! **The top app bar** is 64 tall under the status bar, whose area it
-//! fills with its own colour: `surface`, and `surfaceContainer` once the
+//! fills with its own colour. The defaults are `surface` and `surfaceContainer` once the
 //! route's content has scrolled under it (Material's "on scroll" colour).
 //! It does not collapse. The Up arrow is a 24 icon in a 48 target, 4 from
 //! the edge; the title is title-large, 16 from the edge, or 4 after what
@@ -19,7 +19,7 @@
 //! symbol, else a text button. Its numbers are the `top-` rows.
 //!
 //! **The navigation bar** is 80 tall over the gesture bar, whose area it
-//! fills with its own colour, `surfaceContainer`. Its destinations share
+//! fills with its own colour, by default `surfaceContainer`. Its destinations share
 //! its width, 8 apart: a 24 symbol with its label under it (label-medium),
 //! and behind the selected one's symbol the active indicator, a 56 by 32
 //! pill in `secondaryContainer`. The selected destination's symbol is
@@ -110,6 +110,11 @@ fn told(role: Material, dark: bool, light: u32, night: u32) -> [u8; 4] {
     })
 }
 
+fn disabled(mut ink: [u8; 4]) -> [u8; 4] {
+    ink[3] = (f32::from(ink[3]) * 0.38).round() as u8;
+    ink
+}
+
 /// A header's button as the top bar shows it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Button {
@@ -182,9 +187,17 @@ pub struct Bottom {
     pub tabs: Vec<Tab>,
 }
 
+/// CSS written on the element the bar replaces (LLP 1115.001 D11).
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub(super) struct BarColors {
+    pub container: Option<[u8; 4]>,
+    pub ink: Option<[u8; 4]>,
+}
+
 /// What a bar's look depends on besides what it says.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Inputs {
+    pub(super) colors: BarColors,
     /// The scheme is dark.
     pub dark: bool,
     /// The person's font scale.
@@ -388,8 +401,16 @@ impl Layout {
         };
         let mut left = inputs.sides.0 + edge;
         let mut right = inputs.width - inputs.sides.1 - edge;
+        let base = if top.scrolled {
+            Role::SurfaceContainer
+        } else {
+            Role::Surface
+        };
+        let container = inputs.colors.container.unwrap_or_else(|| base.color(dark));
+        let content = inputs.colors.ink;
+        let title_ink = content.unwrap_or_else(|| Role::OnSurface.color(dark));
         if top.up {
-            let ink = Role::OnSurface.color(dark);
+            let ink = title_ink;
             let at = (left + (ICON_BUTTON - icon) / 2.0, middle(icon), icon, icon);
             items.push(Item::Symbol("back".into(), at, ink));
             targets.push(Target {
@@ -402,12 +423,14 @@ impl Layout {
         }
         // A button's box is its 48 target; what it draws sits in the middle.
         let mut button = |b: &Button, x: Option<f32>, right: &mut f32, left: &mut f32| {
-            let ink = match (b.enabled, b.destructive, b.tint, b.symbol.is_some()) {
+            let ink = match (b.enabled, b.tint, b.symbol.is_some(), content) {
+                (false, _, true, Some(ink)) => disabled(ink),
                 (false, ..) => Role::Disabled.color(dark),
-                (true, _, Some(tint), _) => tint,
-                (true, true, ..) => Role::Error.color(dark),
-                (true, false, None, true) => Role::OnSurfaceVariant.color(dark),
-                (true, false, None, false) => Role::Primary.color(dark),
+                (true, Some(tint), ..) => tint,
+                (true, _, true, Some(ink)) => ink,
+                _ if b.destructive => Role::Error.color(dark),
+                (_, _, true, _) => Role::OnSurfaceVariant.color(dark),
+                _ => Role::Primary.color(dark),
             };
             let label = (b.symbol.is_none()).then(|| {
                 let room = (inputs.width / 2.0 - 2.0 * TEXT_BUTTON_PADDING).max(1.0);
@@ -481,19 +504,15 @@ impl Layout {
                 label_x(&p, x.min(right - edge - bounds.2), 0.),
                 middle(p.height),
             );
-            items.push(Item::Text(p, at, Role::OnSurface.color(dark), heading));
+            items.push(Item::Text(p, at, title_ink, heading));
         }
         if top.direction == Direction::Rtl {
             mirror(&mut items, &mut targets, inputs.width);
         }
-        let container = match top.scrolled {
-            true => Role::SurfaceContainer,
-            false => Role::Surface,
-        };
         Layout {
             size: (inputs.width, y0 + h),
             direction: top.direction,
-            container: container.color(dark),
+            container,
             items,
             targets,
         }
@@ -551,15 +570,21 @@ impl Layout {
         let span = (inputs.width - inputs.sides.0 - inputs.sides.1).max(0.0);
         let count = bottom.tabs.len().max(1) as f32;
         let cell = ((span - nav.item_gap * (count - 1.0)) / count).max(0.0);
-        let inactive = told(Material::OnSurfaceVariant, dark, 0xFF49_454F, 0xFFCA_C4D0);
+        let container = inputs
+            .colors
+            .container
+            .unwrap_or_else(|| Role::SurfaceContainer.color(dark));
+        let inactive = inputs
+            .colors
+            .ink
+            .unwrap_or_else(|| told(Material::OnSurfaceVariant, dark, 0xFF49_454F, 0xFFCA_C4D0));
         let (mut items, mut targets) = (Vec::new(), Vec::new());
         for (index, tab) in bottom.tabs.iter().enumerate() {
             let x = inputs.sides.0 + (cell + nav.item_gap) * index as f32;
             let middle = x + cell / 2.0;
             let (ink, text) = match (tab.enabled, tab.selected) {
                 (false, _) => {
-                    let mut faded = inactive;
-                    faded[3] = (255.0 * 0.38f32).round() as u8;
+                    let faded = disabled(inactive);
                     (faded, faded)
                 }
                 (true, true) => (
@@ -639,7 +664,17 @@ impl Layout {
                 rect: (start, 0.0, end - start, h),
                 what: What::Tab(tab.node),
                 enabled: tab.enabled,
-                layer: (layer, Role::OnSurface.color(dark)),
+                layer: (
+                    layer,
+                    if tab.selected {
+                        Role::OnSurface.color(dark)
+                    } else {
+                        inputs
+                            .colors
+                            .ink
+                            .unwrap_or_else(|| Role::OnSurface.color(dark))
+                    },
+                ),
             });
         }
         if bottom.direction == Direction::Rtl {
@@ -648,7 +683,7 @@ impl Layout {
         Layout {
             size: (inputs.width, h + inputs.edge),
             direction: bottom.direction,
-            container: Role::SurfaceContainer.color(dark),
+            container,
             items,
             targets,
         }
@@ -698,6 +733,7 @@ mod tests {
             ],
         };
         let inputs = Inputs {
+            colors: BarColors::default(),
             dark: false,
             font_scale: 1.0,
             width: 412.0,
@@ -738,6 +774,7 @@ mod tests {
         };
         for font_scale in [1., 2.] {
             let inputs = Inputs {
+                colors: BarColors::default(),
                 dark: false,
                 font_scale,
                 width: 300.,
@@ -850,6 +887,7 @@ component App
             p.host.set_bar_room(Some((64., 80., 80.))).unwrap();
             let (top, bottom) = p.read_bars();
             let inputs = Inputs {
+                colors: BarColors::default(),
                 dark: false,
                 font_scale: 1.,
                 width: 300.,
@@ -950,6 +988,7 @@ component App
         // the inset (16) instead, the title would be cut.
         let width = wide + 4.0 + 48.0 + 4.0 + 8.0 + 2.0;
         let inputs = Inputs {
+            colors: BarColors::default(),
             dark: false,
             font_scale: 1.0,
             width,
@@ -967,6 +1006,54 @@ component App
         // Moved back from the button: it ends 4 before the button's target.
         let bounds = text_rect(&p, at);
         assert!((bounds.0 + bounds.2 - (width - 4.0 - 48.0 - 4.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn bars_without_authored_colours_keep_every_device_paint_role() {
+        use super::super::tests::{barred, APP};
+        let (mut p, _) = barred(APP);
+        let paints = |layout: &Layout| {
+            layout
+                .items
+                .iter()
+                .map(|item| match item {
+                    Item::Fill(_, c) | Item::Symbol(_, _, c) | Item::Text(_, _, c, _) => *c,
+                })
+                .collect::<Vec<_>>()
+        };
+        for dark in [false, true] {
+            p.set_system_scheme(dark);
+            p.sync_bars();
+            let top = &p.bars.top.as_ref().unwrap().layout;
+            let bottom = &p.bars.bottom.as_ref().unwrap().layout;
+            assert_eq!(top.container, Role::Surface.color(dark));
+            assert_eq!(
+                paints(top),
+                [
+                    Role::OnSurfaceVariant.color(dark),
+                    Role::OnSurface.color(dark)
+                ]
+            );
+            let inactive = told(Material::OnSurfaceVariant, dark, 0xff49454f, 0xffcac4d0);
+            assert_eq!(bottom.container, Role::SurfaceContainer.color(dark));
+            assert_eq!(
+                paints(bottom),
+                [
+                    Role::SecondaryContainer.color(dark),
+                    told(Material::OnSecondaryContainer, dark, 0xff1d192b, 0xffe8def8),
+                    told(Material::Secondary, dark, 0xff625b71, 0xffccc2dc),
+                    inactive,
+                    inactive,
+                ]
+            );
+            assert_eq!(
+                (
+                    p.chrome().status_light_icons,
+                    p.chrome().navigation_light_icons
+                ),
+                (dark, dark)
+            );
+        }
     }
 
     #[test]
