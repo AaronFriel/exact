@@ -951,7 +951,7 @@ fn resize<D: DataSource>(p: &mut Presenter<D>, request: &serde_json::Value) -> S
 /// a native module's box but no module (LLP 1024 D1).
 fn tree<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
     p.boxes();
-    // @ref LLP 1080.002 D2 — this host exposes no AT-SPI tree (LLP 1015 §7).
+    // @ref LLP 1080.002 D2 — a headless drive has no platform window to query.
     if field_bool(line, "ax") {
         return serde_json::json!({"ax": {"unavailable": true, "reason": "no AT-SPI tree (LLP 1015 §7)"}})
             .to_string();

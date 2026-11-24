@@ -2,8 +2,8 @@
 //! 1115.001 D13). Android's reader has one view, and what is in it is
 //! painted, so TalkBack sees nothing unless the reader's view answers for
 //! it: an `AccessibilityNodeProvider` whose virtual nodes are these
-//! (`host/android/canvas`, `Access.kt`). Desktop Linux has no shell that
-//! asks (LLP 1015 §7: no AT-SPI tree), and nothing here runs there.
+//! (`host/android/canvas`, `Access.kt`). The Windows and Wayland shells
+//! publish the same elements through AccessKit (LLP 1115.004 D11).
 //!
 //! **Nothing is built until the shell asks.** The tree is made in
 //! [`Presenter::reader_access`], which the reader calls only while an

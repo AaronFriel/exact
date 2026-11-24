@@ -22,6 +22,7 @@ name = "exact_painted"
 crate-type = ["rlib"]
 
 [dependencies]
+accesskit = "0.25.1"
 exact-ink = { path = "../ink" }
 exact-grants = { path = "../../grants" }
 exact-canvas = { path = "../../canvas" }

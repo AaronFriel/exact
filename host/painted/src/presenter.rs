@@ -31,6 +31,7 @@ use std::time::Duration;
 use tiny_skia::Pixmap;
 
 pub mod access;
+pub mod accesskit;
 mod activities;
 mod addressed_tap;
 mod ahead;
