@@ -580,7 +580,7 @@ impl<D: DataSource> Presenter<D> {
             )
         };
         let offset = (f.x - origin.0, f.y - origin.1);
-        let dark = self.host.presented(id).dark.unwrap_or(self.dark());
+        let dark = self.dark_at(id);
         let backdrop = self.backdrop(id, dark);
         let scroll = self.alert_scroll(id);
         let title = title.map(|(label, p)| {
@@ -663,7 +663,7 @@ impl<D: DataSource> Presenter<D> {
             root_font: k.root_font_size(),
             scale: self.brush.scale,
             fonts: self.host.runner().runtime_font_count(),
-            dark: self.host.presented(id).dark.unwrap_or(self.dark()),
+            dark: self.dark_at(id),
             scroll: self.alert_scroll(id),
             anchor: self.alert.as_ref()?.anchor,
         })

@@ -315,11 +315,11 @@ impl<D: DataSource> Presenter<D> {
             .first()
             .and_then(|root| kernel.node(*root))
             .and_then(|n| {
-                // The root's own accent, as the painted root reads it.
+                // The root's own accent and scheme, as the painted root reads them.
                 let _accent = crate::paint::accent_scope(&n);
                 n.style
                     .background_color
-                    .map(|c| crate::paint::rgba(c.resolve(dark)))
+                    .map(|c| crate::paint::rgba(c.resolve(self.dark_at(n.id))))
             })
             .filter(|c| c[3] == 255);
         let bars = self.status_bar();

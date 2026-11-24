@@ -1258,12 +1258,12 @@ export const classifications = [
   group("UI facts", ["subscription"], "current session, viewport, page or rendered geometry", "UI-owned",
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/viewport.rs and page.rs settle facts of the live session; these entries carry no app/account operation identity.", [
     ["painted:host/painted/src/presenter/arrange_geometry.rs", "Presenter::arrange_base Presenter::list_port"],
-    ["painted:host/painted/src/presenter/preferences.rs", "Presenter::apply_scheme Presenter::midi_unavailable"],
+    ["painted:host/painted/src/presenter/preferences.rs", "Presenter::apply_scheme Presenter::midi_unavailable Presenter::scheme_of"],
     ["painted:host/painted/src/presenter/range_frame.rs", "Presenter::read_ranges"],
     ["painted:host/painted/src/presenter/split.rs",
       "Presenter::apply_split_to Presenter::geometry_parent Presenter::pane_frame Presenter::pane_root Presenter::place_split Presenter::scroll_parent " +
       "Presenter::split_placeholder Presenter::sync_split"],
-    ["painted:host/painted/src/presenter/status_bar.rs", "Presenter::status_bar_in_page Presenter::status_bar_scheme Presenter::status_bar_shows"],
+    ["painted:host/painted/src/presenter/status_bar.rs", "Presenter::status_bar_in_page Presenter::status_bar_shows"],
     ["painted:host/painted/src/presenter/timeline_scroll.rs", "Presenter::scroll_timelines"],
     ["painted:host/painted/src/presenter/transform_geometry.rs", "Presenter::deliver_geometry Presenter::deliver_intersections Presenter::refresh_transform_geometry Presenter::transform_geometry"],
     ["painted:host/painted/src/presenter/window.rs", "Presenter::env_insets Presenter::fit_view"],

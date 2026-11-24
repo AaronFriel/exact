@@ -47,7 +47,7 @@ pub(crate) use overlay::TopSurface;
 pub(crate) mod field;
 mod fragments;
 pub(crate) use fragments::{center as tap_point, hits, slop_hits};
-pub(crate) use lift::{Ghost, Lift};
+pub(crate) use lift::{scheme_of, Ghost, Lift};
 mod alert;
 pub(crate) mod inline;
 pub(crate) mod inline_frame;
