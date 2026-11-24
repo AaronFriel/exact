@@ -2,6 +2,8 @@ package dev.exact.canvas
 
 import android.net.Uri
 import android.webkit.WebView
+import android.webkit.CookieManager
+import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
@@ -69,8 +71,30 @@ internal object Partitions {
         return (if (agentCarried()) "exact.agent." else "exact.persist.") + partition.removePrefix("persist:")
     }
 
+    /** The profiles frames were made in since [flush] last ran, and whether any frame was made: what it writes. */
+    private val entered = mutableSetOf<String>()
+    var made = false
+
     /** [web]'s profile, made if new, before anything else touches the view (`WebViewCompat.setProfile`). */
-    fun enter(web: WebView, profile: String) = WebViewCompat.setProfile(web, profile)
+    fun enter(web: WebView, profile: String) {
+        WebViewCompat.setProfile(web, profile)
+        entered += profile
+    }
+
+    /**
+     * Writes the cookies of every store a frame used to disk, at the activity's stop, before Android may end the
+     * process. Chromium commits its cookie store on a timer, so a cookie set in the seconds before the process
+     * ends is otherwise lost. [CookieManager.flush] blocks until it is written. A profile no [live] frame shows is
+     * not flushed again.
+     */
+    fun flush(live: Set<String>) {
+        if (!made) return
+        CookieManager.getInstance().flush()
+        if (entered.isEmpty()) return
+        val store = ProfileStore.getInstance()
+        for (name in entered) store.getProfile(name)?.cookieManager?.flush()
+        entered.retainAll(live)
+    }
 }
 
 /** A string prop, empty where the painted host sent `null`. */

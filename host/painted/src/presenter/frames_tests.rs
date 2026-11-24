@@ -104,26 +104,84 @@ fn a_reader_record_reaches_only_its_frame() {
     assert!(!journal.contains("NoHandler"), "{journal}");
 }
 
-/// `exactPage().iframePartition` asks the platform only for a plan with an iframe.
+/// `exactPage().iframePartition` is asked once, by the first plan with an
+/// iframe, at boot or in a live update, and holds from that runner's first
+/// settlement: a child's state seeded from it reads the device's answer.
 #[test]
-fn only_a_plan_with_a_frame_asks_whether_partitions_are_kept() {
-    let boot = |source: &str| {
-        let (p, error) = Presenter::boot_with(
-            &crate::test_plan(source),
-            (),
-            (400., 800.),
-            1.,
-            PathBuf::new(),
-            PainterChoice::Cpu,
-        )
+fn whether_partitions_are_kept_is_asked_once_by_the_first_plan_with_a_frame() {
+    const PLAIN: &str = "component App\n  view\n    text \"no frame\"\n";
+    const FRAMED: &str = "shape Facts\n  iframePartition: bool\n\ncomponent App\n  resource page = exactPage() as shape Facts\n  view\n    column\n      Seen(kept=page.iframePartition)\n      iframe id=\"guest\" src=\"https://example.com/\" partition=\"persist:a\"\n\ncomponent Seen\n  props\n    kept: bool\n  state seen = kept\n  view\n    text `${seen}` testId=\"seen\"\n";
+    fn kept_page(plan: &exact_plan::Plan) -> exact_runner::Page {
+        super::with_partitions(Default::default(), plan, || Some(true))
+    }
+    fn never_asked(plan: &exact_plan::Plan) -> exact_runner::Page {
+        super::with_partitions(Default::default(), plan, || {
+            panic!("a plan without an iframe asked")
+        })
+    }
+    let boot = |source: &str, page: fn(&exact_plan::Plan) -> exact_runner::Page| {
+        let launch = exact_runner::time::Launch {
+            page: Some(exact_runner::time::PageFacts::new(page)),
+            ..exact_runner::time::Launch::NONE
+        };
+        let (mut p, error) = exact_runner::time::launching_with(launch, || {
+            Presenter::boot_with(
+                &crate::test_plan(source),
+                (),
+                (400., 800.),
+                1.,
+                PathBuf::new(),
+                PainterChoice::Cpu,
+            )
+        })
         .unwrap();
         assert!(error.is_none(), "{error:?}");
+        p.serve_frame_partitions(|| Some(true));
         p
     };
-    let mut plain = boot("component App\n  view\n    text \"no frame\"\n");
-    plain.serve_frame_partitions(|| panic!("a plan without an iframe asked"));
-    assert!(!plain.host.runner().page().iframe_partition);
-    let mut framed = boot(APP);
-    framed.serve_frame_partitions(|| true);
-    assert!(framed.host.runner().page().iframe_partition);
+    let kept = |p: &Presenter<()>| p.host.runner().page().iframe_partition;
+    let seen = |p: &Presenter<()>| {
+        let state: serde_json::Value =
+            serde_json::from_str(&exact_runner::agent::state(p.host.runner())).unwrap();
+        let slots = state["slots"].as_object().unwrap();
+        slots
+            .iter()
+            .any(|(name, value)| name.starts_with("seen#") && value == true)
+    };
+    assert!(!kept(&boot(PLAIN, never_asked)));
+    let p = boot(FRAMED, kept_page);
+    assert!(kept(&p) && seen(&p));
+    // A live update that brings the first iframe asks before its first settlement.
+    let mut p = boot(PLAIN, never_asked);
+    p.reload(&crate::test_plan(FRAMED), ()).unwrap();
+    assert!(kept(&p) && seen(&p));
+    // What a drive prefers holds: an iframe gone and back again, or the first to come.
+    let mut p = boot(FRAMED, kept_page);
+    let preferred = exact_runner::Page {
+        iframe_partition: false,
+        ..p.host.runner().page()
+    };
+    assert!(p.prefer_page(preferred, true).is_none());
+    p.reload(&crate::test_plan(PLAIN), ()).unwrap();
+    p.reload(&crate::test_plan(FRAMED), ()).unwrap();
+    assert!(!kept(&p));
+    // A platform that could not answer is asked again.
+    static ANSWERS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    fn probe() -> Option<bool> {
+        ANSWERS
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .then_some(true)
+    }
+    let mut p = boot(FRAMED, |plan| {
+        super::with_partitions(Default::default(), plan, probe)
+    });
+    p.serve_frame_partitions(probe);
+    assert!(!kept(&p));
+    ANSWERS.store(true, std::sync::atomic::Ordering::Relaxed);
+    p.reload(&crate::test_plan(FRAMED), ()).unwrap();
+    assert!(kept(&p));
+    let mut p = boot(PLAIN, never_asked);
+    assert!(p.prefer_page(p.host.runner().page(), true).is_none());
+    p.reload(&crate::test_plan(FRAMED), ()).unwrap();
+    assert!(!kept(&p));
 }

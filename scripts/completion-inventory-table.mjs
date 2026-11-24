@@ -82,7 +82,9 @@ export const classifications = [
     ["painted:host/painted/src/scale.rs", "Host::apply_live Host::set_display_scale Host::set_modes Host::set_root_font_size Host::set_view"],
     ["painted:host/painted/src/surfaces.rs", "Presenter::sync_surfaces_with_canvas_tick"],
     ["painted:host/painted/src/forma.rs", "Host::forma_json"],
+    ["painted:host/painted/src/presenter/frames.rs", "Presenter::candidate_page Presenter::frame_partitions_asked Presenter::serve_frame_partitions"],
     ["runner:runner/src/orientation.rs", "Runner::orientation_session Runner::set_orientation_applied"],
+    ["runner:runner/src/time.rs", "PageFacts::facts PageFacts::new"],
     ["runner:runner/src/runner.rs", "Runner::report_flow_skipped"],
     ["runner:runner/src/runner/box_resize.rs", "Runner::resize_box"],
     ["runner:runner/src/runner/fragments.rs", "Runner::report_fragment_skipped"],
@@ -426,7 +428,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/clock.rs", "Presenter::background_due_ms"],
     ["painted:host/painted/src/presenter/collection/anchoring.rs", "Presenter::publish_scroll"],
     ["painted:host/painted/src/presenter/commands.rs", "Presenter::refuse_picture_in_picture"],
-    ["painted:host/painted/src/presenter/frames.rs", "Presenter::frame_by_id Presenter::frame_command Presenter::frame_event Presenter::serve_frame_partitions"],
+    ["painted:host/painted/src/presenter/frames.rs", "Presenter::frame_by_id Presenter::frame_command Presenter::frame_event with_partitions"],
     ["painted:host/painted/src/presenter/device.rs", "Presenter::device"],
     ["painted:host/painted/src/presenter/display_frame.rs", "Presenter::activation_refused Presenter::display_input_mapping"],
     ["painted:host/painted/src/presenter/feedback.rs", "Presenter::feedback_at"],
@@ -666,7 +668,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/commands.rs", "Presenter::run_commands"],
     ["painted:host/painted/src/presenter/requests.rs",
       "Presenter::end_auth Presenter::end_packages Presenter::handle_modules Presenter::modules_replaced Presenter::orientation_applied Presenter::orientation_lock " +
-      "Presenter::pick Presenter::serve_packages Presenter::serve_requests Presenter::serve_share_sheet Presenter::take_requests Presenter::tell_shell Presenter::wakelock_moved"],
+      "Presenter::pick Presenter::serve_packages Presenter::serve_requests Presenter::take_requests Presenter::tell_shell Presenter::wakelock_moved"],
     ["painted:host/painted/src/teardown.rs", "finish"],
     ["render:host/render/src/executor.rs",
       "Executor::again Executor::begin_pump Executor::cancel Executor::drain Executor::forget Executor::let_go_started Executor::ordered_idle Executor::resume_ordered " +

@@ -27,22 +27,63 @@ pub(super) fn id(args: &[exact_plan::Value]) -> &str {
         .unwrap_or_default()
 }
 
+/// `page` with `exactPage().iframePartition` as `kept` answers, asked only
+/// by a plan with an `iframe`, as asking may load the platform's web engine.
+pub fn with_partitions(
+    page: exact_runner::Page,
+    plan: &exact_plan::Plan,
+    kept: fn() -> Option<bool>,
+) -> exact_runner::Page {
+    exact_runner::Page {
+        iframe_partition: page.iframe_partition || framed(plan) && kept() == Some(true),
+        ..page
+    }
+}
+
+fn framed(plan: &exact_plan::Plan) -> bool {
+    (plan.nodes.iter()).any(|node| NodeType::from_wire(node.node_type) == Some(NodeType::WebView))
+}
+
 impl<D: DataSource> Presenter<D> {
-    /// `exactPage().iframePartition`: what `kept` answers, asked only by a
-    /// plan with an `iframe`, as asking may load the platform's web engine.
-    pub fn serve_frame_partitions(&mut self, kept: impl FnOnce() -> bool) {
-        let plan = self.host.runner().plan();
-        if !(plan.nodes.iter())
-            .any(|node| NodeType::from_wire(node.node_type) == Some(NodeType::WebView))
-        {
-            return;
+    /// Asks `kept` for `exactPage().iframePartition` when a live update
+    /// brings the first `iframe`, unless the boot's plan had one and the
+    /// platform answered (`None`: it could not, and is asked again).
+    pub fn serve_frame_partitions(&mut self, kept: fn() -> Option<bool>) {
+        self.frame_partitions = Some(kept);
+        self.frame_partitions_asked();
+    }
+
+    /// `exactPage()` from the first settlement of a runner that replaces
+    /// this one: this one's facts, with `iframePartition` asked if the
+    /// reader has not been and the new plan has an `iframe`.
+    pub(super) fn candidate_page(&self) -> exact_runner::time::PageFacts {
+        let (page, kept) = (self.host.runner().page(), self.frame_partitions);
+        exact_runner::time::PageFacts::new(move |plan| match kept {
+            Some(kept) => with_partitions(page, plan, kept),
+            None => page,
+        })
+    }
+
+    /// A drive's facts (`prefer`): an `iframePartition` it names holds, and
+    /// the reader is not asked after.
+    pub(crate) fn prefer_page(
+        &mut self,
+        page: exact_runner::Page,
+        partition: bool,
+    ) -> Option<String> {
+        let error = self.set_page(page);
+        if partition && error.is_none() {
+            self.frame_partitions = None;
         }
-        let page = exact_runner::Page {
-            iframe_partition: kept(),
-            ..self.host.runner().page()
-        };
-        if let Some(e) = self.set_page(page) {
-            self.host.log(format!("page: {e}"));
+        error
+    }
+
+    /// The platform is asked until it answers, once.
+    pub(super) fn frame_partitions_asked(&mut self) {
+        if framed(self.host.runner().plan())
+            && self.frame_partitions.is_some_and(|kept| kept().is_some())
+        {
+            self.frame_partitions = None;
         }
     }
 

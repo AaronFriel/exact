@@ -925,6 +925,9 @@ class Natives(
         }
     }
 
+    /** The profiles the frames shown now were made in ([Partitions.flush]). */
+    fun profiles(): Set<String> = elements.values.mapNotNullTo(HashSet()) { it.profile }
+
     private fun readyWeb(): Int = webPool.indexOfLast { (it.webViewClient as FrameClient).readyToLend }
 
     private val frames = object : FrameHost {
@@ -947,6 +950,7 @@ class Natives(
 
     /** A frame's view; a [partitioned] one, kept or refused, never has a page-world object ([FrameClient]). */
     private fun webView(profile: String? = null, partitioned: Boolean = profile != null): WebView = WebView(context).apply {
+        Partitions.made = true
         profile?.let { Partitions.enter(this, it) }
         settings.javaScriptEnabled = true
         // A page's `localStorage` and `sessionStorage`, as a browser gives it; WebView's default has none.
