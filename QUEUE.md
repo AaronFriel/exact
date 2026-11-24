@@ -2065,5 +2065,3 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - Building a web JS box with `transition="translate -exact-spring()"` warns that the transition row was skipped even though the browser plays it (#1529). Report only transitions the host actually skips.
 - The rendered link and icon test times out waiting for the adoption journal entry after the first button click. Run `bun test host/web-js/dom.test.mjs -t "Bun-rendered links and icons"`.
 - The form keyboard fixture returns HTTP 404 for `drag-in.js`. Run `bun test host/web/tests/form-chrome.test.mjs -t "cancelling a prompt Return at window keydown"`.
-- The iframe message fixture serves HTML for `/rt.js`, so Chromium rejects the module before the test mounts its three frames. Run `bun test ./host/web/frame-messages.test.mjs`.
-- The press fixture serves `input-glue.js` for `/drag-in.js`. Chromium reports that the module has no `receive` export. Run `bun test ./host/web/tests/press.test.mjs -t "only the innermost pressable"`.
