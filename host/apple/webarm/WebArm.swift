@@ -609,18 +609,20 @@ final class WebArm: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         session = values["session"] as? String ?? ""
         handlesNewWindow = values["newwindow"] as? Bool ?? false
         hatched = values["hatched"] as? Bool ?? false
-        element = values["element"] as? String ?? ""
+        let newElement = values["element"] as? String ?? ""
         owner = values["owner"] as? String ?? ""
         Automations.arms.add(self)
         let name = values["partition"] as? String
         options = values
         pdf?.view.zoom = CGFloat((options["zoom"] as? NSNumber)?.doubleValue ?? 1)
         guard name != partition || (built == nil && pdf == nil) else {
+            element = newElement
             if let built { applyOptions(to: built) }
             return
         }
         let replacing = built != nil || pdf != nil
         if replacing { teardown() }
+        element = newElement
         partition = name
         if replacing {
             // A local PDF's frame losing its partition shows the PDF's view, and makes no web view for `serve` to drop.

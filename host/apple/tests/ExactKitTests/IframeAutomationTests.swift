@@ -434,6 +434,43 @@ final class IframeAutomationTests: XCTestCase {
         XCTAssertEqual(received.records.count, 3)
     }
 
+    func testQueuedPauseSurvivesTheLastOwnerOfItsView() throws {
+        for replace in [false, true] {
+            let arm = try arm(), seen = Seen(), player = Seen()
+            var handle: UnsafeMutableRawPointer?
+            var target: WKWebView?
+            weak var retired: WKWebView?
+            defer { if let handle { arm.destroy(handle) } }
+            let realm: String = try autoreleasepool {
+                (handle, target) = mount(arm, seen)
+                retired = target
+                let channel: [String: Any] = ["type": "channel", "value": ["channel": "playback"]]
+                let args: [String: Any] = ["sandbox": "player", "arguments": [channel], "channelSession": "player",
+                                           "functionDeclaration": "post => { window.send = post }"]
+                return try XCTUnwrap(run(arm, "callFunction", args, message: { record in
+                    if record["json"] as? String == "0" {
+                        target?.removeFromSuperview()
+                        target = nil
+                        if replace {
+                            self.json(["element": "next", "partition": "next", "owner": Self.owner], arm.configure, handle!)
+                        } else {
+                            arm.destroy(handle!)
+                            handle = nil
+                        }
+                    } else { player.records.append(("post", record as! [String: Any])) }
+                })["realm"] as? String)
+            }
+            autoreleasepool {
+                target?.evaluateJavaScript("send(0); send('pause')", in: nil, in: .world(name: "player"), completionHandler: nil)
+                spin { !player.records.isEmpty }
+            }
+            spin { autoreleasepool { retired == nil } }
+            XCTAssertEqual(player.records.first?.record["json"] as? String, "\"pause\"")
+            XCTAssertEqual(player.records.first?.record["source"] as? [String: String], ["origin": baseURL, "context": "tab", "realm": realm])
+            XCTAssertNil(retired)
+        }
+    }
+
     func testClosingSessionsRemovesTheirDocumentStartScripts() throws {
         let arm = try arm(), seen = Seen()
         let (handle, web) = mount(arm, seen)
