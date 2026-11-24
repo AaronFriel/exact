@@ -24,7 +24,7 @@ import org.robolectric.annotation.GraphicsMode
 class NativeLayersTest {
     private fun f(n: Float) = n.toRawBits()
     private val identity = intArrayOf(1, f(1f), 0, 0, f(1f), 0, 0)
-    private val header = intArrayOf(f(1f), 0, 0, f(1f), 0, 0, 0, 0, 0, 0, f(1f), 0, f(1f), 0, 0, -1)
+    private val header = intArrayOf(f(1f), 0, 0, f(1f), 0, 0, 0, 0, 0, 0, f(1f), 0, f(1f), 0, 0, f(1f), -1)
 
     private fun native(color: String): IntArray {
         val bytes = """{"module":"test-view","props":"{\"color\":\"$color\"}"}""".toByteArray()
