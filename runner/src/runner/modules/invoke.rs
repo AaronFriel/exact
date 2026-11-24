@@ -213,6 +213,13 @@ impl<D: DataSource> Runner<D> {
             };
             let channel = &params["channel"];
             let source = &params["source"];
+            if !channel.is_string()
+                || !["realm", "context", "origin"]
+                    .iter()
+                    .all(|key| source[key].is_string())
+            {
+                return reply(json!({"error":"TypeError", "message":"script.message needs a channel and a source with realm, context and origin strings"}).to_string());
+            }
             let args = format!(r#"{{"channel":{channel},"source":{source},"data":{data}}}"#);
             self.run_handler(
                 "script.message".into(),

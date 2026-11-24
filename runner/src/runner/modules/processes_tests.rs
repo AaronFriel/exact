@@ -138,6 +138,46 @@ fn a_script_message_needs_the_receivers_grant_and_cannot_start_a_process() {
 }
 
 #[test]
+fn script_message_requires_a_channel_and_a_complete_source() {
+    let mut granted = runner("browser.automation");
+    let mut denied = runner("");
+    let valid = json!({"channel":"playback", "json":"null", "source":{"realm":"r", "context":"c", "origin":"null"}});
+    for field in [
+        "/channel",
+        "/source",
+        "/source/realm",
+        "/source/context",
+        "/source/origin",
+    ] {
+        let mut params = valid.clone();
+        if field == "/source" {
+            params.as_object_mut().unwrap().remove("source");
+        } else {
+            *params.pointer_mut(field).unwrap() = Json::Null;
+        }
+        let message = json!({"extension":"browser-automation", "handle":"script.message", "handler":"script.message", "args":{"params":params}});
+        for (r, reason) in [
+            (&mut granted, "TypeError"),
+            (&mut denied, "NotAllowedError"),
+        ] {
+            let heard = Arc::new(Mutex::new(None));
+            let answer = heard.clone();
+            r.invoke_module(
+                &message.to_string(),
+                Box::new(move |reply| {
+                    *answer.lock().unwrap() = serde_json::from_str::<Json>(&reply).unwrap()
+                        ["error"]
+                        .as_str()
+                        .map(str::to_owned);
+                }),
+            );
+            let received = heard.lock().unwrap().clone();
+            assert_eq!(received.as_deref(), Some(reason), "{field}");
+        }
+    }
+}
+
+#[test]
 fn a_channel_overflow_journals_without_starting_a_guest_handler() {
     let mut r = runner("browser.automation");
     let message = serde_json::json!({
