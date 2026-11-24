@@ -597,6 +597,13 @@ impl<D: DataSource> Runner<D> {
         self.running_wake() == Some(id) && self.wake_deadline().is_some_and(before)
     }
 
+    /// Whether invocation `id` is the running background action or a
+    /// control's press, which owns a native statement until its reply.
+    pub(in crate::runner) fn action_owns(&self, id: u64) -> bool {
+        let action = (self.wakes.current.as_ref()).is_some_and(|w| w.origin == CallOrigin::Action);
+        (action && self.running_wake() == Some(id)) || self.press_running(id)
+    }
+
     /// Whether a wake runs.
     pub(in crate::runner) fn wake_running(&self) -> bool {
         self.wakes.current.is_some()
@@ -770,13 +777,16 @@ impl<D: DataSource> Runner<D> {
     }
 
     /// Take off this commit's host commands from `first` that a wake may
-    /// not run, when the commit is the wake's or a background action's
-    /// (origin `action`: the person's act, but nothing is shown).
+    /// not run, when a wake or a background action (origin `action`: the
+    /// person's act, but nothing is shown) is among the commit's causes.
     pub(in crate::runner) fn refuse_in_wake(&mut self, first: usize) {
-        let during = match self.call_origin() {
-            CallOrigin::Wake => "during a wake",
-            CallOrigin::Action => "during a background action",
-            _ => return,
+        let causes = self.cause().causes;
+        let during = if causes.has(CallOrigin::Wake) {
+            "during a wake"
+        } else if causes.has(CallOrigin::Action) {
+            "during a background action"
+        } else {
+            return;
         };
         let mut i = first;
         while i < self.commands.len() {
