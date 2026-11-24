@@ -1433,6 +1433,9 @@ sits on that list carries the trade it would take.
 
 ## Cheap, any time
 
+- An embedder's plain `NSWindow` still freezes page layout during an animated `setFrame` inside `native.call`. Run the window-frame fixture's 300-by-200 resize in an embedder window and compare the root and viewport at each resize notification (#1412).
+- Restore the LLP working set to 15 documents. `bun scripts/caps.mjs` reports 16 in `llp/current` on main.
+
 - **Editor support in the async lane** (2026-11-13, LLP 1035.005.003): once TypeScript 7.1 is
   stable, run `editors/content-mapper`'s tests with a pinned `tsc` (`EXACT_TSC71`).
 - **On iOS a scroller that hides one axis cannot reveal a target past it on that axis** (2026-11-13, Astra's review of the fragment scroll): an ordinary `overflow-x: hidden; overflow-y: auto` scroller (`host/apple/Sources/ExactKit/IOS/NodeViewIOS.swift` ~1343) does not move to a horizontally offscreen target on `scrollIntoView`. A projected route under a scrolling navigation root now keeps that axis's extent and locks the person's drag on it (`NavigationIOS`); the ordinary scroller needs the same.

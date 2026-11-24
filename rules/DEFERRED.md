@@ -2449,5 +2449,9 @@ toolbar on the display that holds the pointer and capturing before showing
 its window, without its own Win32 monitor and capture code.
 Take: none offered; waived by Charlie, 2026-11-14, after the panel (decision
 D5: all three seats chose to build both). Still out: `getDisplayMedia`, one
-display, a region, a named window, window placement, and the desktop Linux,
-iPadOS and Android cells.
+display, a region, a named window, placing another window, and the desktop Linux, iPadOS and Android cells.
+
+**Expanded (Charlie, 2026-11-24, "recs ok").** Float may read its own window's
+`screenX`, `screenY`, `outerWidth` and `outerHeight` on macOS and the web,
+and dock, expand and constrain it on macOS with `setBounds(bounds, animate)`
+and `setAspectRatio(ratio)` (LLP 1178 D1). AppKit saves the resulting frame.
