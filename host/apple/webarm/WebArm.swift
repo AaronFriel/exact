@@ -1108,6 +1108,7 @@ final class WebArm: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard !invalidated, webView === built else { return }
+        automation?.terminated()
         if let browser {
             emit(kind: 2)
             return browser.crashed()
