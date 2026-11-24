@@ -1206,6 +1206,12 @@ reading. Nothing that isn't HTML is added by it.
   a permission broker, author-facing `srcdoc`, a bridge in a partitioned page's
   world, a picture of any element but an `iframe`, cookie import, and LLP
   1020.002 §13's other uses.
+- **Expanded (Charlie, 2026-11-24, "recs ok"; LLP 1020.002 D9):** script
+  results carry the document's realm and host-supplied origin. An evaluation
+  can target that realm. The execution world checks its document token before
+  running the script, so an approval cannot land in a replacement document.
+  The web keeps same-origin frame evaluation and reports realm targeting unsupported.
+  An Android provider without document-start injection keeps plain page-world results.
 - **Expanded (LLP 1096; admitted by the orchestrator under Charlie's
   2026-10-04 delegation, "make decisions without me"):** short sounds an
   action can schedule: a `sound` declaration (a WAV in `assets/`, at most 10
