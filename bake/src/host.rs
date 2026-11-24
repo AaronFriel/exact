@@ -10,8 +10,8 @@ pub struct Shape {
     /// Whether the entry takes the manifest's Rust replacement mode (an app). A game's generated hosts require it off.
     pub replacement: bool,
     /// Whether the desktop hosts compose the app's packages and Rust hatches from `packages.rs` and `hatches.rs`,
-    /// as a TypeScript app's generated crates do (the crate's `main` is its own). Otherwise the entry carries `main`,
-    /// with the packages and no hatches, as a game's does.
+    /// as a TypeScript app's generated crates do (the crate's `main` is its own), and Android's links the update
+    /// store. Otherwise the desktop entry carries `main`, with the packages and no hatches, as a game's does.
     pub composed: bool,
     /// Whether the Apple entry names what it links and takes the update host when the binary has a store, as an
     /// app's does; a game's links every capability into the plain host.
@@ -149,8 +149,8 @@ pub fn bake<D: DataSource>(
         "generated game hosts require app.json rust: false"
     );
     fs::write(out.join("compat.json"), compat.to_json()).unwrap();
-    // What the APK's build reads beside the plan: its capabilities and derived permissions, and for an app the
-    // hatches' install (`hatches.rs`), as a TypeScript app's Android crate writes it.
+    // What the APK's build reads beside the plan: its capabilities and derived permissions, and the hatches' install
+    // (`hatches.rs`), as a TypeScript app's Android crate writes it.
     if platform == "android" {
         contract::native::android_entry(&app, &manifest, &baked, &out)
             .unwrap_or_else(|e| panic!("android: {e}"));
@@ -277,20 +277,22 @@ include!(concat!(env!("OUT_DIR"), "/hatches.rs"));"#
             )
         }
         "macos" | "ios" => apple_host("PLAN", "COMPAT"),
-        // An app's library with a store takes the update
-        // store's opener, which its crate links at deploy.store.android "A" (LLP 1030.006 D3).
-        "android" if shape.composed => {
-            let updates = if compat.inputs["store"]["L"] == "0" {
-                ""
-            } else {
-                ", updates = exact_painted_update::open"
-            };
-            format!("include!(concat!(env!(\"OUT_DIR\"), \"/hatches.rs\"));\nexact_painted::canvas_jni!(crate::AppData, hatches = crate::exact_hatches(){updates});")
-        }
-        "android" => "exact_painted::canvas_jni!(crate::AppData);".into(),
+        "android" => android_host(shape.composed && compat.inputs["store"]["L"] != "0"),
         _ => panic!("unsupported host platform: {platform}"),
     };
     format!("{packages}\n{main}")
+}
+
+/// The Canvas host's exports over `AppData`, with the hatches `android_entry` wrote, an app's and a game's alike (LLP
+/// 1115.001.000 D4, D5); `updates`, the update store's opener, which an app's crate links at deploy.store.android "A"
+/// (LLP 1030.006 D3).
+fn android_host(updates: bool) -> String {
+    let updates = if updates {
+        ", updates = exact_painted_update::open"
+    } else {
+        ""
+    };
+    format!("include!(concat!(env!(\"OUT_DIR\"), \"/hatches.rs\"));\nexact_painted::canvas_jni!(crate::AppData, hatches = crate::exact_hatches(){updates});")
 }
 
 /// The Apple host's exports over `AppData`, with the plan and compat.json named by the Rust expressions `plan` and
@@ -338,4 +340,25 @@ impl exact_runner::DataSource for ExactEmptyData {{
 }}
 {entry}"#
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    /// A game's Android entry connects the hatches as an app's does (expo/exact#1468).
+    #[test]
+    fn the_canvas_host_is_handed_the_hatches_with_or_without_an_update_store() {
+        for updates in [false, true] {
+            let entry = super::android_host(updates);
+            assert!(entry.starts_with("include!(concat!(env!(\"OUT_DIR\"), \"/hatches.rs\"));"));
+            assert!(
+                entry.contains("hatches = crate::exact_hatches()"),
+                "{entry}"
+            );
+            assert_eq!(
+                entry.contains("exact_painted_update::open"),
+                updates,
+                "{entry}"
+            );
+        }
+    }
 }
