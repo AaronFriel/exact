@@ -1361,7 +1361,7 @@ extension Agent {
     }
 }
 
-open class ExactAgentWindow: NSWindow {
+open class ExactAgentWindow: ExactSessionWindow {
     private(set) static var pointerEvent: NSEvent?
 
     /// An inactive process cannot make its window key. AppKit checks the target
