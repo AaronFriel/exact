@@ -1136,7 +1136,7 @@ export const classifications = [
     ["runner:runner/src/vm/column.rs", "Iter::next#at:1"],
   ]),
   group("native callbacks", ["one-shot"], "module invocation or numbered native send and its session-bound caller", "UI-owned",
-    "runner/src/runner/provenance.rs next_invocation allocates invocation ids; bound.rs forward_body and letgo.rs number_data_call number native sends so cancellation and held replies identify the call.", [
+    "runner/src/runner/provenance.rs next_invocation allocates invocation ids; bound.rs forward_body and letgo.rs number_data_call_linked number native sends so cancellation and held replies identify the call.", [
     ["runner:runner/src/runner/modules/bound.rs", "Runner::forward_body#requests:1"],
     ["runner:runner/src/runner/provenance.rs", "Runner::next_invocation#last_id:1"],
     ["runner:runner/src/runner/modules/letgo.rs", "Runner::number_data_call_linked#requests:1"],
