@@ -89,7 +89,7 @@ impl Module {
             };
             if inst.headroom != h {
                 inst.headroom = h;
-                inst.dirty = true;
+                inst.invalidate();
             }
         }
     }
@@ -139,7 +139,7 @@ impl Module {
         inst.config = Some(config);
         inst.surface.device_ready(features, limits);
         inst.report_color_space();
-        inst.dirty = true;
+        inst.invalidate();
         true
     }
 
@@ -201,7 +201,7 @@ impl Module {
         inst.hdr = false;
         inst.surface.device_ready(features, limits);
         inst.surface.color_space_granted(ColorSpace::Srgb);
-        inst.dirty = true;
+        inst.invalidate();
         Some(inst)
     }
 }

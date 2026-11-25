@@ -100,7 +100,7 @@ impl Module {
             return false;
         };
         if inst.surface.size(width, height) {
-            inst.dirty = true;
+            inst.invalidate();
         }
         inst.drain();
         true

@@ -54,7 +54,7 @@ impl Module {
             inst.child_geometry[index] = Some((name.to_owned(), frame));
             inst.each[index] = None;
             inst.surface.child(index, name, None, frame);
-            inst.dirty = true;
+            inst.invalidate();
             return true;
         }
         let expected = (width as usize)
@@ -135,7 +135,7 @@ impl Module {
             size,
         );
         inst.children_generation += 1;
-        inst.dirty = true;
+        inst.invalidate();
         true
     }
 
@@ -154,7 +154,7 @@ impl Module {
             }
             inst.each.truncate(count);
             inst.child_geometry.truncate(count);
-            inst.dirty = true;
+            inst.invalidate();
         }
         true
     }
@@ -267,7 +267,7 @@ impl Module {
             },
             size,
         );
-        inst.dirty = true;
+        inst.invalidate();
         true
     }
 
@@ -441,7 +441,7 @@ impl Module {
             });
         }
         inst.children_generation += 1;
-        inst.dirty = true;
+        inst.invalidate();
         true
     }
 }

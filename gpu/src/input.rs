@@ -244,6 +244,15 @@ impl crate::Module {
         true
     }
 
+    /// Whether a canvas has something to render: inputs it has not shown.
+    pub fn dirty(&self, id: u32) -> bool {
+        self.has_device(id)
+            && self
+                .instances
+                .get(&id)
+                .is_some_and(|i| i.dirty || i.input_dirty || i.surface.preparing())
+    }
+
     /// A painted display needs a callback for a requested frame, a change or
     /// output from its last tick that the host still has to deliver.
     #[cfg(not(target_arch = "wasm32"))]
@@ -281,6 +290,14 @@ impl crate::Module {
 }
 
 impl crate::Instance {
+    pub(crate) fn invalidate(&mut self) {
+        self.dirty = true;
+        #[cfg(exact_android_draw_trace)]
+        {
+            self.draw_trace.invalidated = true;
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn frame_dirty(&mut self, now_ms: f64, period_ms: f64, seekable: bool) -> bool {
         if !self.dirty && self.input_dirty && !seekable && !self.surface.preparing() {
@@ -290,6 +307,10 @@ impl crate::Instance {
                 std::task::Poll::Ready(draw) => {
                     self.input_dirty = false;
                     self.dirty = draw;
+                    #[cfg(exact_android_draw_trace)]
+                    {
+                        self.draw_trace.polled = draw;
+                    }
                 }
                 std::task::Poll::Pending => return false,
             }

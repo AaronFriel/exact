@@ -181,7 +181,7 @@ impl crate::Module {
                 continue;
             }
             // Drawn again at once: the agent's clock need not move to show the new rung.
-            inst.dirty = true;
+            inst.invalidate();
             if let Some(gpu) = &self.gpu {
                 inst.surface
                     .device_ready(gpu.device.features(), gpu.device.limits());

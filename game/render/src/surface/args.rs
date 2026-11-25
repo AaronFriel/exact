@@ -136,6 +136,9 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         } else {
             let mut sim = Sim::from_values(values).map_err(SurfaceError)?;
             sim.development_edits(self.development_edits);
+            if cfg!(any(test, target_os = "android")) && crate::development_build() {
+                sim.count_draw_samples();
+            }
             sim.defer_assets(ASSETS && self.device);
             // A size the host gave (`Surface::size`) frames the new world
             // before a stamped bind can tick it (`Game::first_frame`).

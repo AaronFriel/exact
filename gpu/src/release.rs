@@ -54,6 +54,10 @@ impl Instance {
         #[cfg(target_os = "android")]
         {
             self.ring = None;
+            #[cfg(exact_android_draw_trace)]
+            {
+                self.draw_trace.new_target = true;
+            }
         }
         retired
     }

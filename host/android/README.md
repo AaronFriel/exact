@@ -329,25 +329,15 @@ window handler and publishes through the reader's normal frame path. The drive's
   request can tap what this one made.
 - *Clock ownership.* The drive starts on the runner's clock. Clock requests and synthesized contact holds advance it.
 
-**Frame timing** (LLP 1079.000 §6.2). In a driver's launch the reader measures two sources, which `perf frames`
-reads as `exact.frame-health.metrics/2` (`health`) and `exact.frame-health/2` (`report`):
+**Frame timing** (LLP 1079.000 §6.2). In a driver launch, `perf frames health` and `report` read `exact.frame-health.metrics/2` and `exact.frame-health/2`.
 
-- `app` (`exact-app-choreographer`), Exact's frames: each Choreographer turn on exact2's thread is a frame at its
-  vsync, whose work runs until the main thread has ingested the stream it published. Its deadline and period are
-  Choreographer's (`FrameData`, Android 13 and later); before 13, the next vsync and the display's refresh. A turn whose
-  stream waits behind eight others has its work lost and counted (`work.lost`).
-- `window` (`android-frame-metrics`), the window's drawn frames from `FrameMetrics`: each from its intended vsync for
-  its total duration, against its `DEADLINE` (Android 12 and later; before it lateness is unknown). A window draws
-  only when something changed, so this source has work and no frame times. The reader's own scrolling and the layers
-  it plays are here.
+- `app` (`exact-app-choreographer`) times an Exact thread callback from vsync until the main thread ingests its stream. `FrameData` supplies the period and deadline on Android 13+. Older systems use display refresh and the next vsync. A stream behind eight others loses its work measurement (`work.lost`).
+- `window` (`android-frame-metrics`) measures drawn window work from intended vsync through `FrameMetrics.TOTAL_DURATION`, including reader scrolling and layer playback. This source records work only when the window draws and supplies no frame intervals. Android 12+ supplies `DEADLINE`. On earlier releases lateness is unknown. A GPU SurfaceView can draw outside the window. Neither source observes presentation.
 
-Neither observes presentation, and a GPU canvas's `SurfaceView` is drawn outside the window. Under the driver's clock
-a frame is virtual and nothing is recorded: `perf frames capture start [ms]` lends the display the clock for the
-lease. During the lease, `clock` is refused and contact holds wait in real time. `capture stop` (or the lease's end)
-gives the driver its clock back where the display left it. `perf frames live <ms>` is a lease of its own, which reads
-both sources from its start to its end. In `--live`, the display owns time for the whole drive.
-Both sources' `coverage.liveAgent` identify the clock as `platform-clock`, `virtual-clock`, or `lent-wall-clock`.
-A production bake collects nothing.
+The virtual driver clock records no frames. `perf frames capture start [ms]` lends the display the clock until `capture stop` or expiry, then the driver resumes at that time. During a lease, clock operations are refused and contact holds use real time.
+`perf frames live <ms>` reads both sources over one lease. In `--live`, the display always owns time. Both sources identify `platform-clock`, `virtual-clock`, or `lent-wall-clock` in `coverage.liveAgent`. Production bakes omit these driver measurements.
+
+For individual GPU canvas draws in a normally launched development or release app, use the [Android canvas trace](../../game/README.md#android-canvas-draws).
 
 **The operations**, each tried on a Pixel 10 Pro XL with Shelf:
 

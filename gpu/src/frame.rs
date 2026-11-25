@@ -190,8 +190,12 @@ impl Module {
             }
             inst.input_dirty = inst.surface.input_pending();
             inst.dirty = false;
+            #[cfg(exact_android_draw_trace)]
+            inst.draw_trace.empty();
             return Some(false);
         }
+        #[cfg(exact_android_draw_trace)]
+        inst.draw_trace.attempt();
         #[cfg(target_os = "android")]
         if inst.ring.is_some() {
             return self.render_to_buffer(id, frame);
@@ -310,6 +314,8 @@ impl Module {
         if let Some(s) = inst.scratch.as_mut().filter(|s| retry && !s.continues) {
             s.clear(&mut recording.encoder);
         }
+        #[cfg(exact_android_draw_trace)]
+        let reasons = inst.trace_draw_begin(id, &frame);
         inst.surface.timing(&timing);
         let wants = inst.surface.render(
             &frame,
@@ -352,13 +358,16 @@ impl Module {
             inst.held = Some(texture);
             (None, None)
         };
+        let drawn = inst.surface.frame_ready() && failure.is_none();
+        #[cfg(exact_android_draw_trace)]
+        inst.trace_draw_end(&frame, id, reasons, wants, drawn);
         let open = self.open.get_or_insert_with(Open::default);
         open.canvases.push(Rendered {
             id,
             refused: commands.is_none(),
             commands,
             complete: ready,
-            drawn: inst.surface.frame_ready() && failure.is_none(),
+            drawn,
             texture,
             failed,
             request: off_thread && wants && ready,
@@ -421,6 +430,8 @@ impl Module {
             ..*frame
         };
         let mut recording = Recording::begin(&gpu.device);
+        #[cfg(exact_android_draw_trace)]
+        let reasons = inst.trace_draw_begin(id, &frame);
         inst.surface.timing(&timing);
         let wants = inst.surface.render(
             &frame,
@@ -443,13 +454,16 @@ impl Module {
         let cap = inst.surface.max_fps();
         inst.cadence
             .after(cap, frame.now_ms, self.period_ms, wants || !ready);
+        let drawn = inst.surface.frame_ready() && failure.is_none();
+        #[cfg(exact_android_draw_trace)]
+        inst.trace_draw_end(&frame, id, reasons, wants, drawn);
         let open = self.open.get_or_insert_with(Open::default);
         open.canvases.push(Rendered {
             id,
             refused: commands.is_none(),
             commands,
             complete: ready,
-            drawn: inst.surface.frame_ready() && failure.is_none(),
+            drawn,
             texture: None,
             failed: None,
             request: false,

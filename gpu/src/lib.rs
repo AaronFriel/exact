@@ -424,6 +424,12 @@ pub trait Surface {
     }
     /// One device event in canvas points, stamped with the host's clock.
     fn input(&mut self, _event: &InputEvent) {}
+    /// Why the surface requested this frame, sampled before rendering during a platform trace.
+    fn draw_reasons(&self, _input_poll: bool, _record: &mut dyn FnMut(&str)) {}
+    /// Remember this completed draw for the trace and return samples consumed since its predecessor.
+    fn finish_draw_trace(&mut self, _traced: bool) -> Option<u64> {
+        None
+    }
     /// Whether the event the last [`Surface::input`] took changed what the
     /// canvas shows, as [`Surface::frame_ready`] answers for `render`. False
     /// asks for no frame, so a resting scene can take a sensor's samples or a
@@ -665,6 +671,8 @@ struct Instance {
     inputs: Vec<Value>,
     dirty: bool,
     input_dirty: bool,
+    #[cfg(exact_android_draw_trace)]
+    draw_trace: android::DrawTrace,
     /// Its first frame has been handed to the compositor (`Module::seen`);
     /// shared with the callback that says so.
     seen: Arc<AtomicBool>,
@@ -805,7 +813,7 @@ impl Module {
                 .device_ready(gpu.device.features(), gpu.device.limits());
             inst.report_color_space();
             inst.surface.prepare_assets(&gpu.device, &gpu.queue, format);
-            inst.dirty = true;
+            inst.invalidate();
         }
         self.gpu = Some(gpu);
     }
@@ -887,7 +895,7 @@ impl Module {
         match shaders::set_shader(name, text, Some(expected)) {
             Ok(()) => {
                 for inst in self.instances.values_mut() {
-                    inst.dirty = true;
+                    inst.invalidate();
                 }
                 true
             }
@@ -959,6 +967,8 @@ impl Module {
                 inputs: Vec::new(),
                 dirty: false,
                 input_dirty: false,
+                #[cfg(exact_android_draw_trace)]
+                draw_trace: Default::default(),
                 seen: Default::default(),
                 presented: Default::default(),
                 children: None,
@@ -989,7 +999,7 @@ impl Module {
             inst.surface.device_lost();
             inst.answered.clear();
             inst.outstanding.clear();
-            inst.dirty = true;
+            inst.invalidate();
             inst.children = None;
             inst.each.clear();
             inst.child_geometry.clear();
@@ -1038,7 +1048,7 @@ impl Module {
         self.reduced_motion = reduce;
         for inst in self.instances.values_mut() {
             inst.surface.reduced_motion(reduce);
-            inst.dirty = true;
+            inst.invalidate();
             inst.drain();
         }
     }
@@ -1085,7 +1095,9 @@ impl Module {
         };
         let reply = inst.surface.agent(request);
         let messages = inst.surface.messages();
-        inst.dirty |= reply.is_some() || !messages.is_empty();
+        if reply.is_some() || !messages.is_empty() {
+            inst.invalidate();
+        }
         inst.messages.extend(messages);
         if let Some(record) = inst.surface.published() {
             inst.published = Some(record);
@@ -1110,7 +1122,7 @@ impl Module {
                 inst.drain();
                 inst.bound = true;
                 inst.inputs = inputs.to_vec();
-                inst.dirty = true;
+                inst.invalidate();
                 #[cfg(windows)]
                 if inst.surface.is_empty() {
                     self.discard_window_picture(id);
@@ -1136,7 +1148,7 @@ impl Module {
             retired,
         } = inst.surface.assets();
         if !retired.is_empty() {
-            inst.dirty = true;
+            inst.invalidate();
         }
         for name in &retired {
             inst.answered.remove(name);
@@ -1181,7 +1193,7 @@ impl Module {
                 .prepare_assets(&gpu.device, &gpu.queue, view_format(config));
         }
         inst.drain();
-        inst.dirty = true;
+        inst.invalidate();
         if let Some(SurfaceError(error)) = inst.surface.take_error() {
             self.error = error;
             return false;
@@ -1216,7 +1228,7 @@ impl Module {
                 inst.presented.forget_record();
                 inst.presented.reset();
                 inst.drain();
-                inst.dirty = true;
+                inst.invalidate();
                 true
             }
             Err(error) => {
@@ -1224,15 +1236,6 @@ impl Module {
                 false
             }
         }
-    }
-
-    /// Whether a canvas has something to render: inputs it has not shown.
-    pub fn dirty(&self, id: u32) -> bool {
-        self.has_device(id)
-            && self
-                .instances
-                .get(&id)
-                .is_some_and(|i| i.dirty || i.input_dirty || i.surface.preparing())
     }
 
     /// Whether a canvas's last render went without a drawable (`acquire`):
