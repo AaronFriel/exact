@@ -214,6 +214,7 @@ export function androidDeploy(app, bin, env) {
     if (existsSync(rust)) run(['push', rust, `${dir}/`], 'push the plan\'s Rust module');
     vars.EXACT_PLAN = `${dir}/${basename(plan)}`;
   }
+  pushSubstitutes(vars, dir, run);
   Object.assign(vars, { HOME: home, EXACT_ASSETS: dir, EXACT_NATIVE_LIBS: dir, EXACT_PAINTER: env.EXACT_PAINTER ?? 'cpu' });
   const assignments = Object.entries(vars).map(([k, v]) => `${k}=${quote(v)}`).join(' ');
   const shot = `${dir}/agent-shot.png`, { lease, release: releasePorts } = reverseForDrive(tool, serial, vars);
@@ -300,7 +301,6 @@ export function apkRecord(app, apk = readerApk(app)) {
 /** The reader's own sources, which every APK compiles. */
 export const READER_SOURCES = ['canvas/src', 'video/src', 'widgets/src', 'app/src', 'soundarm', '../apple/soundarm'].map((d) => resolve(READER, d));
 
-// A reader failure whose cleanup succeeded.
 const RELAY_CLEANED_ERROR = 70;
 
 /** The reader carrier (LLP 1107 D1): install the APK and return what `androidDeploy` returns, with a process that
@@ -347,9 +347,11 @@ function readerDeploy(app, apk, env) {
     run(['shell', `chmod 644 ${quote(plan)}`], 'chmod the plan');
     env = { ...env, EXACT_PLAN: plan };
   }
-  const vars = readerVariables(env), { lease, release: releasePorts } = reverseForDrive(tool, serial, vars);
+  const vars = readerVariables(env), fixture = pushSubstitutes(vars, dir, run);
+  const { lease, release: releasePorts } = reverseForDrive(tool, serial, vars);
   const cleanup = code => {
     if (code !== 0 && code !== RELAY_CLEANED_ERROR) spawnSync(tool, ['-s', serial, 'shell', 'am', 'force-stop', id], { timeout: 5000 });
+    if (fixture) spawnSync(tool, ['-s', serial, 'shell', 'rm', '-f', fixture], { timeout: 5000 });
     releasePorts();
   };
   return {
@@ -364,6 +366,14 @@ function readerDeploy(app, apk, env) {
   };
 }
 
+function pushSubstitutes(vars, dir, run) {
+  if (!vars.EXACT_AGENT_SUBSTITUTES?.startsWith('@')) return;
+  const path = vars.EXACT_AGENT_SUBSTITUTES.slice(1), remote = dir + '/' + basename(path);
+  run(['push', path, remote], 'push package substitutes');
+  run(['shell', 'chmod 644 ' + quote(remote)], 'chmod package substitutes');
+  vars.EXACT_AGENT_SUBSTITUTES = '@' + remote;
+  return remote;
+}
 /** What the reader reads of a drive's `env`, which reaches it as its `x_<name>` launch extras (`ExactActivity`'s
  * `environment`): EXACT_AGENT and every EXACT_AGENT_* (the store, the epoch, the locale, the seed, the fetch faults),
  * EXACT_STORE (`real`: the platform's stores, a conformance suite's), the auth fixture a test declares

@@ -7304,7 +7304,14 @@ step inside a test.
 fixture. Other single-value page facts, such as `prefer online false`, follow
 the same launch, override and reload rules and use the drive's parser and name
 aliases. Hosts refuse facts they cannot substitute. Folds (`posture`, `segments`,
-`gap`), mode pins and extension substitutes are drive-only for now.
+`gap`) and mode pins require a drive.
+
+`prefer extension store.outcome="cancel"` sets a package substitute.
+A leading line supplies it before boot. A later step changes subsequent calls,
+and `prefer extension store.outcome=clear` restores the package default.
+A package that reads its substitute only at startup sees a mid-test change
+at the next launch. Reload and verify's relaunch receive the current values.
+Each test and each replay starts again with the package defaults.
 
 Before the first step (and after a `reload`) the driver waits for the app's data
 as `clock data` does: its data module activated and every request launch started

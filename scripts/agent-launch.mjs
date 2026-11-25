@@ -730,7 +730,7 @@ export function faultSpec(spec) {
  * off (LLP 1075.003.000.001 §2.6). */
 export function agentPage(address, { facts, storage, env }) {
   address.searchParams.set('agent', '1');
-  for (const [key, value] of Object.entries(facts)) if (key !== 'failFetch') address.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(facts)) if (key !== 'failFetch' && key !== 'substitutes' && key !== 'restoreSubstitutes') address.searchParams.set(key, value);
   if (env?.EXACT_AUTH_FIXTURE) address.searchParams.set('authFixture', env.EXACT_AUTH_FIXTURE);
   if (storage !== undefined) address.searchParams.set('storage', storage);
   if ((env?.EXACT_HATCHES ?? process.env.EXACT_HATCHES) === 'off') address.searchParams.set('hatches', 'off');
@@ -754,7 +754,7 @@ export function withEpoch(href, epoch) {
   return url.href;
 }
 
-export function launchFacts({seed, locale, formatLocale, timeZone, epoch, failFetch, env = {}}) {
+export function launchFacts({seed, locale, formatLocale, timeZone, epoch, failFetch, substitutes, restoreSubstitutes, env = {}}) {
   seed = Number(seed ?? env.EXACT_AGENT_SEED ?? 1);
   // An ISO date, Unix milliseconds or `now` (the machine's clock, read here, once); hosts are told milliseconds.
   epoch = String(epoch ?? env.EXACT_AGENT_EPOCH ?? AGENT_EPOCH);
@@ -772,11 +772,11 @@ export function launchFacts({seed, locale, formatLocale, timeZone, epoch, failFe
   formatLocale = formatLocale ?? env.EXACT_AGENT_FORMAT_LOCALE;
   if (formatLocale !== undefined) formatLocale = Intl.getCanonicalLocales(formatLocale)[0];
   failFetch = faultSpec(failFetch ?? env.EXACT_AGENT_FAIL_FETCH);
-  return {seed, locale, timeZone, epoch, ...(formatLocale ? {formatLocale} : {}), ...(failFetch ? {failFetch} : {})};
+  return {seed, locale, timeZone, epoch, ...(substitutes ? {substitutes: {...substitutes}} : {}), ...(restoreSubstitutes ? {restoreSubstitutes: true} : {}), ...(formatLocale ? {formatLocale} : {}), ...(failFetch ? {failFetch} : {})};
 }
 
-export function launchEnvironment(facts) {
-  return {EXACT_AGENT_SEED: String(facts.seed), EXACT_AGENT_LOCALE: facts.locale, EXACT_AGENT_TIME_ZONE: facts.timeZone, EXACT_AGENT_EPOCH: String(facts.epoch), ...(facts.formatLocale ? {EXACT_AGENT_FORMAT_LOCALE: facts.formatLocale} : {}), ...(facts.failFetch ? {EXACT_AGENT_FAIL_FETCH: facts.failFetch} : {})};
+export function launchEnvironment(facts, host) {
+  return {...(facts.substitutes && host !== 'web' ? {EXACT_AGENT_SUBSTITUTES: JSON.stringify({ values: facts.substitutes, restore: !!facts.restoreSubstitutes, target: host })} : {}), EXACT_AGENT_SEED: String(facts.seed), EXACT_AGENT_LOCALE: facts.locale, EXACT_AGENT_TIME_ZONE: facts.timeZone, EXACT_AGENT_EPOCH: String(facts.epoch), ...(facts.formatLocale ? {EXACT_AGENT_FORMAT_LOCALE: facts.formatLocale} : {}), ...(facts.failFetch ? {EXACT_AGENT_FAIL_FETCH: facts.failFetch} : {})};
 }
 
 // A build older than what it was made from is refused before launch

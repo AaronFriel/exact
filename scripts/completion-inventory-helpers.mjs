@@ -57,6 +57,8 @@ export function helperClassifications(group) {
   ]),
   group("module announcements", ["subscription"], "bound source/module and its active readers in this session", "UI-owned",
     "The named public runner-crate source is the module announcements API or its value/admission helper. runner/src/runner/time.rs changed/apply_announced settle source watches; modules/events.rs raises events into the live module bindings. No durable outcome record is provided.", [
+    ["runner:runner/src/runner/modules/agent.rs", "check_source_substitute"],
+    ["runner:runner/src/runner/modules/arrival.rs", "check_arrival_field"],
     ["runner:runner/src/local_network.rs", "fact launch launch_once prompts Reach::refusal Reach::static_risk report State::parse State::word"],
     ["runner:runner/src/runner/source.rs", "Interrupt::trigger Native::changed Native::on_changed"],
   ]),

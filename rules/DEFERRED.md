@@ -2335,6 +2335,11 @@ one that sets every device fact by its web name: display preferences, and the
 page and place facts of LLP 1069.000. A new fact is a form of `prefer`, never a
 tenth operation.
 
+**Admitted (Charlie, 2026-11-24, "recs ok"; panel 3–1, LLP 1017.000 P7).**
+An authored test may set a package substitute with `prefer extension`. The driver
+owns its value for the test, starts replay from defaults, applies changes to
+later calls and supplies current values at relaunch (expo/exact#1610).
+
 **Ruled (Charlie, 2026-10-02: "it's probably worth a waiver to a 10th op I think";
 LLP 1079 D7):** `perf` is the tenth operation and takes none away: a subtree's work
 by plan site, and a host's presented frames. A new measurement is a form of `perf`,

@@ -28,7 +28,7 @@
 // is raised by the host (an activation the implementation binds, `isTrusted`
 // only) or emitted (the device's origin), and heard in order, once, each as
 // its own commit (D6).
-import { data, Resources, commit, R, Failed, nextTicket, say, clock, order, drive, Clocked, After, time, Store, Hosts, navigateRoot, locationOf, inflight, Origin, viewId } from "./rt.js";
+import { data, Resources, commit, R, Failed, nextTicket, say, clock, agentMode, order, drive, Clocked, After, time, Store, Hosts, navigateRoot, locationOf, inflight, Origin, viewId } from "./rt.js";
 import { reportTime } from "./navigation.js";
 import { packageContext, packageFiles, packageInstances, packageServices } from "./package-session.js";
 import { packageViews } from "./views.js";
@@ -138,7 +138,7 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
   const valueOf = row => {
     if (row.sub.index === "entries") return rc.value(row);
     if (row.sub.listed) return wk.listed(row.sub.listed, row);
-    let v = preferredOver(row) ?? restricted(row);
+    let v = preferred.has(row.key) ? preferredOver(row) : restricted(row);
     if (row.sub.web) v = { ...(v ?? {}), ...row.sub.web };
     // The browser keeps no presence secrets (LLP 1133.010 D15), whatever the preferred status says.
     if (row.sub.facts && v && typeof v === "object" && !Array.isArray(v)) {
@@ -174,10 +174,12 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
   // `prompt` (`admission`, LLP 1133.004 §7).
   // `p` is the permission `permissionOf` selected: none when a permission it requires is not this row's, as in the runner
   const decidePermission = (row, send, p, args = {}) => {
+    if (!send && isStatus(row) && (preferred.has(row.key) || (p && row.sub.admission !== "none"))) {
+      const status = valueOf(row);
+      return { now: errorCode(status) ? status : statusValue(row, status) };
+    }
     if (!p || row.sub.admission === "none") return null;
     const state = stateOf(p.name);
-    // A target that makes the module absent keeps its own answer (`unknown`), as the runner's.
-    if (!send && isStatus(row)) return { now: row.sub.targets?.web?.available === false ? valueOf(row) : statusValue(row, valueOf(row)) };
     // A source that reads a value of its own until the permission is granted (`ungranted`), as the runner's.
     if (!send && "ungranted" in row.sub && state !== "granted") return { now: structuredClone(row.sub.ungranted) };
     // A request that answers the status answers it denied too (`deniedAnswers`: WebKit's `requestPermission` resolves
@@ -407,7 +409,7 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
   // the track table (`tracks`), admitted paths' files (`files`), the audio session (`audioSession`), and
   // `clocked(fn)`, which runs `fn` after each move of the session's clock. The web has no session end an
   // implementation could finish in.
-  const live = new Set(), ready = new Map(), constructed = new Map();
+  const live = new Set(), ready = new Map(), constructed = new Map(), notifications = new Map();
   // Under the agent the drive's page fact (`prefer visibility-state`, agent.js) is the foreground; the machine's never is.
   let agentShown = true;
   const shown = () => clock.agent ? agentShown : typeof document !== "object" || document.visibilityState !== "hidden";
@@ -476,11 +478,18 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
       } };
     const impl = m.implementation?.(packageContext(context, !globalThis.__exactProduction)) ?? null;
     constructed.set(extension, impl);
-    if (clock.agent) await impl?.preferred?.(preferredOf(extension));
+    if (clock.agent) await tellPreferred(extension, true);
     ready.set(extension, impl);
     return impl;
   });
-  const implementation = row => route(row) === "substitute" ? null : instance(extensionOf(row));
+  const implementation = row => {
+    if (route(row) === "substitute") return null;
+    const extension = extensionOf(row);
+    return instance(extension).then(async impl => {
+      await notifications.get(extension)?.pending;
+      return impl;
+    });
+  };
   // `of`, spans, `played` and `changes` (spans.js).
   const sp = spans({ sibling, valueOf, route, extensionOf, say, raise: (key, args, from) => raise(key, args, from) });
   Clocked.push(sp.due);
@@ -527,13 +536,26 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
   const tell = () => { sampled.visibility(!shown()); for (const impl of loaded.values()) impl.then(i => i?.foreground?.(shown())); };
   if (typeof addEventListener === "function") addEventListener("visibilitychange", tell);
   (globalThis.exact ??= {}).foreground = visible => { if (agentShown !== visible) { agentShown = visible; tell(); ar.visibility(!visible); } };
-  // Preferences can cancel pending initialization; construction picks up any earlier changes.
-  const tellPreferred = async extension => {
-    if (!constructed.has(extension)) return;
-    inflight.n++;
-    try { await constructed.get(extension)?.preferred?.(preferredOf(extension)); }
-    catch (e) { say(`${extension}: ${e.message}`); }
-    finally { inflight.n--; }
+  // Deliver immediately so a new preference can cancel work in progress. A call waits for
+  // earlier notifications. If an older callback finishes last, restore the current table.
+  const tellPreferred = (extension, opening = false) => {
+    const impl = constructed.get(extension);
+    if (!impl?.preferred) return;
+    let state = notifications.get(extension);
+    if (!state) notifications.set(extension, state = {sent:0, finished:0});
+    const revision = ++state.sent;
+    const notify = async () => {
+      inflight.n++;
+      try {
+        await impl.preferred(preferredOf(extension));
+        if (revision < state.finished) await tellPreferred(extension);
+        else state.finished = revision;
+      } catch (e) { if (opening) throw e; say(`${extension}: ${e.message}`); }
+      finally { inflight.n--; }
+    };
+    const update = notify();
+    state.pending = Promise.all([state.pending, opening ? update.catch(() => {}) : update]).then(() => {});
+    return update;
   };
   // The agent's preferred values for an extension's names, by name.
   const preferredOf = extension => Object.fromEntries([...preferred].filter(([k]) => k.startsWith(`${extension}.`) && (!k.includes("#") || route(byKey.get(k)) === "agent")).map(([k, v]) => [k.slice(extension.length + 1).split("#")[0], v]));
@@ -1326,32 +1348,39 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
       return { ticket: req.ticket, capability: cap, answered: "value", delivery: "substituted" };
     },
     // `prefer extension` and `prefer permission` (LLP 1124 D7, LLP 1133.002 §6).
-    prefer(req) {
+    prefer(req, phase) {
+      const launching = phase === "launch" || phase === "restore";
       for (const [name, state] of Object.entries(req.permission ?? {})) {
         if (![...byKey.values()].some(r => permissionNamed(r, name))) return { error: `prefer permission: no module here asks for \`${name}\`` };
         if (!["granted", "denied", "prompt"].includes(state)) return { error: `prefer permission.${name}: granted, denied or prompt` };
       }
       const group = req.extension ?? {};
+      const clearing = v => !launching && !req.literal && v === "clear";
       for (const [key, v] of Object.entries(group)) {
         const word = agentWord(key);
         if (word) {
-          if (v !== "clear" && !wordFits(word, v)) return { error: `prefer extension: \`${key}\` is a ${word}` };
-          const refused = ar.refusal(key, v, group);
+          if (!clearing(v) && !wordFits(word, v)) return { error: `prefer extension: \`${key}\` is a ${word}` };
+          const refused = phase !== "restore" && !clearing(v) && ar.refusal(key, v, group);
           if (refused) return { error: refused };
           continue;
         }
         const row = byKey.get(key);
         const sources = [...byKey.values()].filter(r => !r.send).map(r => r.key);
         if (!row) return { error: `prefer extension: no source \`${key}\` in this app; its module sources are ${sources.join(", ") || "none"}` };
-        if (row.send) return { error: `prefer extension: \`${key}\` is a send, which the module answers` };
-        const p = row.sub.permission, field = p && isStatus(row) ? p.field : null;
-        if (field && v && typeof v === "object" && field in v) return { error: `prefer extension: \`${key}\`'s \`${field}\` is set by \`prefer permission.${p.name}\`` };
+        if (row.send && row.sub.from !== declaredOf(row)) return { error: `prefer extension: \`${key}\` is a send, which the module answers` };
+        const statuses = statusesOf(row);
+        for (const p of statuses) {
+          if (p.field.split(".").reduce((at, part) => at?.[part], v) !== undefined)
+            return { error: `prefer extension: \`${key}\`'s \`${p.field}\` is set by \`prefer permission.${p.name}\`` };
+        }
         // An implementation's own substitute takes a partial overlay (LLP 1133.009 D10 item 11); a declared one, a value.
-        if (v !== "clear" && !errorCode(v)) {
+        if (!clearing(v) && !errorCode(v)) {
           try {
-            if (row.sub.implementation || row.sub.partial) partial(v, row.type, row.key);
+            if (row.sub.network === "browse") networkFixture(v);
+            else if (row.sub.implementation || row.sub.partial) partial(v, row.type, row.key);
             else if (sampled.sampled(row)) sampled.check(row, v, (reading, key) => value(filled(row, reading), row.type, key));
-            else typed(row, JSON.stringify(field ? { ...v, [field]: stateOf(p.name) } : v));
+            else if (!launching && !req.literal && !row.send && typeof v !== "object" && row.type && typeof row.type === "object" && !Array.isArray(row.type)) typed(row, JSON.stringify(v));
+            else value(filled(row, statuses.length && v && typeof v === "object" ? statusValue(row, v) : v), row.type, key);
           } catch (e) { return { error: `prefer extension: ${e.message}` }; }
         }
       }
@@ -1360,21 +1389,22 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
       for (const [key, v] of Object.entries(group)) {
         const row = byKey.get(key), before = row?.sub.changes ? valueOf(row) : undefined;
         moved.push([key, preferred.get(key)]);
-        if (v === "clear") preferred.delete(key); else preferred.set(key, v);
-        if (row) sampled.prefer(row, v);
+        if (clearing(v)) preferred.delete(key); else preferred.set(key, v);
+        if (row) sampled.prefer(row, clearing(v) ? null : v);
+        if (launching) continue;
         dv.preferred(key);
         say(`prefer extension ${key}`);
         if (row?.sub.changes) sp.changed(row, before, valueOf(row));
       }
+      if (launching) return {};
       // An implementation bound under the agent is told its names' preferred values (LLP 1133.008 D8 item 9).
-      const told = Object.keys(group).flatMap(key => {
-        const row = byKey.get(key) ?? rowOf(key), extension = key.slice(0, key.indexOf("."));
-        if (row && route(row) === "agent") return [extensionOf(row)];
-        return clock.agent && agentWord(key) && viewWords.has(extension) ? [extension] : [];
-      });
-      for (const extension of new Set(told)) {
-        tellPreferred(extension);
+      const told = new Set();
+      for (const key of Object.keys(group)) {
+        const row = byKey.get(key), extension = key.slice(0, key.indexOf("."));
+        if (row ? route(row) === "agent" : clock.agent && (viewWords.has(extension) ||
+            [...byKey.values()].some(r => extensionOf(r) === extension && route(r) === "agent"))) told.add(extension);
       }
+      for (const extension of told) tellPreferred(extension);
       // A field word's change is an arrival, once every word is set.
       for (const [key, before] of moved) ar.moved(key, before, preferred.get(key));
       settleValues();
@@ -1383,6 +1413,22 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
       return { extension: Object.fromEntries(preferred), permission: Object.fromEntries(permission) };
     },
   };
+  if (globalThis.__exactLaunchSubstitutes && agentMode()) {
+    const { values, restore } = globalThis.__exactLaunchSubstitutes;
+    const result = globalThis.exact.extensions.prefer({ extension: values }, restore ? "restore" : "launch");
+    if (result.error) throw new Error(result.error);
+  }
+}
+
+// DNS-SD fixtures have the same service type and port bounds as the runner's network_checked.
+function networkFixture(services) {
+  if (!Array.isArray(services)) throw new Error("the network is a list of services");
+  for (const service of services) {
+    const name = /^_([a-zA-Z0-9-]{1,15})\._(?:tcp|udp)$/.exec(service?.type)?.[1];
+    if (!name || !/[a-zA-Z]/.test(name) || /^-|--|-$/.test(name) || typeof service.name !== "string" ||
+        typeof service.host !== "string" || !Number.isInteger(service.port) || service.port < 1 || service.port > 65535)
+      throw new Error("each service needs a name, DNS-SD type, host and port");
+  }
 }
 
 /** Whether `c` is a CSS colour: the browser's own parse, else its common forms. */
