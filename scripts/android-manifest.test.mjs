@@ -100,6 +100,21 @@ test('speech action queries and package queries share one element and deduplicat
   ].join('\n'));
 });
 
+test("an app's Kotlin shares the package query allow-list and merged entries", () => {
+  const tts = { action: 'android.intent.action.TTS_SERVICE' };
+  const mail = { action: 'android.intent.action.SENDTO', scheme: 'mailto' };
+  const health = { package: 'com.google.android.apps.healthdata' };
+  const xml = manifestFragment(impl({ queries: [tts, mail] }), { appQueries: [tts, health] });
+  assert.equal(xml, manifestFragment(impl({ queries: [tts, health, mail] })));
+  assert.match(manifestFragment([], { appQueries: [mail] }), /<intent><action android:name="android\.intent\.action\.SENDTO" \/><data android:scheme="mailto" \/><\/intent>/);
+  for (const invalid of [null, {}, [null], [{}], [{ ...health, ...tts }], [{ ...tts, mimeType: '*/*' }],
+    [{ package: 'com.example' }], [{ action: 'android.intent.action.MAIN' }],
+    [{ ...mail, scheme: 'https' }], [{ ...mail, action: 'constructor' }], [{ ...mail, action: [mail.action] }]]) {
+    assert.throws(() => manifestFragment([], { appQueries: invalid }), /app.json host\.android\.queries/);
+    assert.throws(() => manifestFragment(impl({ queries: invalid })), /alarms's Android implementation/);
+  }
+});
+
 test('an unlisted query action is refused with the package and action named', () => {
   assert.throws(() => manifestFragment([{
     extension: 'speech-recognition', className: 'exact.speechrecognition.SpeechRecognitionModule',

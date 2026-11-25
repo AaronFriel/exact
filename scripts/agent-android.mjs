@@ -1317,7 +1317,7 @@ function extensionArgs(app, out, config, bound, firebase, development) {
       `    override val config: Map<String, String> = mapOf(${config.filter((c) => bound.some((b) => b.extension === c.extension) && Object.keys(c.values).length).map((c) => `${JSON.stringify(c.extension)} to ${sourceString(JSON.stringify(c.values), 'kotlin')}`).join(', ')})`,
       '}', ''].join('\n'));
   }
-  // The queries and components the packages' manifest fragments declare, under the allow-list (LLP 1133.030 D9), with
+  // The app’s and packages’ queries and the packages’ components, under the allow-list (LLP 1133.030 D9), with
   // the app's privacy policy for an activity that shows it (LLP 1133.026 D4), and the vendor meta-data the packages'
   // configuration fills (`configMetaData`).
   // The notification channels, strings, sounds and small icon (LLP 1133.004.000 D1, D3), and Firebase's options for
@@ -1330,7 +1330,7 @@ function extensionArgs(app, out, config, bound, firebase, development) {
   // The App Links `handle_links` claims (LLP 1038 D8), its https auth callbacks excluded.
   const links = androidLinkFilters(app.manifest, callbacks);
   for (const note of androidLinkNotes(app.manifest, links, { callbacks, signsIn: !!reach?.auth?.sessions || callbacks.some((c) => c.startsWith('https:')) })) console.warn(`${app.name}: ${note}`);
-  const fragment = withAuthCallbacks(withAppLinks(withProtocolHandlers(withMetaData(manifestFragment(bound, { privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? []), ...(notify ? CHANNELS_RECEIVER : [])]), app.manifest, !development), links), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');
+  const fragment = withAuthCallbacks(withAppLinks(withProtocolHandlers(withMetaData(manifestFragment(bound, { appQueries: app.manifest?.host?.android?.queries, privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? []), ...(notify ? CHANNELS_RECEIVER : [])]), app.manifest, !development), links), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');
   rmSync(fragmentFile, { force: true });
   if (fragment) { mkdirSync(dirname(fragmentFile), { recursive: true }); writeFileSync(fragmentFile, fragment); }
   return [...(bound.length ? [`-PextensionDirs=${[...bound.flatMap((b) => b.dirs), generated].join(',')}`] : []), ...(permissions.length ? [`-Ppermissions=${permissions.join(',')}`] : []),

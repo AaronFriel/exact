@@ -991,10 +991,8 @@
             },
             "urlSchemes": {"type": "array", "description": "Custom schemes whose URLs open as app locations. Use protocol_handlers for a template.", "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9+.-]*$"}},
             "painter": {"enum": ["ink"], "description": "Opt into ink (LLP 1149 D12); absent: the current painter, with `EXACT_PAINTER` overriding the choice, and ink refused until its Vulkan presenter is implemented."},
-            "minimumOS": {
-              "description": "The oldest Android the app runs on, as \"12\"; never below 10. Below 12 the APK carries the reader's Android 10 and 11 code (host/android/README.md, \"Android 10 and 11\"); at 12 or later it carries none.",
-              "enum": ["10", "11", "12", "13", "14", "15", "16"]
-            },
+            "minimumOS": { "description": "The oldest Android the app runs on, as \"12\"; never below 10. Below 12 the APK carries the reader's Android 10 and 11 code (host/android/README.md, \"Android 10 and 11\"); at 12 or later it carries none.",
+              "enum": ["10", "11", "12", "13", "14", "15", "16"] },
             "launchImage": {
               "description": "What Android 12's starting window shows on `background_color` (or the platform's surface without one) in place of the launcher icon, which it shows unsaid. A picture (iOS's `host.ios.launchImage`; Expo's splash `image` and `imageWidth`) is that icon, `width` dp wide, which the platform shows within a centred square 192 dp across and, on stock Android, cuts to the circle in it; before Android 12, whose launch window has no icon, it is centred on the window's background. `false` shows no icon. A PNG in the app's directory; the same picture in both appearances unless color_scheme_dark.src names another. Changing it requires a new native build.",
               "type": ["object", "boolean"],
@@ -1022,14 +1020,16 @@
                 "additionalProperties": false
               }
             },
+            "queries": {"description": "Android package visibility for modules/android, checked against the package manifest allow-list (LLP 1133.030 D9).", "type": "array", "items": {"oneOf": [
+              {"type": "object", "required": ["package"], "properties": {"package": {"type": "string"}}, "additionalProperties": false},
+              {"type": "object", "required": ["action"], "properties": {"action": {"type": "string"}, "scheme": {"type": "string"}}, "additionalProperties": false}
+            ]}},
             "maven": {
               "description": "Pinned group:artifact:version coordinates on Google's Maven or Maven Central for the app's Kotlin in modules/android. Like a package implementation's maven array, these join the APK's locked, checksum-verified Gradle graph (LLP 1133.008 D8 item 5; host/android/README.md).",
               "type": "array",
-              "items": {
-                "type": "string",
+              "items": { "type": "string",
                 "pattern": "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:(?!(?:[Ll][Aa][Tt][Ee][Ss][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee])(?:\\.|$))(?!.*-[Ss][Nn][Aa][Pp][Ss][Hh][Oo][Tt]$)[A-Za-z0-9_.-]+$(?![\\s\\S])",
-                "x-hint": "use group:artifact:version with a pinned version, without ranges, dynamic selectors, SNAPSHOTs, classifiers or repositories"
-              }
+                "x-hint": "use group:artifact:version with a pinned version, without ranges, dynamic selectors, SNAPSHOTs, classifiers or repositories" }
             },
             "certificates": {
               "description": "The SHA-256 fingerprints of every certificate that signs the app (the debug key, the upload key, Play App Signing's), as `AB:CD:…`: the origin's `/.well-known/assetlinks.json` lets each use the app's passkeys (LLP 1133.011 D6).",
