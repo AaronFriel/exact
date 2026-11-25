@@ -314,9 +314,19 @@ impl<D: DataSource> Runner<D> {
         args: Vec<Value>,
         frames: &[Frame],
     ) -> Result<CommitReceipt, RunnerError> {
+        self.run_action_from(action, args, frames, None)
+    }
+
+    pub(super) fn run_action_from(
+        &mut self,
+        action: ActionsId,
+        args: Vec<Value>,
+        frames: &[Frame],
+        edit: Option<field::InputEdit>,
+    ) -> Result<CommitReceipt, RunnerError> {
         let was_poisoned = self.poisoned;
         let checkpoint = self.checkpoint();
-        let result = self.run_action_inner(action, args, frames);
+        let result = self.run_action_inner(action, args, frames, edit);
         self.conclude(checkpoint, &result, was_poisoned);
         self.arm_then(result.is_ok());
         self.arm_next(result.is_ok());
@@ -355,6 +365,7 @@ impl<D: DataSource> Runner<D> {
         action: ActionsId,
         args: Vec<Value>,
         frames: &[Frame],
+        edit: Option<field::InputEdit>,
     ) -> Result<CommitReceipt, RunnerError> {
         if self.poisoned {
             return Err(RunnerError::Poisoned);
@@ -436,6 +447,7 @@ impl<D: DataSource> Runner<D> {
                 RunnerError::from(t).evaluated(|| format!("action {:?}", self.plan.str(row.name)))
             })?
         };
+        let rewrite = edit.and_then(|edit| self.reconciled_input(edit, frames, &outcome));
         // Sends (LLP 1016 §4): each asks the source now. An answer lands in
         // the mutation's slot inside this commit; a request goes to the host
         // once the commit stands. A queue mutation's send is asked only when
@@ -808,7 +820,17 @@ impl<D: DataSource> Runner<D> {
                 Err(why) => self.log(format!("scrollIntoView refused: {why}")),
             }
         }
-        let result = self.update();
+        let mut result = self.update();
+        if let (Ok(receipt), Some((key, old))) = (&mut result, rewrite) {
+            if !receipt.renewed.contains(&key)
+                && self
+                    .kernel
+                    .node_by_key(key)
+                    .is_some_and(|n| exact_kernel::control::bound_field_value(n.props) == old)
+            {
+                receipt.reconcile_field = Some(key);
+            }
+        }
         if result.is_err() && !self.poisoned {
             for (rows, slot, old) in row_undo.into_iter().rev() {
                 match old {

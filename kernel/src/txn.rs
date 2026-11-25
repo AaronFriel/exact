@@ -68,6 +68,8 @@ pub struct CommitReceipt {
     pub destroyed: Vec<NodeKey>,
     /// Live nodes whose props, style, or children changed (created nodes excluded).
     pub touched: Vec<NodeKey>,
+    /// The edited field whose action assigned its existing bound text (LLP 1102 §3.16).
+    pub reconcile_field: Option<NodeKey>,
     /// Whether any change can move geometry; a host that only paints may skip layout otherwise.
     pub layout_invalidated: bool,
     /// The destroyed nodes that play an exit before a host removes them.
@@ -96,7 +98,6 @@ pub struct CommitReceipt {
     /// producer that mounts rows fills it, as it does `renewed`.
     pub revealed: Vec<NodeKey>,
 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
     Live(NodeType),

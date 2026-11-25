@@ -715,7 +715,7 @@ states. This gives the editor three responsibilities:
   field (an eye, a "Forgot password?"). Submit on Return with `submit`, which
   runs on Return alone, after the commit (and never for an IME's Return).
 
-For a live filter on the web JS target, assign the accepted text in
+For a live filter, assign the accepted text in
 `input`, including when it equals the previous value. For example:
 
 ```contract
@@ -733,8 +733,7 @@ skips the assignment on rejection leaves the rejected text visible. An
 unconditional assignment of a parsed number erases a half-typed `-` or
 `1.`. Assigning `v.trim()` removes a trailing space as it is typed.
 Keep raw text in a draft and normalize on `change` when those
-intermediate states matter. The wasm and native hosts still use their
-existing value-change behavior.
+intermediate states matter.
 
 ```contract
 component Quantity

@@ -916,7 +916,7 @@ package final class Presenter {
     var onChecked: ((UInt32, Bool) -> Void)?
     func typed(_ id: UInt32, _ value: String, input: Bool) {
         edited = id
-        if input { onInput?(id, value) }
+        if input { fieldSelections.input(id, value) }
     }
     package func commitEdit(_ id: UInt32, _ value: String, change: Bool) {
         guard edited == id else { return }

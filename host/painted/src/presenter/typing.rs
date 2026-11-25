@@ -945,7 +945,7 @@ impl<D: DataSource> Presenter<D> {
     }
 
     /// What a field shows and commits: its typed text while its bound
-    /// value is the one it had then (`keep_typed`), else that value.
+    /// value is the one it had then and its action has not reconciled it.
     pub(crate) fn field_text(&self, id: ViewId) -> String {
         self.field_text_ref(id).into_owned()
     }
@@ -960,21 +960,16 @@ impl<D: DataSource> Presenter<D> {
             .unwrap_or_else(|| exact_kernel::control::bound_field_value(node.props))
     }
 
-    /// After an edit's dispatch: a field whose `value` the edit's action did
-    /// not write keeps the typed text, as the web's element keeps its own
-    /// value and the web build writes `value` only when the bound value
-    /// changes (LLP 1069.001 D4: an unbound field holds its own text).
-    pub(crate) fn keep_typed(&mut self, id: ViewId, typed: String, before: String) {
-        // No handler need hear an edit for it to show.
+    /// The draft was installed before dispatch so the handler and its commands
+    /// could read it. A commit may already have replaced it.
+    pub(crate) fn finish_field_edit(&mut self, id: ViewId) {
         self.dirty = true;
-        // A commit since the edit began (the watch set before its dispatch) that changed the
-        // value replaces the typed text, whatever it reads now.
-        let written = self.forget_replaced_choices().contains(&id);
-        let bound = self.bound_text(id);
-        if !written && self.host.kernel().node(id).is_some() && bound == before && bound != typed {
-            self.host.values.watch(id, Some(bound.clone()));
-            self.chosen.insert(id, (typed, bound));
-        } else {
+        self.forget_replaced_choices();
+        if self
+            .chosen
+            .get(&id)
+            .is_some_and(|(typed, bound)| typed == bound)
+        {
             self.host.values.watch(id, None);
             self.chosen.remove(&id);
         }

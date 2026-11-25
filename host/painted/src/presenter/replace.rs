@@ -31,6 +31,7 @@ impl<D: DataSource> Presenter<D> {
             autofocus_from,
             disabled_blur,
             edited,
+            filtering_field,
             fields,
             field_history,
             field_drag,
@@ -195,6 +196,7 @@ impl<D: DataSource> Presenter<D> {
         // 1069.001 D4), an edit to commit, a caret: as Apple's reset and
         // the web's rebuilt page have it.
         *edited = None;
+        *filtering_field = None;
         fields.clear();
         *field_history = Default::default();
         *field_drag = None;

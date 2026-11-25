@@ -1323,8 +1323,8 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   a text field commits on Enter and on blur, as in HTML. Fix: submit on `submit`
   (Return, a form's button) and keep `change` for normalizing the draft.
   (The Bluesky clone's muted words dialog, 2026-10-08.)
-- **Skipping an assignment keeps the rejected text visible.** On the web JS
-  target, a live filter assigns the accepted value on every edit, including
+- **Skipping an assignment keeps the rejected text visible.** A live filter
+  assigns the accepted value on every edit, including
   when it equals the previous value. An action that only validates, or a data
   layer that suppresses the assignment, leaves the draft in place. Keep raw
   text in state for a number that can be half-typed, then parse on commit.

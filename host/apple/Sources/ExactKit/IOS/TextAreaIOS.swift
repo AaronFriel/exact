@@ -672,9 +672,11 @@ extension NodeView {
     /// shows changes nothing, so a composition and its selection stand. A
     /// different one is held while text is marked, the last one written,
     /// and applied when the composition ends (`FieldComposition.swift`).
-    func writeValue(_ value: String, into f: UITextView) {
+    func writeValue(_ value: String, into f: UITextView, heldFilter: Bool? = nil) {
+        let filtered = heldFilter ?? (presenter?.fieldSelections.inputSource == id && fieldIsTextEntry)
         if (f.text ?? "").utf16.elementsEqual(value.utf16) { pendingValue = nil; return }
-        if f.markedTextRange != nil { pendingValue = value; return }
+        if f.markedTextRange != nil { pendingFiltered = filtered; pendingValue = value; return }
+        let direction = filtered ? presenter?.fieldSelections.current(self).direction : nil
         pendingValue = nil
         toldText = nil
         guard let edit = minimalTextEdit(from: f.text ?? "", to: value) else { return }
@@ -687,7 +689,8 @@ extension NodeView {
         } else {
             f.textStorage.replaceCharacters(in: edit.range, with: NSAttributedString(string: edit.text, attributes: f.typingAttributes))
         }
-        f.selectedRange = carrySelection(selection, through: edit)
+        f.selectedRange = carrySelection(selection, through: edit, filtered: filtered)
+        presenter?.fieldSelections.carried(self, direction: direction)
         (f as? TextArea)?.markup?.bookmark = f.selectedRange
         restyleMarkup()
     }
@@ -725,7 +728,7 @@ extension NodeView {
         if let editor = (textView as? TextArea)?.markup, editor.applying || editor.styling { return }
         textView.setNeedsDisplay()
         if !disabled { typedText(textView.text ?? "") }
-        if textView.markedTextRange == nil, let held = pendingValue { writeValue(held, into: textView) }
+        if textView.markedTextRange == nil, let held = pendingValue { writeValue(held, into: textView, heldFilter: pendingFiltered) }
         configureMarkup()
         restyleMarkup()
         applyBaseDirection(to: textView) // an undo brings back the attributes of the text it restores

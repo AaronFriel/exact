@@ -144,6 +144,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// applied when the composition ends, and whether a value is being
     /// written in (`FieldComposition.swift`).
     var toldText: String?
+    var pendingFiltered = false
     var pendingValue: String?
     var writingValue = false
     package var scroll: ChainingScrollView?

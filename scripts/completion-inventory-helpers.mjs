@@ -114,7 +114,7 @@ export function helperClassifications(group) {
       "KeyModifiers::held KeyModifiers::split"],
     ["runner:runner/src/runner/event/frame_navigation.rs", "FrameNavigation::parse FrameNavigation::value other"],
     ["runner:runner/src/runner/event/keyboard.rs", "KeyboardEvent::chord KeyboardEvent::parse KeyboardEvent::value"],
-    ["runner:runner/src/runner/field.rs", "Event::edit_payload Event::field_payload FieldSelection::at_end FieldSelection::caret FieldSelection::clamped FieldSelection::parse SelectionDirection::name SelectionDirection::of utf16_len"],
+    ["runner:runner/src/runner/field.rs", "Event::edit_payload Event::field_payload FieldSelection::at_end FieldSelection::caret FieldSelection::clamped FieldSelection::parse FieldSelection::through_rewrite SelectionDirection::name SelectionDirection::of utf16_len"],
     ["runner:runner/src/runner/host_kinds.rs", "Event::clipboard_payload Event::media_payload Event::of_host_kind Event::paste_files_payload Event::selection_change_payload Event::selection_payload"],
     ["runner:runner/src/runner/modules/declared/desktop.rs", "chord_refusal"],
     ["runner:runner/src/desktop.rs", "single_side_shortcut"],

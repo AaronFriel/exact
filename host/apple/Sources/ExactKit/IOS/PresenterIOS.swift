@@ -743,7 +743,7 @@ package final class Presenter {
     func typed(_ id: UInt32, _ value: String, input: Bool) {
         send(id) { [self] in
             edited = id
-            if input { onInput?(id, value) }
+            if input { fieldSelections.input(id, value) }
         }
     }
     package func commitEdit(_ id: UInt32, _ value: String, change: Bool) {

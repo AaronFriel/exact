@@ -2938,15 +2938,15 @@ extended), and when `setSelectionRange` changes the selection, collapsed
 included; typing and a plain caret move do not fire it. Its payload is the
 `InputEvent`.
 
-On the web JS target, a text field (including search) or textarea shows its
+A text field (including search) or textarea shows its
 bound `value` after its own `input` action assigns state that expression
 read. Assigning the old value counts. For `value=form.name` the slot is
 `form`, including when a child receives the name from its parent and calls
 the parent's action. A guard that skips the assignment, a data layer that
 issues no write, validation and a save awaiting a reply all leave the draft
 visible. A later change to the binding updates the field normally. The
-caret follows the accepted part of the edit. The wasm and native hosts
-still use their existing value-change behavior.
+caret follows the accepted part of the edit. The terminal currently displays
+the bound text between keystrokes even when the action only validates.
 
 While an input method composes in a text field or a textarea (Japanese kana
 before its kanji, pinyin, a Korean syllable), `input` fires at every change

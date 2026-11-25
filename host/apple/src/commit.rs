@@ -123,6 +123,13 @@ impl<D: DataSource> Host<D> {
                     self.update(id, &mut batch);
                 }
             }
+            if let Some(node) = r
+                .reconcile_field
+                .and_then(|k| self.runner.kernel().node_by_key(k))
+            {
+                let value = exact_kernel::control::bound_field_value(node.props);
+                batch.props(node.id, &[("value", value.into_owned())], &[]);
+            }
         }
         self.withdraw_flat_hits(&omitted_gone, &mut batch);
         // The `portal` movers placement moved this batch or before.

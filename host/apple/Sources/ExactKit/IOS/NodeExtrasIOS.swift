@@ -162,6 +162,7 @@ final class NodeExtras {
     var stepper: FieldStepper?
     #endif
     var toldText: String?
+    var pendingFiltered = false
     var pendingValue: String?
     /// A native field in a grouped list's row (`isCellField`).
     var fieldInCell = false
@@ -413,6 +414,7 @@ extension NodeView {
     var selectionField: UITextField? { headerField ?? field }
     /// The editor's text as the app was last told it; nil once the app has set the value since (`FieldComposition.swift`).
     var toldText: String? { get { extras?.toldText } set { if newValue != nil || extras != nil { more.toldText = newValue } } }
+    var pendingFiltered: Bool { get { extras?.pendingFiltered ?? false } set { if newValue || extras != nil { more.pendingFiltered = newValue } } }
     /// A `value` that arrived while text was marked, applied when the composition ends.
     var pendingValue: String? { get { extras?.pendingValue } set { if newValue != nil || extras != nil { more.pendingValue = newValue } } }
     package var video: (any VideoPlaying)? { get { extras?.video } set { if newValue != nil || extras != nil { more.video = newValue } } }

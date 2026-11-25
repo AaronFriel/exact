@@ -307,6 +307,7 @@ pub struct Presenter<D: DataSource> {
     /// The text field typed into since it took the focus: its `change`
     /// fires on blur or Enter, HTML's commit (LLP 1069.001 D4).
     pub(crate) edited: Option<ViewId>,
+    filtering_field: Option<ViewId>,
     /// Each text field's selection (x2apps codeedit #2), kept for the value
     /// it indexes, focused or not: the next key there edits at it.
     pub(crate) fields: BTreeMap<ViewId, field::FieldMark>,
@@ -680,6 +681,7 @@ impl<D: DataSource> Presenter<D> {
             autofocus_from: None,
             disabled_blur: Vec::new(),
             edited: None,
+            filtering_field: None,
             fields: BTreeMap::new(),
             field_history: Default::default(),
             field_drag: None,

@@ -107,6 +107,7 @@ impl RetainedReceipt {
             created: self.created.keys(),
             destroyed: self.destroyed.keys(),
             touched: self.touched.keys(),
+            reconcile_field: None,
             layout_invalidated: self.layout_invalidated,
             exits: self.exits.clone(),
             handoffs: self.handoffs.clone(),

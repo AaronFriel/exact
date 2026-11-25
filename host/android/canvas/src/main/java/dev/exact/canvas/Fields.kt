@@ -171,6 +171,7 @@ internal class Fields(context: Context) : FrameLayout(context) {
         var look: IntArray? = null
         /** The count of the person's edits here, and the last told to exact2. */
         var edits = 0
+        var answered = 0
         var edited = false
         var moved = false
         /** Whether its text composes, as exact2 was last told. */
@@ -300,7 +301,7 @@ internal class Fields(context: Context) : FrameLayout(context) {
             var f = fields[id]
             // A view made for a field exact2 already knows (the activity was made again) starts at exact2's count
             // of its edits, and so takes the value told with it.
-            if (f == null) f = make(id, generation).also { it.edits = w[i + 12] }
+            if (f == null) f = make(id, generation).also { it.edits = w[i + 12]; it.answered = it.edits }
             // Its node is another row's item now (LLP 1078): the view starts over, with nothing of the last one's.
             else if (f.generation != generation) renew(f, generation)
             val placed = w[i + 2] and PLACED != 0
@@ -326,7 +327,10 @@ internal class Fields(context: Context) : FrameLayout(context) {
             position(f)
             // The value answers the field's newest edit, or it is older than what the person has typed since.
             val current = w[i + 12] == f.edits
-            if (current && value != f.text.text.toString()) replace(f, value)
+            if (current) {
+                if (value != f.text.text.toString()) replace(f, value, f.answered != f.edits)
+                if (!f.composing) f.answered = f.edits
+            }
             val rev = w[look + 15]
             if (rev != f.select) {
                 f.select = rev
@@ -468,14 +472,24 @@ internal class Fields(context: Context) : FrameLayout(context) {
      * limits, not the app's: its `maxlength`, and the characters its keyboard's kind admits (a number field's key
      * listener drops a "." the app sets, and the caret was then put past the end of what was left: a crash, seen on
      * a Pixel with Shelf's own test of its pages field). */
-    private fun replace(f: Field, value: String) {
+    private fun replace(f: Field, value: String, filtered: Boolean) {
         val e = f.text.editableText ?: return
         val old = e.toString()
         val start = f.text.selectionStart; val end = f.text.selectionEnd
-        val at = { o: Int ->
-            if (o < 0) value.length
-            else if (o <= old.length && value.endsWith(old.substring(o))) value.length - (old.length - o)
-            else min(o, value.length)
+        var prefix = 0
+        val limit = min(old.length, value.length)
+        while (prefix < limit && old[prefix] == value[prefix]) prefix++
+        var suffix = 0
+        while (suffix < limit - prefix && old[old.lastIndex - suffix] == value[value.lastIndex - suffix]) suffix++
+        val oldEnd = old.length - suffix
+        val newEnd = value.length - suffix
+        fun at(offset: Int) = when {
+            offset < 0 -> value.length
+            !filtered -> if (offset <= old.length && value.endsWith(old.substring(offset)))
+                value.length - (old.length - offset) else min(offset, value.length)
+            offset <= prefix -> offset
+            offset < oldEnd -> min(offset, newEnd)
+            else -> newEnd + (offset - oldEnd)
         }
         quiet = true
         try {
@@ -486,7 +500,7 @@ internal class Fields(context: Context) : FrameLayout(context) {
             e.filters = filters
             val n = e.length
             val a = min(at(start), n); val b = min(at(end), n)
-            f.text.setSelection(min(a, b), max(a, b))
+            if (filtered) f.text.setSelection(a, b) else f.text.setSelection(min(a, b), max(a, b))
         } finally { quiet = false }
         if (f.text.isFocused) imm.restartInput(f.text)
         // Where the caret is now, for the app's next `input`.
@@ -503,7 +517,7 @@ internal class Fields(context: Context) : FrameLayout(context) {
 
     private fun renew(f: Field, generation: Int) {
         f.generation = generation
-        f.edits = 0; f.edited = false; f.moved = false; f.select = 0; f.composing = false
+        f.edits = 0; f.answered = 0; f.edited = false; f.moved = false; f.select = 0; f.composing = false
         quiet = true
         // A new text and a new history: nothing of the last item's is undone into this one.
         try { f.text.setText("") } finally { quiet = false }

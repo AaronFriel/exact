@@ -543,6 +543,7 @@ impl<D: DataSource> Presenter<D> {
                 self.forget_replaced_choices();
                 let bound = self.bound_text(id);
                 self.host.values.watch(id, Some(bound.clone()));
+                self.chosen.insert(id, (value.clone(), bound));
                 let heard = (self.host.runner().handlers_of(id)).contains(&EventKind::Input);
                 let error = match heard {
                     true => {
@@ -553,7 +554,7 @@ impl<D: DataSource> Presenter<D> {
                     false => None,
                 };
                 let after = self.after_commit();
-                self.keep_typed(id, value, bound);
+                self.finish_field_edit(id);
                 error.or(after)
             }
         };

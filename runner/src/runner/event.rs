@@ -1418,6 +1418,8 @@ impl<D: DataSource> Runner<D> {
             }
             _ => event.record(),
         };
+        let composing =
+            matches!(&event, Event::Input(ControlValue::Edit(_, _, edit)) if edit.is_composing);
         match event {
             Event::ReorderDrop { item, before } => {
                 args.push(Value::str(&item));
@@ -1462,6 +1464,9 @@ impl<D: DataSource> Runner<D> {
             }
         }
         super::lines::ran(what, self.plan.str(self.plan.action(handler.action).name));
+        if kind == EventKind::Input && self.plan.action(handler.action).writes.len != 0 {
+            return self.run_input(view, node, &handler, args, &frames, composing);
+        }
         self.traced_action("handler", handler.action, args, &frames)
     }
 }
