@@ -6038,7 +6038,12 @@ one (`lower-svg-use-foreign-object`). Native hosts refuse `foreignObject` at run
 time; for content on every host, position an ordinary box over the `svg`. Canvas 2D calls
 live in a data module, and GPU/game surfaces in their optional module. A
 hyphenated native tag must be declared by a dependency's `exact.json` `views` or
-listed in `app.json`'s `modules` (the bake refuses others). An app module's unknown
+listed in `app.json`'s `modules`. A string or `{"tag":"map-view"}` declares every host.
+For `{"tag":"map-view","hosts":["ios","macos"]}`, bind `page` to `exactPage()`
+and place the tag under `if page.platform == "ios" || page.platform == "macos"`.
+A view can also use `match page.platform` with indented `case "ios"` and `case "macos"` arms.
+Every build checks these guards. Put the guard where the tag is written, including
+inside a reusable component. An app module's unknown
 attributes pass through unchecked as its props. A package view refuses an attribute
 declared as neither a prop nor an event with `lower-native-attr`, apart from standard
 box attributes and common module events. A known attribute binds to the module's
