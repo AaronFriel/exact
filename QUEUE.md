@@ -1597,6 +1597,8 @@ sits on that list carries the trade it would take.
 
 ## Cheap, any time
 
+- Clarify the guide’s missing-key warning for Android release builds. Unset a `"required": "release"` key under development trust. An ordinary build warns, and `android --release` refuses the same missing value.
+
 - Include a target whose slop alone enters the viewport in web spacing checks. Put a 16 px button at `left: -16px` with 12 px right slop and a 16 px neighbor at `left: 14px`. Both take taps in the viewport, but only the neighbor is observed. A 0×0 control with 22 px slop is also absent from the iOS and web item lists.
 - Account for WCAG 2.5.8’s equivalent-control exception. Put a small button beside another target and provide a separate 44×44 button with the same action. The small button still gets a size finding.
 - Check AppKit row-button slop. Give a button with a row bezel 4 pt of slop and click 2 pt outside its bezel. The bezel rejects the click before the slop hit test.

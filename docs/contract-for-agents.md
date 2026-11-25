@@ -4295,6 +4295,11 @@ refuses a build that requires the key. The package reads its target's selected
 values from its context. See the [package context](reference.md#package-configuration)
 for the build's `development` fact.
 
+An Android APK built with `--release` alone includes the Android overrides from
+`development.packages`, even when signed with an upload key. Use `--bundle`
+for a production App Bundle or set `EXACT_UPDATE_TRUST=production` with
+`--release` for a production-trust APK.
+
 | Target | What the package reads |
 | --- | --- |
 | Android | `context.config`, a `JSONObject` on `ExtensionContext` |
