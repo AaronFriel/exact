@@ -215,6 +215,63 @@ fn a_resting_world_ticks_input_before_deciding_to_draw() {
 }
 
 #[test]
+fn resting_engine_systems_keep_the_picture_when_sensor_samples_arrive() {
+    use exact_game::{Emitter, Follow};
+    struct AtRest;
+    impl Game for AtRest {
+        const ID: &'static str = "resting-systems";
+        type Args = DiceArgs;
+        fn setup(w: &mut World, a: &DiceArgs) {
+            Dice::setup(w, a);
+            if a.rough == 1 {
+                w.spawn((Emitter::sparks().rate(0.),));
+            } else {
+                w.spawn((Transform::default(), Follow::new("die")));
+            }
+        }
+        fn tick(_: &mut World, _: &Input, _: &DiceArgs) {}
+        fn render_idle(_: &World, _: &DiceArgs) -> bool {
+            true
+        }
+    }
+    for kind in [1, 2] {
+        let mut sim = exact_game::Sim::<AtRest>::new(DiceArgs {
+            rough: kind,
+            ..Default::default()
+        })
+        .unwrap();
+        sim.run(100.);
+        let revisions = |w: &World| (w.revision::<Emitter>(), w.revision::<Transform>());
+        let before = revisions(sim.world());
+        sim.sensor(exact_game::SensorKind::Accelerometer, [0.01, 9.8, 0., 0.]);
+        sim.run(100.);
+        assert_eq!(revisions(sim.world()), before, "resting system {kind}");
+    }
+    let Some(gpu) = gpu() else { return };
+    let decisions = [1, 2].map(|kind| {
+        let mut canvas = WorldSurface::<AtRest>::default();
+        canvas.poll_input_before_draw();
+        canvas.clock(false);
+        canvas.bind(&args(false, kind, 0), None).unwrap();
+        let rest = (0..10)
+            .map(|i| f64::from(i) * PERIOD)
+            .find(|&now| !fixture::render(&gpu, &mut canvas, &live(now)).unwrap().1)
+            .expect("the scene settled");
+        (1..=4).all(|i| {
+            let now = rest + f64::from(i) * 100.;
+            canvas.input(&InputEvent::Sensor {
+                sensor: exact_gpu::SensorKind::Accelerometer,
+                values: [i as f32 * 0.01, 9.8, 0., 0.],
+                dropped: 0,
+                at_ms: now - 1.,
+            });
+            canvas.redraw_for_input(now, PERIOD) == std::task::Poll::Ready(false)
+        })
+    });
+    assert_eq!(decisions, [true; 2], "emitter and follower");
+}
+
+#[test]
 fn slow_and_paused_worlds_rest_with_input_already_running() {
     use std::task::Poll;
     struct Slow;

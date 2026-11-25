@@ -1273,6 +1273,7 @@ impl Follow {
 /// so both translation and rotation stop exactly. Missing targets leave the pose alone.
 #[track_caller]
 pub fn follow(world: &World) {
+    world.sim_writes(format_args!("stepped followers"));
     let _span = world.span("scene::follow");
     if world.in_tick && world.followed.replace(true) {
         return;
@@ -1284,11 +1285,18 @@ pub(crate) fn place_followers(world: &World) {
 }
 #[track_caller]
 fn follow_inner(world: &World, placement_only: bool) {
-    for (e, follow) in world.query::<&mut Follow>().iter() {
+    let followers = world.components::<Follow>();
+    for e in followers.entities() {
+        let mut follow = followers.get(e).unwrap();
         let target = follow.target.resolve(world);
         if target != follow.resolved {
-            follow.initialized = false;
-            follow.resolved = target;
+            drop(follow);
+            {
+                let mut changed = world.require_mut::<Follow>(e);
+                changed.initialized = false;
+                changed.resolved = target;
+            }
+            follow = followers.get(e).unwrap();
         }
         if placement_only && follow.initialized {
             continue;
@@ -1353,10 +1361,16 @@ fn follow_inner(world: &World, placement_only: bool) {
                 scale,
             };
         }
-        if let Some(mut transform) = world.get_mut::<Transform>(e) {
-            *transform = pose;
+        if world
+            .get::<Transform>(e)
+            .is_some_and(|current| *current != pose)
+        {
+            *world.require_mut::<Transform>(e) = pose;
         }
-        follow.initialized = true;
+        if !follow.initialized {
+            drop(follow);
+            world.require_mut::<Follow>(e).initialized = true;
+        }
     }
 }
 
