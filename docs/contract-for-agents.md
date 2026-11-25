@@ -6021,6 +6021,12 @@ define `class exact.app.Module : dev.exact.canvas.ExactModule()` in
 `native.call` runs a cheap query on main on Apple and on the caller's thread on Android. `native.later` starts on
 main and can reply from any thread. Use `context.after` for the session clock
 and `context.changed(topic)` for a source that reads `native.watch(topic)`.
+On Android, `context.activity` is the activity in front, as a package's
+`ExtensionContext.activity` is, for what needs its window (`FLAG_SECURE`,
+`screenBrightness`, a screen-capture callback); touch it on main, from `later`.
+It is null while no activity exists, and the stopped one while the app is in
+the background. A configuration change that remakes the activity drops what
+was set on its window (expo/exact#1596).
 See the [native module recipe](recipes/native-module.md).
 
 Put vendor `.xcframework` bundles beside an Apple native module's Swift files

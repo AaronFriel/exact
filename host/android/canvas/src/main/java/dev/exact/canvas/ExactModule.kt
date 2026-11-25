@@ -1,5 +1,6 @@
 package dev.exact.canvas
 
+import android.app.Activity
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -27,8 +28,18 @@ abstract class ExactModule {
 
 private class NoModuleCall : UnsupportedOperationException("the app's module answers no native.call")
 
-/** The session's application Context, clock and topic notifications, including while no Activity is attached. */
+/** The session's application Context, the activity in front if one is, clock and topic notifications. */
 class ExactModuleContext internal constructor(val application: Context, private val session: ModuleSession) {
+    /**
+     * The activity that shows the app now, read on each access, as [ExtensionContext.activity] is: its window takes
+     * `FLAG_SECURE`, `screenBrightness` and a screen-capture callback (expo/exact#1596). Null before the first activity
+     * is made (a process a job or widget started), after the last one is destroyed, and between a destroyed activity
+     * and its replacement. A configuration change that the manifest's `configChanges` lists keeps the activity and its
+     * window; one that remakes it gives a new window without what was set on the old one. While the app is stopped this
+     * is the stopped activity: its flags still hold, so `FLAG_SECURE` keeps the recents thumbnail blank. Use it on main
+     * ([ExactModule.later]); [ExactModule.call] runs on the caller's thread. Read it when needed; don't keep it.
+     */
+    val activity: Activity? get() = Extensions.front()
     val agent: Boolean get() = agentCarried()
     fun now(): Double = Native.now()
     fun changed(topic: String) = session.hand(OwnerReplies.Handed.Changed(topic))

@@ -79,6 +79,32 @@ class ExactModuleTest {
         } finally { next.end() }
     }
 
+    // expo/exact#1596: an app's module reads the activity in front, as a package's ExtensionContext does, and null
+    // while none is; it is read when asked, never the Context the session was made with.
+    @Test fun theModuleSeesTheActivityInFrontAndNoneWhileNoneIs() {
+        val first = Robolectric.buildActivity(Activity::class.java).setup()
+        val next = Robolectric.buildActivity(Activity::class.java).setup()
+        var front: Activity? = null
+        var session: ModuleSession? = null
+        try {
+            Extensions.front = { front }
+            session = checkNotNull(ModuleSession.open(first.get()))
+            val context = Module.made.context
+            assertNull(context.activity)
+            front = first.get()
+            assertSame(first.get(), context.activity)
+            front = next.get()
+            assertSame(next.get(), context.activity)
+            front = null
+            assertNull(context.activity)
+        } finally {
+            session?.end()
+            Extensions.front = { Exact.reader?.get() }
+            first.pause().stop().destroy()
+            next.pause().stop().destroy()
+        }
+    }
+
     @Test fun theSessionOwnsCallsAndTimersAcrossReadersAndEndsOnce() {
         val reader = Robolectric.buildActivity(Activity::class.java).setup()
         val first = reader.get()
