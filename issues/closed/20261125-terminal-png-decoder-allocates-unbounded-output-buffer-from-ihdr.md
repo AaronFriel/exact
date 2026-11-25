@@ -1,6 +1,7 @@
 # Terminal PNG decoder allocates unbounded output buffer from IHDR dimensions before validating limits
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Validated PNG IHDR dimensions and output buffer size against pixel and byte limits before allocating, reused the RGBA decode buffer, added LRU eviction to Images::by_source, and bounded concurrent decode workers.
 **Systems:** exact-terminal (terminal host / harness image loader)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

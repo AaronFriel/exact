@@ -1,6 +1,7 @@
 # Apple getifaddrs netmask parser reads past sa_len in unsafe address() on compressed BSD sockaddrs
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Enforced sa_len bounds in reach::interfaces::address and added reach::interfaces::netmask to zero-fill omitted trailing bytes and accept AF_UNSPEC without reading past sa_len.
 **Systems:** exact-executor (Apple local-network subnet gate in reach.rs)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

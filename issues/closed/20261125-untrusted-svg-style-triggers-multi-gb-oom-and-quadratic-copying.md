@@ -1,6 +1,7 @@
 # Untrusted SVG <style> triggers multi-GB OOM and quadratic copying in css::rules
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Replaced quadratic string copying and cloned declarations in exact-svg-file with a cursor-based indexed Sheet, shared declaration blocks, O(1) attribute merging, and hard stylesheet/matching/warning bounds.
 **Systems:** exact-svg-file (Apple, Linux, Windows, and Android SVG image loaders; contract-lower bundled check)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

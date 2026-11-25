@@ -1,6 +1,7 @@
 # Unsynchronized hold/bind handoff and displaced/acquire ordering cause double displacement and an orphaned dead socket in exactListen
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Serialized per-path hold checks with bind/unpublish/look operations under an in-process publication lock and reconciled Loop::turn displaced and acquire signals against hold.holding().
 **Systems:** exact-listen (Unix domain socket listener used by exactListen)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

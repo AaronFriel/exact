@@ -1,6 +1,7 @@
 # Lost wakeup race between body::take_place and Reader::drop permanently stalls queued exactBodyFrom uploads
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Unified Readers running count and waitlist under a single Mutex so take_place and Reader::drop cannot lose wakeups while still invoking upload::start after releasing the lock.
 **Systems:** exact-executor (native desktop/mobile upload queue and file-body reader pool)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25
