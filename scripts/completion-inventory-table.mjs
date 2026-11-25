@@ -458,7 +458,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/glide.rs", "Presenter::reveal_glides"],
     ["painted:host/painted/src/presenter/hatch.rs", "Presenter::wake_due_ms Presenter::wants_frames"],
     ["painted:host/painted/src/presenter/height_drag.rs", "Presenter::height_candidate"],
-    ["painted:host/painted/src/presenter/layout_json.rs", "Presenter::layout_json"],
+    ["painted:host/painted/src/presenter/layout_json.rs", "Presenter::layout_json Presenter::laid_out_display_none"],
     ["painted:host/painted/src/presenter/links.rs", "Presenter::inline_hit"],
     ["painted:host/painted/src/presenter/media.rs", "Presenter::media_json"],
     ["painted:host/painted/src/presenter/painter.rs",
