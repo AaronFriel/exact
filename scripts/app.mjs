@@ -935,8 +935,13 @@ function bakeMetadata(app, target, env) {
   writeFileSync(`${kept}.${process.pid}.tmp`, JSON.stringify({ watched, metadata })); renameSync(`${kept}.${process.pid}.tmp`, kept);
   return metadata;
 }
-function buildGraph(app, target, kind, env, gpu, platform) {
-  const prepared = app.prepare?.(true, {target, env}), gpuApp = gpuView(app);
+/** Where Cargo keeps an Apple variant's generated Rust, whose bytes its receipt checks (LLP 1030.008 D4). */
+export function appleVariantBuildDir(app, env) {
+  const metadata = buildCommand('cargo', ['metadata', '--no-deps', '--format-version', '1'], app, { ...env, CARGO_TARGET_DIR: app.target });
+  return resolve(JSON.parse(metadata.stdout).build_directory, 'variants', app.id);
+}
+function buildGraph(app, target, kind, env, platform, prepared) {
+  const gpu = app.hasGpu, gpuApp = gpuView(app);
   const hostMetadata = prepared?.workspace_root === app.workspace ? prepared : bakeMetadata(app, target, env);
   const declared = gpuModules(app.manifest, target.includes('-tvos') ? 'tvos' : target.includes('-watchos') ? 'watchos' : platform);
   const workspaces = new Map(), cargoGraphs = new Map([[app.workspace, hostMetadata]]);
@@ -1243,7 +1248,9 @@ export function buildBake(app, platform, target, options = {}) {
   if(rustBundle)env.EXACT_RUST_BUNDLE=rustBundle;
   const native=platform==='web'?null:nativeSource(app,env); // what the binary compiles its Rust from (Swappable::with_native)
   if(native)env.EXACT_NATIVE_SOURCE=native;else delete env.EXACT_NATIVE_SOURCE;
-  const graph=buildGraph(app,target,kind,env,app.hasGpu,platform),messages=[],roots=[];
+  const prepared = app.prepare?.(true, { target, env });
+  if (apple && app.manifest.variant) env.CARGO_BUILD_BUILD_DIR = appleVariantBuildDir(app, env);
+  const graph=buildGraph(app,target,kind,env,platform,prepared),messages=[],roots=[];
   // Production-profile game bakes (web, Apple, release Linux, deploy) hold the
   // logic to determinism lints; the gpu-dev loop runs them in its preceding check.
   if(app.manifest.game&&(options.profile??'')!=='gpu-dev')lintGame(app.dir,app.manifest.game,{env});

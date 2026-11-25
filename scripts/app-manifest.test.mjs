@@ -1,7 +1,7 @@
 // app.json keys the web manifest standard defines (scripts/app.schema.json).
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 
@@ -1054,6 +1054,79 @@ test('a generated workspace names the checkout relatively, and is rewritten when
     assert.notDeepEqual(paths(moved), before);
   } finally { rmSync(parent, { recursive: true, force: true }); }
 }, 60000);
+
+test('a variant builds every native shell in the base workspace without rewriting it', async () => {
+  const { ensureShells, namePlatform } = await import('./app-shells.mjs');
+  const { readManifest } = await import('./app.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'manifest-variant-shell-'));
+  const base = { name: 'Web title', app: { id: 'dev.example.notes', name: 'Field Notes' },
+    host: { ios: {}, macos: {}, linux: {}, android: {} }, variants: { dev: { idSuffix: '.dev', name: 'Notes Dev' } } };
+  const { EXACT_VARIANT, EXACT_VARIANT_APP } = process.env;
+  try {
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify(base));
+    process.env.EXACT_VARIANT = 'dev';
+    process.env.EXACT_VARIANT_APP = dir;
+    const variant = readManifest(dir, 'notes');
+    assert.equal(variant.app.name, 'Notes Dev');
+    const initial = ensureShells(dir, base);
+    const times = () => ['.stamp.json', 'Cargo.toml', 'Cargo.lock', 'web/src/lib.rs', 'linux/src/main.rs', 'android/src/lib.rs']
+      .map(file => statSync(resolve(initial.workspace, file), { bigint: true }).mtimeNs);
+    const wroteAt = times();
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ ...base, host: { web: {} } }));
+    assert.equal(ensureShells(dir, { ...variant }).wrote, false);
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify(base));
+    assert.equal(ensureShells(dir).wrote, false);
+    assert.deepEqual(times(), wroteAt);
+    namePlatform(dir, 'windows');
+    const saved = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+    assert.deepEqual(saved.app, base.app);
+    assert.equal(saved.variant, undefined);
+    assert.equal(ensureShells(dir).wrote, true);
+    assert.match(readFileSync(resolve(initial.workspace, 'windows/src/main.rs'), 'utf8'), /run_baked.*"Field Notes"/);
+    assert.equal(ensureShells(dir, readManifest(dir, 'notes')).wrote, false);
+  } finally {
+    if (EXACT_VARIANT === undefined) delete process.env.EXACT_VARIANT; else process.env.EXACT_VARIANT = EXACT_VARIANT;
+    if (EXACT_VARIANT_APP === undefined) delete process.env.EXACT_VARIANT_APP; else process.env.EXACT_VARIANT_APP = EXACT_VARIANT_APP;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test('a variant icon leaves the locked workspace alone until a native verb adds the platform', async () => {
+  const { readManifest } = await import('./app.mjs');
+  const { ensureShells, bringPlatform, namesPlatform, settleLock, withoutPlatformKeys } = await import('./app-shells.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'manifest-variant-platform-')), file = resolve(dir, 'app.json');
+  const base = { name: 'Notes', app: { id: 'dev.example.notes', name: 'Notes' }, host: { web: {} },
+    variants: { dev: { idSuffix: '.dev', name: 'Notes Dev', host: { macos: { icon: 'Dev.icon' } } } } };
+  const { EXACT_VARIANT, EXACT_VARIANT_APP } = process.env;
+  try {
+    const first = ensureShells(dir, { ...base, variants: {} });
+    writeFileSync(resolve(dir, 'Cargo.lock'), readFileSync(resolve(first.workspace, 'Cargo.lock')));
+    writeFileSync(file, JSON.stringify(base));
+    process.env.EXACT_VARIANT = 'dev';
+    process.env.EXACT_VARIANT_APP = dir;
+    const selected = readManifest(dir, 'notes');
+    assert.equal(selected.host.macos.icon, 'Dev.icon');
+    assert.equal(ensureShells(dir, selected).wrote, false);
+    settleLock(dir, first.workspace);
+    assert.equal(namesPlatform(selected, 'macos'), false);
+    const missing = [{ required: true, ok: false, name: 'Xcode', have: 'missing', want: 'installed', fix: 'install Xcode' }];
+    assert.match((await bringPlatform(dir, 'macos', { os: 'darwin', report: missing })).refused, /lacks.*macos build/);
+    assert.deepEqual(JSON.parse(readFileSync(file)), base);
+    const brought = await bringPlatform(dir, 'macos', { os: 'darwin' });
+    assert.match(brought.lines[0], /host.macos, deploy.store.macos added/);
+    const saved = JSON.parse(readFileSync(file));
+    assert.deepEqual(saved.app, base.app);
+    assert.deepEqual(saved.variants, base.variants);
+    assert.deepEqual(ensureShells(dir).crates, ['web', 'apple']);
+    withoutPlatformKeys(dir, 'macos');
+    assert.deepEqual(ensureShells(dir).crates, ['web']);
+    settleLock(dir, first.workspace);
+  } finally {
+    if (EXACT_VARIANT === undefined) delete process.env.EXACT_VARIANT; else process.env.EXACT_VARIANT = EXACT_VARIANT;
+    if (EXACT_VARIANT_APP === undefined) delete process.env.EXACT_VARIANT_APP; else process.env.EXACT_VARIANT_APP = EXACT_VARIANT_APP;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 60_000);
 
 test('adding and removing preload regenerates native shells with the baked accessor', async () => {
   const { ensureShells } = await import('./app-shells.mjs');
