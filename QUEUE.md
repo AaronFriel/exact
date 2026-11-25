@@ -1,5 +1,7 @@
 # Queue
 
+- On Android, put a scrolled list with `margin-top=-48` under a visible sheet handle at the lower of two detents. Start a downward drag on the grip. The reader gives the list that direction while the painted presenter claims the handle in both directions.
+- Give a sheet its exit animation when its navigation root handles only Back. Open a modal route, push a second route inside it, then tap the scrim. Both routes pop before the painted stage can retain their closing frame. A root that handles `navigate` dismisses the stack in one turn.
 - The neutral route-header test accepts a selector that matches no navigation root. Substitute `[data-fixture-absent]` for `[navigationkey]` in the test’s copy of `index.html` and run `bun test ./host/web/tests/neutral-look.test.mjs -t 'route header geometry'`. The four declarations still pass.
 - `bun test ./host/web/tests/js-runtime.test.mjs` fails eight module cases while destructuring `tracks` from an absent value. The calendar-difference case in the same file passes.
 - The upload-refusal fixture stages files before its cleanup runs. Make a staged host file unavailable and run `bun test ./host/web-js/upload.test.mjs -t 'refuses an upload where Hermes does'` with an empty `TMPDIR`. The failed read leaves an `exact-ts-upload-*` directory.

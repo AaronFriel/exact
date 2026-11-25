@@ -204,12 +204,12 @@ impl<D: DataSource> Presenter<D> {
     }
 
     /// The top sheet, with its frame now.
-    fn grab_sheet(&self) -> Option<(NodeKey, f32)> {
+    fn grab_sheet(&self) -> Option<(&Sheet, f32)> {
         let sheet = self
             .front_sheets()
             .last()
             .filter(|_| self.stage_presents())?;
-        Some((sheet.modal, self.sheet_top_now(sheet)))
+        Some((sheet, self.sheet_top_now(sheet)))
     }
 
     /// Which finger directions move the sheet rather than its nested list:
@@ -284,9 +284,11 @@ impl<D: DataSource> Presenter<D> {
         now: f64,
         event: f64,
     ) -> bool {
-        let Some((modal, top)) = self.grab_sheet() else {
+        let Some((sheet, top)) = self.grab_sheet() else {
             return false;
         };
+        let modal = sheet.modal;
+        let handle = y < top + sheet.handle;
         let (left, width) = self.sheet_span();
         let contact = Contact {
             at: (x, y),
@@ -297,7 +299,6 @@ impl<D: DataSource> Presenter<D> {
             self.stage.gesture = Some(Gesture::Scrim { modal, contact });
             return true;
         }
-        let handle = y < top + SHEET_HANDLE;
         let under = self.scrollers_at(x, y);
         let directions = if handle || (under.chain.is_empty() && !under.claims.1) {
             (true, true)

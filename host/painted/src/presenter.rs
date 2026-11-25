@@ -206,8 +206,8 @@ pub use pointer::PointerKind;
 pub use requests::android::attach as attach_android_module;
 pub use requests::{AgentTurn, Handed, Haptic, Pick, Request};
 pub use scrollers::{Scroller, Under, PAGE};
-pub(crate) use stage::sheet_span;
 pub use stage::SHEET_HANDLE;
+pub(crate) use stage::{sheet_handle, sheet_span};
 pub use window::{Chrome, Window};
 
 #[derive(PartialEq, Eq)]

@@ -20,7 +20,7 @@
 //!   bands at either side of a covered page;
 //! - a route the shell shows in a sheet (a `modal` one, or one pushed
 //!   inside it, LLP 1115.001 D10) has no bar: its header stays in the page,
-//!   and it is inset by the sheet's drag handle at its top and the system's
+//!   and it is inset by the sheet's visible drag handle at its top and the system's
 //!   bar under the sheet's foot (`presenter/stage.rs`);
 //! - each route so inset is a content owner whose local insets are that
 //!   room, and the page's side insets, which its content reads as
@@ -232,9 +232,10 @@ impl<D: DataSource> Host<D> {
                     let Some(node) = kernel.node(*route) else {
                         continue;
                     };
-                    if sheet_of(&kinds, index).is_some() {
+                    if let Some(sheet) = sheet_of(&kinds, index) {
+                        let modal = kernel.node(stack[sheet]).expect("a live sheet route");
                         let cover = [
-                            crate::presenter::SHEET_HANDLE,
+                            crate::presenter::sheet_handle(&modal),
                             (env.right - sheet_margin).max(0.0),
                             foot,
                             (env.left - sheet_margin).max(0.0),
