@@ -2144,6 +2144,9 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - Preserve Shift on modified printable keys in the terminal decoder. With a button declaring `Meta+Shift+O`, the terminal drive `key Meta+Shift+O` misses it. A button declaring `Meta+O` takes the same press (#1617).
 - Compare held modifiers as a set in Windows reserved-shortcut diagnostics. A Windows app warns for `Control+Escape` but misses `Control+Control+Escape`, which the host matches the same way (#1617).
 - Run `cargo test -p contract --bin contract --test it vocab::`. The vocabulary card panics on an empty row at `contract/cli/src/vocab/card.rs:46`, and the function table lacks a row for `formatShortcut`.
+- Decide whether comparing disjoint enum types should warn. A function taking `x: enum<"pen", "text">` and `y: enum<"copy", "save">` compiles `x == y`.
+- Check inference across child action props. A child declaring `pick(x)` and forwarding `run=pick` to another child that calls `run(mode)` with an enum state gets `type-cannot-infer` for `x` even when that is its only caller.
+- Extend nearest-member suggestions to assignment and argument errors. Given `state drag: enum<"idle", "move"> = "idle"`, assigning `drag = "moev"` reports the members and the misspelling without suggesting `"move"`.
 - Run `bun test ./game/new.test.mjs -t 'ordinary cargo fmt accepts'`. Formatting a generated game's workspace asks to reorder the Android re-exports in `game/audio/src/native.rs`.
 - Run `bun test ./game/new.test.mjs -t 'Rivals.*captured lock|the SDK lock decides'`. Rivals resolves brotli-decompressor 6.0.0 against a captured 6.3.2, and the SDK fixture's generated lock fails Cargo metadata with `--locked`.
 - Run `bun test ./game/new.test.mjs -t 'a new game names its Rust type'`. The test follows the generated game's `.exact/checkout` link and finds the template name in the SDK's own `game/new.mjs`.

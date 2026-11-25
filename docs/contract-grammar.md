@@ -1637,8 +1637,12 @@ neither refuses the commit because it has no value to display.
 
 Finite string parameters are written `enum<"draft", "published">`. Members must be
 quoted, distinct strings, with at least one member. A literal call argument must be a
-member; a dynamic argument must have a compatible declared enum type. Shapes may
-use enums too; a source answer outside the declared vocabulary fails its shape check.
+member. A dynamic argument must have a compatible declared enum type. In `==` and
+`!=`, a string literal compared with an enum must be a member, in either operand
+order. This includes literals inside `some(…)` and list literals when comparing
+options and lists. The same rule applies to item comparisons in a list’s `includes` and
+`indexOf`. A dynamic string can be compared with any enum. Shapes may use enums
+too. A source answer outside the declared vocabulary fails its shape check.
 Generated TypeScript uses the corresponding string literal union. An enum's placeholder
 is its first member. Enums use ordinary string values at the data seam.
 
