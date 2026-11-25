@@ -4259,10 +4259,21 @@ target. A key typed `env` names the environment variable that holds its value:
 }
 ```
 
-The build reads the values, with each variable's value as the build runs, and
-writes them into the code it generates for the app. The package's code reads
-the declared keys for its target from its context. A key given no value is
-absent.
+For a test key, put an override in the development section of `app.json`:
+
+```json
+"development": {
+  "packages": { "exact-yandex-mapkit": { "ios": { "apiKey": { "env": "MAPKIT_TEST_KEY" } } } }
+}
+```
+
+A development-trust build uses that variable for `apiKey` and keeps the
+base values of other keys. A declared key may appear only in the development
+section. Production reads only the base variables and values, including for
+`"required": "release"`. An unset override variable leaves an optional key absent and
+refuses a build that requires the key. The package reads its target's selected
+values from its context. See the [package context](reference.md#package-configuration)
+for the build's `development` fact.
 
 | Target | What the package reads |
 | --- | --- |
@@ -4294,8 +4305,8 @@ Every build refuses these, naming the key and never its value:
 
 An `app.json` entry for a package that is not installed is a warning.
 
-**`env` keeps a value out of the repository, not out of the app.** Anything in
-`config` ships inside the APK, the IPA or the page, and anyone with the app
+An `env` reference keeps the value out of the repository. Each value selected
+for this build ships inside the APK, the IPA or the page, and anyone with the app
 can read it, as with a setting an app reads through `import.meta.env` (LLP
 1153 D4). A value that must stay secret belongs on a server. Restrict a vendor key to the
 app instead: by package name and signing certificate for Google's keys, or by

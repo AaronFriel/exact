@@ -1,11 +1,11 @@
 // Loaded by the first native view after paint. The build supplies only the packages that own placed tags.
-import { packageFiles, packageInstances, packageServices } from '../../web-js/package-session.js';
+import { packageContext, packageFiles, packageInstances, packageServices } from '../../web-js/package-session.js';
 import { packageViews } from '../../web-js/views.js';
 import { coversPath, rawGrantText } from '../navigation.js';
 import { storageKey, agentStorageRefusal } from '../storage-environment.js';
 import '../native-glue.js';
 
-export function packageHost(views, bound, { host, generation, agentMode, now, foreground, changed }, options) {
+export function packageHost(views, bound, { host, generation, agentMode, now, foreground, changed }, options, development) {
   const current = () => generation === host.incarnation;
   if (!current()) return { attach() {}, destroy() {} };
   if (host.packageViews) return host.packageViews.native;
@@ -33,7 +33,7 @@ export function packageHost(views, bound, { host, generation, agentMode, now, fo
   }
   const { chunk, instance, loaded } = packageInstances(bound, async (extension, m) => {
     if (!current()) return null;
-    const impl = m.implementation?.({
+    const impl = m.implementation?.(packageContext({
       ...services, files: packageFiles((op, ...paths) => fileStore(extension, op, paths)), after, agent: agentMode, config: m.config ?? {}, now, log: options.log, foreground,
       grants: host.unparsed ? '' : rawGrantText(host.grantSet),
       clocked: fn => clocked.push(fn),
@@ -46,7 +46,7 @@ export function packageHost(views, bound, { host, generation, agentMode, now, fo
           if (current()) changed(topic);
         }, () => topics.delete(topic));
       },
-    });
+    }, development));
     if (agentMode) await impl?.preferred?.({});
     return impl;
   });

@@ -47,6 +47,6 @@ export function nativeExtras(app, platform = 'ios', extensions, contractSources 
   const composing = packages.length > 0 || own.length > 0;
   const tamber = composing && existsSync(`${app.dir}/app.tamber`) ? sha(readFileSync(`${app.dir}/app.tamber`)) : null;
   // The packages' configuration, which the composed module carries (compose.mjs `composedModule`).
-  const config = composing ? nativePackageConfig(app.manifest, platform) : {};
+  const config = composing ? nativePackageConfig(app.manifest, platform, process.env, true) : {};
   return sha(canonical({ version: 1, packages, own, frameworks, composing, tamber, data: composing ? app.manifest.data ?? null : null, tags: modules.tags ?? [], ...(Object.keys(config).length ? { config } : {}), ...(shipped.length ? { shipped } : {}) }));
 }

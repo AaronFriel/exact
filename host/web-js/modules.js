@@ -30,7 +30,7 @@
 // its own commit (D6).
 import { data, Resources, commit, R, Failed, nextTicket, say, clock, order, drive, Clocked, After, time, Store, Hosts, navigateRoot, locationOf, inflight, Origin, viewId } from "./rt.js";
 import { reportTime } from "./navigation.js";
-import { packageFiles, packageInstances, packageServices } from "./package-session.js";
+import { packageContext, packageFiles, packageInstances, packageServices } from "./package-session.js";
 import { packageViews } from "./views.js";
 import { packagePictures } from "./pictures.js";
 import { appGrantSet, coversPath, rawGrantText } from "./admission.js";
@@ -474,7 +474,7 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
         say(`${extension}: media session ${action} ${pick ? "set" : "cleared"}`);
         return true;
       } };
-    const impl = m.implementation?.(context) ?? null;
+    const impl = m.implementation?.(packageContext(context, !globalThis.__exactProduction)) ?? null;
     constructed.set(extension, impl);
     if (clock.agent) await impl?.preferred?.(preferredOf(extension));
     ready.set(extension, impl);

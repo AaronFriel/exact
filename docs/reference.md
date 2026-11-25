@@ -6730,19 +6730,31 @@ A package's interface declares the values it takes from the app in its
 `"metadata": "<name>"` to also fill a vendor SDK's `<meta-data>`, if the name is
 on `CONFIG_METADATA` in `scripts/android-manifest.mjs`.
 
-The app gives them in `app.json` as `"packages": {"<interface>": {"<target>":
-{"<key>": <value>}}}`. An `env` key's value is `{"env": "<VARIABLE>"}`, which
-the build reads from its environment. The package's code reads the values as
-`context.config` in Kotlin and Swift, and as `config` on the web. A build
-refuses a value of another type (`bake-config-type`), an undeclared key
-(`bake-config-unknown`) and a required key with no value (the declared
-`missing` code). It refuses a `"required": "release"` key only in a release
-build.
+The app supplies a base value in `packages.<interface>.<target>.<key>` in
+`app.json`. A development-trust build overlays individual keys from
+`development.packages.<interface>.<target>`. Both sections take the keys and
+types the interface declares. A key supplied only under `development` is
+absent in production. The build selects the value before reading an `env`
+reference (`{"env": "<VARIABLE>"}`). Each selected value ships in the app.
+A production JSON import of `app.json` sees an empty `development.packages`
+map when the app declared that section.
 
-`env` keeps a value out of the repository, not out of the app: everything in
-`config` ships in the APK, the IPA or the page. A changed native value needs
-a new binary. See
-[A package's configuration](contract-for-agents.md#a-packages-configuration).
+The package reads the result through `context.config` in Swift, Kotlin and
+JavaScript. A build refuses a value of another type (`bake-config-type`),
+an undeclared key (`bake-config-unknown`) and a missing required value
+(the declared `missing` code). A release checks `"required": "release"`
+after selection. Production must satisfy it from the base. A changed native
+value needs a new binary.
+
+**Package context.** The read-only Boolean `context.development` is true
+when the app was built with development trust and false in production.
+Linux and Windows Rust packages read it as `context.development()`.
+It has the same value when the app runs under the agent or launches normally.
+The package's Swift sources also have the `EXACT_DEVELOPMENT` compilation
+condition in a development build. SwiftPM products build in release
+configuration and the APK is non-debuggable in both trusts. A package can
+use the fact to select a vendor SDK's test mode.
+See [A package's configuration](contract-for-agents.md#a-packages-configuration).
 
 Both web targets load a placed package view from its bound web implementation
 after first paint. A game can also supply the tag in its own web module.

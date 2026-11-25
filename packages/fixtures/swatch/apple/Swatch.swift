@@ -31,7 +31,7 @@ public final class SwatchModule: ExactPackage {
     /// length and last four characters only.
     private var config: String {
         let key = context.config["apiKey"] as? String ?? ""
-        return "label=\(context.config["label"] as? String ?? "none") apiKey=\(key.isEmpty ? "none" : "\(key.count) chars ending \(key.suffix(4))")"
+        return "label=\(context.config["label"] as? String ?? "none") apiKey=\(key.isEmpty ? "none" : "\(key.count) chars ending \(key.suffix(4))") development=\(context.development)"
     }
 
     public func view(_ tag: String, id: String, props: [String: String], events: ExactPackageEvents) throws -> ExactPackageView {

@@ -41,7 +41,7 @@ import { gateAgent } from './agent-gate.mjs';
 import { contentName, contentNames } from './content-names.mjs';
 import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, moduleSources, undeclaredRustData, fresh, frameAnswer, frameFixture, frameURL, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp, sizeWarning, entrySizeReport } from './module.mjs';
 import { appDigest, developmentStore } from '../../scripts/agent-launch.mjs';
-import { settingLines } from '../../js/bake/src/__exact_env.mjs';
+import { productionManifestImports, settingLines } from '../../js/bake/src/__exact_env.mjs';
 import { colorSchemeMeta, interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from '../web/look.mjs';
 import { copyStaticTreeIfPresent } from '../web/serve.mjs';
 
@@ -457,7 +457,7 @@ async function typecheck(checking) {
   const real = realpathSync(stage);
   if (real !== tsStage) throw new Error(`the TypeScript stage moved: ${real}`);
   const { rolldown } = await import('rolldown');
-  const metadata = await configure(real, false, parseSync, true, rolldown, basename(pageAppTs));
+  const metadata = await configure(real, false, parseSync, true, rolldown, basename(pageAppTs), production);
   const backendWarning=JSON.parse(readFileSync(resolve(real,'__exact_backend.json'),'utf8')).warning;
   if (backendWarning) console.warn(`warning: ${backendWarning}`);
   // The packages whose declarations the check reads (typescript.mjs
@@ -1052,13 +1052,13 @@ const scopedModule = (code, id) => {
 // Both bundles take app.ts and its packages from the checked capture alone.
 const replay = ts ? (await import(resolve(root, 'js/bake/src/typescript.mjs'))).replayCaptured(tsStage,
   generatedRoots.flatMap(root => ['ts-fetch.js', ...(fetchRefused ? ['ts-fetch-refused.js'] : [])].map(name => resolve(root, name)))) : null;
-// These hooks are optional. Keep their static accesses for tree-shaking,
-// but suppress missing-export warnings only at the generated glue's path.
+// Optional hooks keep their static accesses for tree-shaking. Only generated glue suppresses their missing-export warnings.
 const optionalHookWarning = (id, message) => generatedRoots.some(root => id === resolve(root, 'ts-data.js'))
   && /Import ["`](?:kept|overlay|tools)["`] will always be undefined because there is no matching export/.test(message);
 const { rolldown, RolldownMagicString } = await import('rolldown');
 const scopedPlugins = () => [...(replay ? [replay.rolldown] : []),
-  { name: 'exact-mounts', resolveId: (source, importer) => mounted(source, importer) },
+  { name: 'exact-mounts', resolveId: (source, importer) => mounted(source, importer),
+    load: production ? productionManifestImports(appDir) : undefined },
   { name: 'source-grants', transform: scopedModule }, asyncContext()];
 const onLog = (level, log) => {
   if (level === 'warn' && log.code === 'IMPORT_IS_UNDEFINED' && optionalHookWarning(log.id, log.message)) return;

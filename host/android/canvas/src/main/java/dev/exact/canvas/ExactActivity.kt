@@ -873,7 +873,7 @@ open class ExactActivity : Activity() {
     /** The launch extras that reach exact2 as its environment, written before its library loads; the launching
      * intent's URL or share only when it [arrived] now. */
     private fun environment(arrived: Boolean) {
-        val meta = Setup.environment(applicationContext, intent)
+        Setup.environment(applicationContext, intent)
         if (arrived) {
             launchUrl()?.let { android.system.Os.setenv("EXACT_LAUNCH_URL", it, true) }
             // A share that starts the app is its launch location, claimed before the boot (LLP 1133.024 D5).
@@ -881,7 +881,7 @@ open class ExactActivity : Activity() {
         }
         // filters=0: a box's filter runs on the CPU, not as a RenderEffect (exact2's EXACT_FILTERS), to compare.
         if (intent.getStringExtra("filters") == "0") android.system.Os.setenv("EXACT_FILTERS", "0", true)
-        if (meta?.getBoolean("dev.exact.development", false) != true) return
+        if (!Setup.development) return
         // rows=0: no kept rows, every frame walks every row (exact2's EXACT_ROWS), to compare.
         if (intent.getStringExtra("rows") == "0") android.system.Os.setenv("EXACT_ROWS", "0", true)
         // imgvp=N: keep N viewports of decoded pictures (exact2's EXACT_IMAGE_VIEWPORTS; 12 by default).

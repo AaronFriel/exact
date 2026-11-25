@@ -252,6 +252,12 @@ public final class ExactPackageContext {
     /// production (`--bind`): an implementation that is its own substitute
     /// then opens no device and asks the OS for nothing (LLP 1133.006 D8).
     public let agent: Bool
+    /// The trust with which the host was built.
+    #if EXACT_DEVELOPMENT
+    public let development = true
+    #else
+    public let development = false
+    #endif
     /// The session's id, unique in the process: what a process object
     /// shared by sessions (a capture, a photo output) keys its consumers by.
     public let session: String

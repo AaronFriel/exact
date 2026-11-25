@@ -1,3 +1,8 @@
+/** The package reads the trust that built the page, including when the agent drives it. */
+export function packageContext(context, development) {
+  return Object.defineProperty(context, "development", { value: development, enumerable: true });
+}
+
 /** Device handles shared by the web implementations in one session (LLP 1133.009 D10). */
 export function packageServices() {
   // The session's track table (LLP 1133.009 D10 item 6): tracks and streams by id, each track with the

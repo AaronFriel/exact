@@ -1660,6 +1660,10 @@ reading. Nothing that isn't HTML is added by it.
   refused (LLP 1133.021 §11): continuous background location, beacons,
   visits and significant-change launches, overlays, directions, search, a
   default web tile source and a web geocoder.
+  **Expanded (Charlie, 2026-11-24, "recs ok"):** packages read the build's
+  development trust and take development-only app config (AA3, panel 3–1,
+  LLP 1133.001 D5 and 1133.021 §9 item 7). SwiftPM dependencies build in
+  release configuration and the APK stays non-debuggable.
 - **Expanded (Charlie, 2026-10-26, "Accept r5, services first
   (Recommended)", waived; LLP 1133.033 §13 question 9):** a foreground
   service the host keeps on Android, claimed by a package for a capture

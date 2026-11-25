@@ -1007,7 +1007,7 @@ export const classifications = [
     "host/painted/src/package.rs Context exposes a session package instance; canvas/jni_extensions.rs binds the current reader extensions. Session reload replaces the context native slot.", [
     ["painted:host/painted/src/canvas/jni_extensions.rs", "agent bind_later invoked now sensor_input surface_has under_agent"],
     ["painted:host/painted/src/package.rs",
-      "Context::agent Context::cache Context::changed Context::data Context::desktop Context::displays Context::emit Context::extension Context::foreground Context::label Context::log " +
+      "Context::agent Context::cache Context::changed Context::data Context::desktop Context::development Context::displays Context::emit Context::extension Context::foreground Context::label Context::log " +
       "Context::notifier Context::now Context::origin Context::pads Context::request Context::session Context::temporary Entry::of"],
   ]),
   group("region and text", ["one-shot"], "text request/source, font recipe, paint context and current paragraph/cache residency", "UI-owned",

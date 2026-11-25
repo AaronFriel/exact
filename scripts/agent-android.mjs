@@ -1135,9 +1135,10 @@ function assembleApk(app, env, profile, writeLocks, bundle, abis, dirs) {
   const bound = androidImplementations(app.dir, extensions);
   const maven = mavenCoordinates(app, bound);
   if (!writeLocks && !mavenLocksPresent(app, maven)) return null;
-  // A release profile or production trust is a release (package-config.mjs).
-  let config; const release = profile === 'release' || env.EXACT_UPDATE_TRUST === 'production';
-  try { config = packageConfigs(app.dir, 'android', { extensions, release, env, warn: (m) => console.warn(`${app.name}: ${m}`) }); configMetaData(config); } catch (error) { console.error(`${app.name}: ${error.message}`); return null; }
+  const compat = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')), development = compat.embedded?.trust !== 'production';
+  // The release profile also enforces release-required keys under development trust.
+  let config; const release = profile === 'release' || !development;
+  try { config = packageConfigs(app.dir, 'android', { extensions, release, development, env, warn: (m) => console.warn(`${app.name}: ${m}`) }); configMetaData(config); } catch (error) { console.error(`${app.name}: ${error.message}`); return null; }
   // Firebase's options for an app that pushes (LLP 1133.004.000 D6). The file beside app.json needs no configuration
   // line, so the refusal is the push implementation's own rather than a `required` key's.
   let firebase = null;
@@ -1155,7 +1156,6 @@ function assembleApk(app, env, profile, writeLocks, bundle, abis, dirs) {
   // The modules' shader text (LLP 1030 D8), which the host registers from `shaders/` under the asset root.
   if (gpu.length) copyShaders(app, resolve(staged, 'assets/app/shaders'));
   const compose = composeArgs(uses, app.dir, bound, env);
-  const compat = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')), development = compat.embedded?.trust !== 'production';
   // The library's baked identity is the one the APK installs under, as `assertAppleIdentity` holds an Apple build to it
   // (LLP 1030.008 D2): the JavaScript and the Rust readers resolved the same variant.
   if (compat.inputs?.app !== app.id) { console.error(`${app.name}: the library's baked app id is ${compat.inputs?.app}, not ${app.id}: build it again`); return null; }

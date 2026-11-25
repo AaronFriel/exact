@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { webPackageBindingChanged } from '../../js/bake/src/package-config.mjs';
@@ -7,21 +7,33 @@ import { buildPackageViews } from './build.mjs';
 import { hostFixtureFile } from './tests/glue-fixture.mjs';
 import { suiteBrowser } from '../../scripts/agent-launch.mjs';
 
-test('two placed views share the configured implementation, admitted files and lifecycle of their wasm session', async () => {
+test.each([false, true])('two placed views share the configured implementation, admitted files and lifecycle of their wasm session (production %s)', async production => {
   const dir = mkdtempSync(join(tmpdir(), 'exact-wasm-swatch-')), stage = join(dir, 'dist');
   const pkg = join(dir, 'node_modules/@fixture/swatch');
   const placed = [{ tag: 'swatch-box', extension: 'swatch', package: '@fixture/swatch', displayed: true, binds: 'tint' }];
+  const canary = 'swatch-wasm-development-02', previousKey = process.env.EXACT_WASM_SWATCH_KEY;
   let server, browser;
   try {
     mkdirSync(stage);
     cpSync(resolve(import.meta.dir, '../../packages/fixtures/swatch'), pkg, { recursive: true });
-    writeFileSync(join(dir, 'app.json'), JSON.stringify({ packages: { '@fixture/swatch': { web: { label: 'tiles' } } } }));
+    process.env.EXACT_WASM_SWATCH_KEY = 'base';
+    writeFileSync(join(dir, 'app.json'), JSON.stringify({
+      packages: { '@fixture/swatch': { web: { label: 'tiles', apiKey: { env: 'EXACT_WASM_SWATCH_KEY' } } } },
+      development: { packages: { '@fixture/swatch': { web: { label: canary } } } },
+    }));
+    mkdirSync(join(dir, 'config'));
+    renameSync(join(dir, 'app.json'), join(dir, 'config/manifest.json'));
+    symlinkSync('config/manifest.json', join(dir, 'app.json'));
+    mkdirSync(join(dir, '.shells'));
+    writeFileSync(join(dir, '.shells/app.json'), readFileSync(join(dir, 'app.json')));
     writeFileSync(join(pkg, 'web/index.js'), readFileSync(join(pkg, 'web/index.js'), 'utf8')
       .replace('export function implementation', 'function swatch') + `
       import { color } from './palette';
+      import manifest from '../../../../config/manifest.json';
+      import resolved from '../../../../.shells/app.json';
       export function implementation(context) {
         const impl = swatch(context);
-        window.instances.push({ impl, context, color });
+        window.instances.push({ impl, context, color, manifest, resolved });
         return impl;
       }`);
     mkdirSync(join(pkg, 'web/palette'));
@@ -29,7 +41,9 @@ test('two placed views share the configured implementation, admitted files and l
     expect(await buildPackageViews(dir, [], [], stage, false)).toBeNull();
     expect(await buildPackageViews(dir, placed, ['swatch-box'], stage, false)).toBeNull();
     expect(existsSync(join(stage, 'packages'))).toBe(false);
-    const receipt = await buildPackageViews(dir, placed, [], stage, false);
+    const receipt = await buildPackageViews(dir, placed, [], stage, production);
+    const chunks = readdirSync(join(stage, 'packages')).map(file => readFileSync(join(stage, 'packages', file), 'utf8'));
+    expect(chunks.some(code => code.includes(canary))).toBe(!production);
     expect(receipt.files).toContain(realpathSync(join(pkg, 'web/index.js')));
     expect(webPackageBindingChanged(dir, receipt)).toBe(false);
     writeFileSync(join(pkg, 'web/palette.js'), "export const color = 'blue';");
@@ -98,7 +112,7 @@ test('two placed views share the configured implementation, admitted files and l
       const el = document.createElement('swatch-box');
       el.exactNative = { id: 1, name: el.localName };
       await next.attach(el);
-      return { count: window.instances.length, reports, grants: context.grants, denied, destroyed, hidden, topics, callbacks, stayedRetired, siblingDenied, directoryDenied, finalReports };
+      return { count: window.instances.length, writable: Reflect.set(context, "development", !context.development), scoped: [window.instances[0].manifest, window.instances[0].resolved].map(m => Object.keys(m.development.packages)), reports, grants: context.grants, denied, destroyed, hidden, topics, callbacks, stayedRetired, siblingDenied, directoryDenied, finalReports };
     });
     expect(result.stayedRetired).toBe(true);
     expect(result.callbacks).toEqual([17]);
@@ -110,12 +124,17 @@ test('two placed views share the configured implementation, admitted files and l
     }
     expect(result.siblingDenied).toContain('denied: fs.write app:/tmp/other/frame');
     expect(result.count).toBe(2);
-    expect(result.reports.config).toBe('label=tiles apiKey=none');
+    expect(result.reports.config).toBe(`label=${production ? 'tiles' : canary} apiKey=4 chars ending base development=${!production}`);
+    expect(result.writable).toBe(false);
+    expect(result.scoped).toEqual(production ? [[], []] : [['@fixture/swatch'], ['@fixture/swatch']]);
     for (const id of [1, 2]) for (const report of [`made ${id}`, `displayed ${id} true app`, `bound ${id} tint app`]) expect(result.reports.text).toContain(report);
     expect(result.grants).toBe('fs.write app:/tmp');
     expect(result.denied).toContain('denied: fs.write app:/data/refused');
     expect(result.destroyed).toBe(true);
     expect(result.hidden).toContain('displayed 1 false app');
     expect(result.topics).toContain('swatch.swatchReports');
-  } finally { await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    if (previousKey === undefined) delete process.env.EXACT_WASM_SWATCH_KEY; else process.env.EXACT_WASM_SWATCH_KEY = previousKey;
+    await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true });
+  }
 });

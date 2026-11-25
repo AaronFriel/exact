@@ -39,7 +39,7 @@ import { sealEnvelope } from '../../scripts/deploy-signing.mjs';
 import { compilerWarnings, oneScheme, webInputDigests, webInputPresent } from '../../scripts/agent-launch.mjs';
 import { webBuildFailure } from '../../scripts/app-cli.mjs';
 import { webPackageBinding, webPackageEntries } from '../../js/bake/src/package-config.mjs';
-import { builtSettings, recordSourceInputs, resolutionCandidates } from '../../js/bake/src/__exact_env.mjs';
+import { builtSettings, productionManifestImports, recordSourceInputs, resolutionCandidates } from '../../js/bake/src/__exact_env.mjs';
 import { authoredWebBake, webRendererHost, packageGpuDir, packageGpuInputs, packageGpuManifest, rustDataOf } from '../../scripts/app-shells.mjs';
 import { authClientMetadata, checkModuleRoster, gpuModules, markWorlds, rustPolicy, webGpuArtifacts, webHostFiles, worldSurfaces } from '../../scripts/app.mjs';
 import { webAudioSession, webCspFile, webHead } from '../../scripts/web-head.mjs';
@@ -287,12 +287,13 @@ export async function buildPackageViews(appDir, placed, provided, stage, product
     const runtime = resolve(SDK_ROOT, 'host/web/wasm/package-views.js');
     const entry = resolve(gen, 'views.js');
     writeFileSync(entry, `import { packageHost } from ${JSON.stringify(runtime)};
-globalThis.exact.wasmViewHost = (session, options) => packageHost(${JSON.stringify(views)}, {${loaders.join(',')}}, session, options);
+globalThis.exact.wasmViewHost = (session, options) => packageHost(${JSON.stringify(views)}, {${loaders.join(',')}}, session, options, ${!production});
 `);
     const { rolldown } = await import('rolldown');
     const { bundleOptions } = await import('../../js/bake/src/typescript.mjs');
     const bundle = await rolldown({ ...bundleOptions, input: entry, plugins: [{
       name: 'wasm-package-host',
+      load: production ? productionManifestImports(appDir) : undefined,
       async resolveId(source, importer, options) {
         if (importer === runtime && ['../native-glue.js', '../storage-environment.js', '../storage-fs.js', '../navigation.js'].includes(source))
           return { id: source, external: true };

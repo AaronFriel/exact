@@ -549,7 +549,8 @@ impl<D: DataSource> Presenter<D> {
     /// drive binds it (`--bind`), on the target this binary was built for.
     pub fn serve_packages(&mut self, table: Vec<crate::package::Entry>) {
         let agent = self.agent || std::env::var("EXACT_AGENT").as_deref() == Ok("1");
-        self.requests.packages.set(table, agent);
+        let development = !exact_runner::delivery::production(&self.compat);
+        self.requests.packages.set(table, agent, development);
         // Said with no package composed too: a substitute's per-target answer
         // is this target's, not that of the OS the binary was built on.
         let target = if cfg!(target_os = "windows") {
