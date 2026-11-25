@@ -46,7 +46,7 @@ impl<D: DataSource> Presenter<D> {
 
     /// A candidate has a new runner, but belongs to the same launch.
     pub(super) fn restore_time(&self, host: &mut Host<D>) -> Result<(), HostError> {
-        host.web_mount = self.host.web_mount.clone();
+        host.incoming_links = self.host.incoming_links.clone();
         host.set_scheme(self.dark());
         // The same launch keeps what the device said about itself.
         let runner = self.host.runner();

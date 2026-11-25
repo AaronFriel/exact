@@ -52,7 +52,7 @@ What changed on the way in, one commit each:
 
 ## Building an app
 
-`host.android.urlSchemes` registers browsable links on the activity. `notes:///links?from=test` opens `/links?from=test` at launch or sends one `navigate` while running. Use `protocol_handlers` to receive the complete URL at a template’s `%s` (LLP 1038 D8).
+`host.android.urlSchemes` registers browsable links on the activity. `notes:///links?from=test` opens `/links?from=test` at launch or sends one `navigate` while running. A location no pattern matches reaches `notfound` when declared, at launch or while running; without that fallback it is refused. Use `protocol_handlers` to receive the complete URL at a template’s `%s` (LLP 1038 D8).
 
 ### Shared elements
 

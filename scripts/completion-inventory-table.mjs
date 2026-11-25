@@ -596,7 +596,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/links.rs", "Presenter::launch_at Presenter::launch_location"],
     ["runner:runner/src/runner/router.rs",
       "Runner::host_back Runner::host_back_to Runner::host_forward Runner::host_go Runner::host_launch Runner::location_ahead Runner::location_behind Runner::location_beneath " +
-      "Runner::resource_args Runner::resource_is_placeholder Runner::route_matches Runner::route_one_location Runner::take_router_change Runner::visit_location"],
+      "Runner::resource_args Runner::resource_is_placeholder Runner::route_accepts Runner::route_matches Runner::route_one_location Runner::take_router_change Runner::visit_location"],
     ["runner:runner/src/runner/split.rs", "Runner::press_writes_router Runner::route_inspector Runner::show_split_placeholder Runner::split_row_owner Runner::stack_split"],
     ["runner:runner/src/runner/tabs.rs", "Runner::build_every_tab Runner::build_tabs Runner::panels_need_navigation Runner::unopened_tabs"],
     ["web:host/web/src/abi.rs", "exact_build_locations exact_host_back exact_host_go exact_location_of exact_route_match exact_set_launch"],

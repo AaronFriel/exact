@@ -100,7 +100,7 @@ impl PlanBytes<'_> {
 /// One runner, one painter.
 pub struct Host<D: DataSource> {
     runner: Runner<D>,
-    pub(crate) web_mount: Option<serde_json::Value>,
+    pub(crate) incoming_links: crate::app::IncomingLinks,
     secret_session: system::SecretSession,
     doc_watch: Option<crate::doc_watch::DocWatch>,
     font_sync: Option<(crate::text::Shared, usize)>,
@@ -327,7 +327,7 @@ impl<D: DataSource> Host<D> {
         }
         let mut host = Host {
             runner,
-            web_mount: None,
+            incoming_links: Default::default(),
             secret_session,
             doc_watch: None,
             font_sync: font_sync.map(|text| (text, 0)),
@@ -444,7 +444,7 @@ impl<D: DataSource> Host<D> {
     /// is answered again in that one commit, which the painter picks up
     /// like any other — the kernel is the display list here.
     pub fn set_delivery_from_compat(&mut self, json: &str) -> Option<String> {
-        self.web_mount = crate::app::web_mount(json);
+        self.incoming_links = crate::app::IncomingLinks::from_compat(json);
         match self.runner.set_delivery_from_compat(json) {
             Ok(None) => None,
             Ok(Some(receipt)) => {

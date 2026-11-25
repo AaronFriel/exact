@@ -233,8 +233,11 @@ impl<D: DataSource> Presenter<D> {
     /// it, at its scheme's registered `protocol_handlers` template when there
     /// is one (`app::incoming_location`). The refusal, else `None`.
     pub fn open_location(&mut self, href: &str, now_ms: f64) -> Option<String> {
-        let location = crate::app::incoming_location_at(href, self.host.web_mount.as_ref());
-        if !self.host.runner().route_matches(&location) {
+        let Some(location) = crate::app::incoming_location_at(href, &self.host.incoming_links)
+        else {
+            return Some(format!("open {href}: URL is outside this app"));
+        };
+        if !self.host.runner().route_accepts(&location) {
             return Some(format!("open {location}: no route matches it"));
         }
         let root = self.navigation_root().filter(|root| {
@@ -257,7 +260,10 @@ impl<D: DataSource> Presenter<D> {
     /// nothing showing it (LLP 1133.017 D7: Android's boot for a wake), read
     /// as `EXACT_LAUNCH_URL` is at a boot. The refusal, else `None`.
     pub fn launch_location(&mut self, href: &str, now_ms: f64) -> Option<String> {
-        let location = crate::app::incoming_location_at(href, self.host.web_mount.as_ref());
+        let Some(location) = crate::app::incoming_location_at(href, &self.host.incoming_links)
+        else {
+            return Some(format!("launch {href}: URL is outside this app"));
+        };
         self.launch_at(&location, now_ms)
     }
 
@@ -411,8 +417,11 @@ component App
 
     #[test]
     fn a_url_from_outside_goes_to_the_root_when_it_routes_it() {
+        // The compiler supplies a fallback even when the source omits one.
+        let mut plan = exact_plan::Plan::decode(&crate::test_plan(SRC)).unwrap();
+        plan.routes.retain(|route| !route.notfound);
         let (mut p, error) = Presenter::boot_with_fixture_fonts(
-            &crate::test_plan(SRC),
+            &plan.encode(),
             (),
             (400., 300.),
             1.,
@@ -450,6 +459,31 @@ component App
             p.host.kernel().find_by_test_id("route-note").len(),
             notes + 2
         );
+    }
+
+    #[test]
+    fn a_url_from_outside_uses_the_notfound_route() {
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
+            &crate::test_plan(SRC),
+            (),
+            (400., 300.),
+            1.,
+            std::path::PathBuf::new(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        assert!(!p.host.runner().route_matches("/nope-missing"));
+        assert_eq!(
+            p.open_location("shelf:///nope-missing?from=link#detail", 10.),
+            None
+        );
+        let change = p.host.router_op().unwrap();
+        assert_eq!(change.location(), "/nope-missing?from=link#detail");
+        assert_eq!(change.visits.len(), 2);
+        assert_eq!(p.host.kernel().find_by_test_id("route-notfound").len(), 1);
+        assert_eq!(p.open_location("/note/7", 20.), None);
+        assert_eq!(p.host.kernel().find_by_test_id("route-note").len(), 1);
     }
 
     impl Presenter<()> {

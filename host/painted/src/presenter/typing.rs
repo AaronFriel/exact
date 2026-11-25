@@ -20,7 +20,8 @@ impl<D: DataSource> Presenter<D> {
             // A path as written; a URL with a scheme as the platform delivers
             // one from outside, as Apple's `typedLocation`.
             let location = if has_scheme(text) {
-                crate::app::incoming_location_at(text, self.host.web_mount.as_ref())
+                crate::app::incoming_location_at(text, &self.host.incoming_links)
+                    .ok_or_else(|| format!("open {text}: URL is outside this app"))?
             } else {
                 text.to_owned()
             };

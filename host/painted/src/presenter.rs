@@ -531,7 +531,7 @@ impl<D: DataSource> Presenter<D> {
             services,
         )?;
         presenter.compat = compat.to_string();
-        presenter.host.web_mount = crate::app::web_mount(compat);
+        presenter.host.incoming_links = crate::app::IncomingLinks::from_compat(compat);
         presenter.measure();
         Ok((presenter, error))
     }
