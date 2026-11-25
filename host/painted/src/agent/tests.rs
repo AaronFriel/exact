@@ -18,6 +18,8 @@ mod overrun;
 mod polls;
 // A canvas input's samples across a seek.
 mod sensors;
+// A button's declared chord, pressed before the focus's key handlers.
+mod shortcuts;
 mod visibility;
 
 #[test]
