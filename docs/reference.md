@@ -750,13 +750,14 @@ the browser's supported schemes and installation behavior. Linux's CLI URL
 argument retains the ordinary location conversion because it does not
 register OS protocol handlers.
 
-A scheme registered with `host.ios.urlSchemes` or `host.macos.urlSchemes`
+A scheme in `host.ios.urlSchemes`, `host.macos.urlSchemes` or `host.android.urlSchemes`
 alone delivers its link as a location, cold as the launch location and warm
 as one navigation, with no `/open` route. A non-empty authority is the first
 segment and an empty one is none: `notes://post/42?x=1`,
 `notes:///post/42?x=1` and `notes:/post/42?x=1` are all `/post/42?x=1`, the
 fragment kept (LLP 1038 §3). Expo's `Linking.createURL("/post/42")` writes
-the three-slash form.
+the three-slash form. Android matches the declared spelling and its lowercase form,
+and refuses a scheme declared in both `urlSchemes` and `protocol_handlers`.
 
 For packaged-only Apple registration, add `"distribution_only": true` to an
 entry, for example `{"protocol":"notes","url":"/open?u=%s","distribution_only":true}`.
@@ -770,7 +771,7 @@ the web manifest or explicit `host.<platform>.urlSchemes`.
 `http` and `https` are the web's own schemes. An app declares both or
 neither: each once, with the same `url` and the same `distribution_only`.
 `readManifest` refuses any other form, so every build does, and
-`host.ios.urlSchemes` and `host.macos.urlSchemes` refuse both. The pair makes
+all three hosts refuse both in `urlSchemes`. The pair makes
 the app a web browser:
 
 | host | what the pair does |

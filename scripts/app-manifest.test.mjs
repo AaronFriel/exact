@@ -306,7 +306,16 @@ test('http and https come as a pair: a Mac web browser, refused on iOS and dropp
       save(bad);
       assert.throws(() => readManifest(dir, 'links'), /http and https come together/);
     }
-    for (const platform of ['ios', 'macos']) {
+    const android = (scheme, handlers = []) => writeFileSync(resolve(dir, 'app.json'), JSON.stringify({
+      name: 'Links', app: { id: 'dev.exact.links', name: 'Links' }, protocol_handlers: handlers, host: { android: { urlSchemes: [scheme] } },
+    }));
+    android('Notes+test.2');
+    assert.deepEqual(readManifest(dir, 'links').host.android.urlSchemes, ['Notes+test.2']);
+    android('a:b');
+    assert.throws(() => readManifest(dir, 'links'), /urlSchemes/);
+    android('Notes', [{ protocol: 'notes', url: '/open?u=%s', distribution_only: true }]);
+    assert.throws(() => readManifest(dir, 'links'), /host.android.urlSchemes: Notes is also declared in protocol_handlers/);
+    for (const platform of ['ios', 'macos', 'android']) {
       writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'Links', app: { id: 'dev.exact.links', name: 'Links' }, host: { [platform]: { urlSchemes: ['links', 'HTTPS'] } } }));
       assert.throws(() => readManifest(dir, 'links'), new RegExp(`host\\.${platform}\\.urlSchemes: HTTPS is the web's own scheme; declare http and https together in protocol_handlers`));
     }

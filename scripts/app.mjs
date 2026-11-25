@@ -599,7 +599,7 @@ export { moduleDirectory } from './launch-modules.mjs';
 import { webManifestAtBase, webCspProblems, webHeadProblems } from './web-head.mjs';
 import { appIconProblems, publishedIcons } from './app-icons.mjs';
 import { claimVariant, resolveVariant, selectedVariant, variantProblems } from './variants.mjs';
-import { REMOVED_DOMAINS, appleLinkDomains, androidLinkFilters, linkProblems, rawAppleDomains } from './links.mjs';
+import { REMOVED_DOMAINS, appleLinkDomains, androidLinkFilters, linkProblems, protocolHandlerProblems, isWebScheme, rawAppleDomains } from './links.mjs';
 export { DOCUMENT_UTIS, ownDocumentType };
 ;
 
@@ -613,18 +613,7 @@ function launchImageProblems(manifest, dir) {
   });
 }
 
-/** Whether a `protocol_handlers` scheme is the web's own: `http` and
- * `https` make a native app a web browser (LLP 1030 D2, 2026-10-20), and
- * no browser registers them (WHATWG HTML's protocol handler safelist). */
-export const isWebScheme = (protocol) => ['http', 'https'].includes(protocol.toLowerCase());
-function protocolHandlerProblems({ protocol_handlers = [], host }) {
-  const web = protocol_handlers.filter((h) => isWebScheme(h.protocol));
-  const pair = web.length && (new Set(web.map((h) => h.protocol.toLowerCase())).size !== 2 || web.some((h) => h.url !== web[0].url || !h.distribution_only !== !web[0].distribution_only));
-  const claimed = ['ios', 'macos'].flatMap((platform) => (host?.[platform]?.urlSchemes ?? []).filter(isWebScheme).map((s) => `host.${platform}.urlSchemes: ${s} is the web's own scheme; declare http and https together in protocol_handlers`));
-  return [...claimed, ...protocol_handlers.flatMap(({ protocol }, i) => protocol_handlers.findIndex(h => h.protocol.toLowerCase() === protocol.toLowerCase()) === i ? [] : [`protocol_handlers[${i}].protocol: ${protocol} is declared more than once`]),
-    ...(host?.ios?.webBrowser && web.length === 0 ? ['host.ios.webBrowser: declare http and https together in protocol_handlers'] : []),
-    ...(pair ? ['protocol_handlers: http and https come together, with one url and one distribution_only: a web browser claims both'] : [])];
-}
+export { isWebScheme };
 /** The W3C keys of `app.json`, as the web builds write `manifest.json`
  * (LLP 1030 D2/D10; 1030.000 D7). A browser opens files only, so
  * `inode/directory` (the Apple bake's word for a folder) leaves each file handler, and one with nothing

@@ -6,7 +6,8 @@
 
 - On an iPhone with bottom tabs, join the toolbar buttons beside the tab bar to their test IDs in the in-process `tree --ax` containment walk. XCTest’s system accessibility snapshot includes both buttons with their labels and IDs (#1422).
 
-- `host.ios` and `host.macos` take the same `urlSchemes` array that #1597 admits for `host.android`. Before building the Android key, decide whether one host-independent key would be simpler while Exact makes no migration promises.
+- Pocket Lab can replace its Android `/open?u=%s` protocol handler with the same `urlSchemes` array it uses on iOS. Revisit a shared manifest key if apps keep repeating the array across hosts (#1597).
+- Register `SSControl` in Android `protocol_handlers` and open an uppercase `SSControl:` link. Android’s case-sensitive resolver registers only the lowercase spelling.
 - A 2–2 panel split left the parent chain of accessible names out of `elementAtPoint`. Revisit it when the recorder's author says what a recorded step loses without those names (#1584).
 - Return an Android activity to the foreground and stop it before the reader publishes a frame. A module first receives its foreground callbacks when a paint confirms its node. Check whether a live allocation can be confirmed before painting (#1574).
 - On Android, start a second ExactActivity that takes the reader, then finish it and return to the first. The first activity releases its mounted module views when the second takes over. Check module state on that path separately from Home and return (#1574).

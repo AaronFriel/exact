@@ -1,9 +1,6 @@
 # The Android reader
 
-The Kotlin side of Android's Canvas host (LLP 1076 §3.3), in the repository by LLP 1115.001 D2 (Charlie, 2026-10-11).
-
-An app on Android is its Rust, built for `aarch64-linux-android` or `x86_64-linux-android` (`host/painted`: the runner, the kernel, layout, text
-and the paint walk), and this. The Rust records what it paints as an op stream (`host/painted/src/canvas.rs`). The
+The Kotlin reader is part of Android’s Canvas host (LLP 1076 §3.3, LLP 1115.001 D2). The Rust host (`host/painted`, built for `aarch64-linux-android` or `x86_64-linux-android`) runs the app, lays out its text and records its paint operations (`host/painted/src/canvas.rs`). The
 reader replays that stream onto Android's own Canvas: a `RenderNode` for each row, scroller and animated layer,
 hardware bitmaps for pictures, `drawGlyphs` for text the Rust has shaped (below Android 12, the glyphs' outlines:
 "Android 10 and 11", below). The two meet at `dev.exact.canvas.Native`,
@@ -54,6 +51,8 @@ What changed on the way in, one commit each:
 - The package is `dev.exact.canvas` (it was `dev.exact.bench.exactcanvas`), in Kotlin and in the JNI's function names.
 
 ## Building an app
+
+`host.android.urlSchemes` registers browsable links on the activity. `notes:///links?from=test` opens `/links?from=test` at launch or sends one `navigate` while running. Use `protocol_handlers` to receive the complete URL at a template’s `%s` (LLP 1038 D8).
 
 ### Shared elements
 

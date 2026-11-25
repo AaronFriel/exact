@@ -305,13 +305,14 @@ export const androidProtocolHandlers = (manifest, distributed = false) => (manif
   .filter((h) => !['http', 'https'].includes(h.protocol.toLowerCase()) && (!h.distribution_only || distributed))
   .map(({ protocol, url }) => ({ protocol: protocol.toLowerCase(), url }));
 
-/** The protocol handlers on the app's activity (LLP 1038 D8): a VIEW filter for each scheme, and the handlers as the
- * application's `dev.exact.protocol_handlers` meta-data, which the reader gives exact2 so that the whole URL arrives at
- * the template's `%s` (cold, the launch location; warm, `navigate`), as Apple's `ExactProtocolHandlers`. */
-export function withProtocolHandlers(fragment, handlers = []) {
-  if (!handlers.length) return fragment;
-  const filters = [...new Set(handlers.map((h) => h.protocol))].flatMap(viewFilter);
-  return onMainActivity(fragment, filters, [`        <meta-data android:name="dev.exact.protocol_handlers" android:value="${escape(JSON.stringify(handlers))}" />`]);
+/** Both declarations register browsable VIEW filters. Only protocol handlers supply templates to the reader.
+ * A URL with no template reaches `location_of` directly (LLP 1038 D8). */
+export function withProtocolHandlers(fragment, manifest, distributed = false) {
+  const handlers = androidProtocolHandlers(manifest, distributed), urlSchemes = manifest?.host?.android?.urlSchemes ?? [];
+  const schemes = new Set([...handlers.map((h) => h.protocol), ...urlSchemes.flatMap((s) => [s, s.toLowerCase()])]);
+  if (!schemes.size) return fragment;
+  const metadata = handlers.length ? [`        <meta-data android:name="dev.exact.protocol_handlers" android:value="${escape(JSON.stringify(handlers))}" />`] : [];
+  return onMainActivity(fragment, [...schemes].flatMap(viewFilter), metadata);
 }
 
 /** The App Links on the app's activity (LLP 1038 D8): for each claimed host (`androidLinkFilters`), an `autoVerify`

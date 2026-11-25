@@ -990,6 +990,7 @@
               "type": "string",
               "pattern": "^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$"
             },
+            "urlSchemes": {"type": "array", "description": "Custom schemes whose URLs open as app locations. Use protocol_handlers for a template.", "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9+.-]*$"}},
             "painter": {"enum": ["ink"], "description": "Opt into ink (LLP 1149 D12); absent: the current painter, with `EXACT_PAINTER` overriding the choice, and ink refused until its Vulkan presenter is implemented."},
             "minimumOS": {
               "description": "The oldest Android the app runs on, as \"12\"; never below 10. Below 12 the APK carries the reader's Android 10 and 11 code (host/android/README.md, \"Android 10 and 11\"); at 12 or later it carries none.",

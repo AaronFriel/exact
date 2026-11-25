@@ -46,6 +46,9 @@ scheme and fragment. A no-router URL event remains deferred; Charlie's ruling
 keeps the navigation root requirement. Take: no second delivery mechanism is
 added.
 
+**Android app schemes (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"; panel 3–1).**
+`host.android.urlSchemes` registers browsable `VIEW` links. `location_of` supplies the launch location or one warm `navigate`. Android refuses a scheme also listed in `protocol_handlers` (LLP 1038 D8).
+
 **Expanded (Charlie, 2026-10-26, #1003):** an iOS app can ask to be the default
 browser. `host.ios.webBrowser: true` emits Apple's managed
 `com.apple.developer.web-browser` entitlement, registers the `http` and `https`
