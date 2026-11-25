@@ -6,6 +6,8 @@
 
 - On an iPhone with bottom tabs, join the toolbar buttons beside the tab bar to their test IDs in the in-process `tree --ax` containment walk. XCTest’s system accessibility snapshot includes both buttons with their labels and IDs (#1422).
 
+- `host.ios` and `host.macos` take the same `urlSchemes` array that #1597 admits for `host.android`. Before building the Android key, decide whether one host-independent key would be simpler while Exact makes no migration promises.
+- A 2–2 panel split left the parent chain of accessible names out of `elementAtPoint`. Revisit it when the recorder's author says what a recorded step loses without those names (#1584).
 - Return an Android activity to the foreground and stop it before the reader publishes a frame. A module first receives its foreground callbacks when a paint confirms its node. Check whether a live allocation can be confirmed before painting (#1574).
 - On Android, start a second ExactActivity that takes the reader, then finish it and return to the first. The first activity releases its mounted module views when the second takes over. Check module state on that path separately from Home and return (#1574).
 - A fixture that sets `modulesDir` in `gradle.properties` can select a different Kotlin directory from the Android shell's Compose scan. Put a Compose import in the app's `modules/android`, point the Gradle property at plain Kotlin, and compare the runtime graph with the same path set through `ORG_GRADLE_PROJECT_modulesDir` (#1575).
