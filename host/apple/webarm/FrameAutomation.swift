@@ -76,8 +76,8 @@ enum Automations {
     static func run(_ request: [String: Any], message: AutomationMessage?, finish: @escaping ([String: Any]) -> Void) {
         if request["op"] as? String == "releaseScriptChannels", let session = request["channelSession"] as? String,
            let owner = request["owner"] as? String, !owner.isEmpty {
+            FrameAutomation.closeMessageQueues(owner: owner, session: session)
             for arm in arms.allObjects where arm.owner == owner { arm.automation?.releaseChannels(session) }
-            FrameAutomation.releaseRetirements(owner: owner, session: session)
             return finish([:])
         }
         var options = request
@@ -145,8 +145,7 @@ final class FrameAutomation {
     }
     private var preload: [(id: String, script: WKUserScript, session: String?, seededWorld: String?)] = []
     private final class Messages: NSObject, WKScriptMessageHandlerWithReply {
-        let owner: String
-        let session: String
+        let queue: ScriptMessageQueue
         private var flushing: [ObjectIdentifier: WKWebView] = [:]
         let handler = "_message" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
         private struct Capability {
@@ -174,21 +173,45 @@ final class FrameAutomation {
         let route: String
         private var deliver: AutomationMessage?
         weak var arm: WebArm?
-        private let views = NSMapTable<WKWebView, NSString>.weakToStrongObjects()
+        private let views = NSHashTable<WKWebView>.weakObjects()
+        private weak var current: WKWebView?
         private let controllers = NSHashTable<WKUserContentController>.weakObjects()
 
         init(_ arm: WebArm, _ world: WKContentWorld, _ route: String, _ session: String, _ deliver: @escaping AutomationMessage) {
-            self.owner = arm.owner
-            self.session = session
             self.arm = arm
             self.world = world
             self.route = route
             self.deliver = deliver
+            let key = SessionKey(owner: arm.owner, session: session)
+            let channels = FrameAutomation.sessions[key] ?? SessionChannels()
+            FrameAutomation.sessions[key] = channels
+            queue = channels.queue
+            super.init()
+            channels.receivers.add(self)
+        }
+
+        private final class Registration {
+            let remove: () -> Void
+            init(_ remove: @escaping () -> Void) { self.remove = remove }
+            deinit { remove() }
         }
 
         func install(_ view: WKWebView) {
-            views.setObject((arm?.element ?? "") as NSString, forKey: view)
+            current = view
             let controller = view.configuration.userContentController
+            if !views.contains(view) {
+                views.add(view)
+                let registration = Registration { [weak self, weak controller] in
+                    DispatchQueue.main.async { [weak self, weak controller] in
+                        guard let self, let controller, self.controllers.contains(controller),
+                              !self.views.allObjects.contains(where: { $0.configuration.userContentController === controller }) else { return }
+                        controller.removeScriptMessageHandler(forName: self.handler, contentWorld: self.world)
+                        self.controllers.remove(controller)
+                    }
+                }
+                // A hatch can retain the controller after the last view using its handler dies.
+                objc_setAssociatedObject(view, Unmanaged.passUnretained(self).toOpaque(), registration, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            }
             if !controllers.contains(controller) {
                 controllers.add(controller)
                 controller.addScriptMessageHandler(self, contentWorld: world, name: handler)
@@ -198,6 +221,9 @@ final class FrameAutomation {
         func uninstall() {
             for controller in controllers.allObjects { controller.removeScriptMessageHandler(forName: handler, contentWorld: world) }
             controllers.removeAllObjects()
+            for view in views.allObjects {
+                objc_setAssociatedObject(view, Unmanaged.passUnretained(self).toOpaque(), nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            }
             views.removeAllObjects()
             issued.removeAll()
             flushing.removeAll()
@@ -205,52 +231,55 @@ final class FrameAutomation {
         }
 
         func retire(_ view: WKWebView) {
-            guard views.object(forKey: view) != nil else { return }
-            views.setObject((arm?.element ?? "") as NSString, forKey: view)
-            // WebKit discards even a queued post when its view dies. The session owns the view
-            // through the flush and can release it on close if the page never services the evaluation.
+            guard current === view else { return }
+            current = nil
+            // WebKit discards queued callbacks when their view dies. Session close can
+            // release the view even if its renderer never services the flush.
             let id = ObjectIdentifier(view)
             flushing[id] = view
-            FrameAutomation.retiring.add(self)
             view.evaluateJavaScript("void 0", in: nil, in: world) { [weak self] _ in
-                guard let self, let view = self.flushing.removeValue(forKey: id) else { return }
-                self.views.removeObject(forKey: view)
-                if self.flushing.isEmpty { FrameAutomation.retiring.remove(self) }
-                let controller = view.configuration.userContentController
-                if self.controllers.contains(controller), !self.views.keyEnumerator().allObjects.contains(where: { ($0 as? WKWebView)?.configuration.userContentController === controller }) {
-                    controller.removeScriptMessageHandler(forName: self.handler, contentWorld: self.world)
-                    self.controllers.remove(controller)
-                }
+                self?.flushing.removeValue(forKey: id)
             }
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage,
                                    replyHandler: @escaping (Any?, String?) -> Void) {
-            guard let view = message.webView, let saved = views.object(forKey: view), message.frameInfo.isMainFrame,
+            guard let view = message.webView, views.contains(view), message.frameInfo.isMainFrame,
                   let parts = message.body as? [String] else { return replyHandler(nil, nil) }
             if parts.first == "bind" {
                 let keys = parts.dropFirst()
-                guard !keys.isEmpty, keys.allSatisfy({ issued[$0] != nil }) else { return replyHandler(nil, "channel closed") }
+                guard view === current, !keys.isEmpty, keys.allSatisfy({ issued[$0] != nil }) else { return replyHandler(nil, "channel closed") }
                 for key in keys { issued[key]?.admitted = true }
                 return replyHandler(true, nil)
             }
             defer { replyHandler(nil, nil) }
-            guard parts.count == 3, let channel = issued[parts[0]]?.channel, UUID(uuidString: parts[1]) != nil,
-                  parts[2].utf8.count <= Automations.limit else { return }
+            guard parts.count == 4, let channel = issued[parts[0]]?.channel, UUID(uuidString: parts[1]) != nil else { return }
+            let start = ScriptMessageQueue.Start(handler: handler, view: ObjectIdentifier(view), turn: parts[2])
+            if parts[3].isEmpty { return queue.publish(start) }
+            guard parts[3].utf8.count <= Automations.limit else { return }
+            guard view === current, let arm, !arm.invalidated, arm.built === view else {
+                deliver?(["retiredPost": true])
+                return
+            }
             let origin = WebArm.spelled(message.frameInfo.securityOrigin)
-            let context = arm?.built === view ? arm?.element ?? (saved as String) : saved as String
-            let source = ["realm": FrameAutomation.realmId(route, parts[1], origin), "origin": origin, "context": context]
-            deliver?(["channel": channel, "json": parts[2], "source": source])
+            let source = ["realm": FrameAutomation.realmId(route, parts[1], origin), "origin": origin, "context": arm.element]
+            queue.admit(start, ["channel": channel, "json": parts[3], "source": source]) { [self] in deliver?($0) }
         }
     }
 
-    nonisolated(unsafe) private static let retiring = NSHashTable<Messages>.weakObjects()
+    private struct SessionKey: Hashable { let owner: String, session: String }
+    private final class SessionChannels {
+        let queue = ScriptMessageQueue()
+        let receivers = NSHashTable<Messages>.weakObjects()
+    }
+    // A package handler can still be running when its last frame goes away.
+    nonisolated(unsafe) private static var sessions: [SessionKey: SessionChannels] = [:]
 
-    static func releaseRetirements(owner: String, session: String) {
-        for sink in retiring.allObjects where sink.owner == owner && sink.session == session {
-            sink.uninstall()
-            retiring.remove(sink)
-        }
+    static func closeMessageQueues(owner: String, session: String) {
+        let key = SessionKey(owner: owner, session: session)
+        guard let channels = sessions.removeValue(forKey: key) else { return }
+        channels.queue.close()
+        for receiver in channels.receivers.allObjects { receiver.uninstall() }
     }
 
     private struct Destination: Hashable { let sandbox: String, session: String }
@@ -576,7 +605,7 @@ final class FrameAutomation {
     }
 
     func releaseChannels(_ session: String) {
-        for key in messages.keys.filter({ $0.session == session }) { messages.removeValue(forKey: key)?.uninstall() }
+        messages = messages.filter { $0.key.session != session }
         let removed = preload.filter { $0.session == session }.map(\.script)
         preload.removeAll { $0.session == session }
         let scripts = removed + unusedSeeds()
@@ -616,11 +645,18 @@ final class FrameAutomation {
             let capability = sink.reserve(channel)
             reserved.append(capability)
             expressions.append("""
-            ((token, send, capability) => value => {
-              const json = JSON.stringify(value);
-              if (json === undefined) throw new TypeError('script.message needs JSON');
-              if (new TextEncoder().encode(json).length > \(Automations.limit)) throw new DOMException('script.message exceeds 65536 bytes', 'QuotaExceededError');
-              send([capability, token, json]);
+            ((token, send, capability) => {
+              let turn = null;
+              return value => {
+                const json = JSON.stringify(value);
+                if (json === undefined) throw new TypeError('script.message needs JSON');
+                if (new TextEncoder().encode(json).length > \(Automations.limit)) throw new DOMException('script.message exceeds 65536 bytes', 'QuotaExceededError');
+                if (turn === null) {
+                  turn = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('.');
+                  queueMicrotask(() => { const done = turn; turn = null; send([capability, token, done, '']); });
+                }
+                send([capability, token, turn, json]);
+              };
             })(\(Self.binding).token, webkit.messageHandlers.\(sink.handler).postMessage.bind(webkit.messageHandlers.\(sink.handler)), '\(capability)')
             """)
         }

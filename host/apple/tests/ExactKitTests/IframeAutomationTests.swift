@@ -471,6 +471,145 @@ final class IframeAutomationTests: XCTestCase {
         }
     }
 
+    private typealias DeliveryHold = @convention(block) (Bool) -> Void
+
+    private func channel(_ session: String, _ function: String) -> [String: Any] {
+        ["channelSession": session, "sandbox": "player", "functionDeclaration": function,
+         "arguments": [["type": "channel", "value": ["channel": "playback"]]]]
+    }
+
+    // A post on another session crosses the same WebKit connection after the preceding turn.
+    private func waitForPostedTurn(_ arm: Arm) {
+        var reached = false
+        let args = channel("checkpoint", "post => post(0)")
+        XCTAssertNil(run(arm, "callFunction", args, message: { _ in reached = true })["error"])
+        spin { reached }
+        XCTAssertTrue(reached)
+        XCTAssertNil(run(arm, "releaseScriptChannels", ["channelSession": "checkpoint"])["error"])
+    }
+
+    func testHeldSessionAcrossAnEmptyFrameSet() throws {
+        let arm = try arm(), first = Seen(), second = Seen()
+        let args = channel("player session", "post => post(1)")
+        defer { _ = run(arm, "releaseScriptChannels", ["channelSession": "player session"]) }
+        var held: DeliveryHold?
+        weak var retired: WKWebView?
+        weak var firstReceiver: Seen?
+        try autoreleasepool {
+            let (handle, web) = mount(arm, first)
+            defer { web.removeFromSuperview(); arm.destroy(handle) }
+            retired = web
+            let receiver = Seen()
+            firstReceiver = receiver
+            XCTAssertNil(run(arm, "callFunction", args, message: { record in
+                receiver.records.append(("post", [:]))
+                if let block = record["holdDelivery"] {
+                    held = unsafeBitCast(block as AnyObject, to: DeliveryHold.self)
+                    held?(true)
+                }
+            })["error"])
+            spin { held != nil }
+            _ = try XCTUnwrap(held)
+        }
+        spin { autoreleasepool { retired == nil && firstReceiver == nil } }
+        XCTAssertNil(retired)
+        XCTAssertNil(firstReceiver)
+        let (handle, _) = mount(arm, second)
+        defer { arm.destroy(handle) }
+        var values: [String] = []
+        XCTAssertNil(run(arm, "callFunction", args, message: { record in
+            if let json = record["json"] as? String { values.append(json) }
+        })["error"])
+        waitForPostedTurn(arm)
+        XCTAssertEqual(values, [])
+        held?(false)
+        spin { !values.isEmpty }
+        XCTAssertEqual(values, ["1"])
+    }
+
+    func testRetiredPostsDoNotDisplaceAnyOfThe32WaitingPosts() throws {
+        let arm = try arm(), seen = Seen()
+        let (handle, web) = mount(arm, seen)
+        defer { arm.destroy(handle) }
+        let args = channel("full queue", "post => { window.send = post; post(0) }")
+        defer { _ = run(arm, "releaseScriptChannels", ["channelSession": "full queue"]) }
+        var held: DeliveryHold?, values: [Int] = [], refused = 0, overflows = 0
+        XCTAssertNil(run(arm, "callFunction", args, message: { record in
+            if record["retiredPost"] as? Bool == true { refused += 1 }
+            if record["overflow"] as? Bool == true { overflows += 1 }
+            if let json = record["json"] as? String, let value = Int(json) {
+                values.append(value)
+                if value == 0, let block = record["holdDelivery"] {
+                    held = unsafeBitCast(block as AnyObject, to: DeliveryHold.self)
+                    held?(true)
+                }
+            }
+        })["error"])
+        spin { held != nil }
+        let release = try XCTUnwrap(held)
+        XCTAssertNil(run(arm, "evaluate", ["sandbox": "player", "expression": "Array.from({length: 32}, (_, i) => send(i + 1)).length"])["error"])
+        waitForPostedTurn(arm)
+        json(["element": "next", "partition": "next", "owner": Self.owner], arm.configure, handle)
+        web.evaluateJavaScript("send(33); send(34)", in: nil, in: .world(name: "player"), completionHandler: nil)
+        spin { refused == 2 }
+        XCTAssertEqual(refused, 2)
+        XCTAssertEqual(values, [0])
+        release(false)
+        spin { values.last == 32 }
+        XCTAssertEqual(values, Array(0...32))
+        XCTAssertEqual(overflows, 0)
+    }
+
+    func testOnlyTheFrameThatStillOwnsTheViewAcceptsNewPosts() throws {
+        let arm = try arm(), seen = Seen()
+        let (handle, web) = mount(arm, seen)
+        defer { arm.destroy(handle) }
+        let channel: [String: Any] = ["type": "channel", "value": ["channel": "playback"]]
+        let args: [String: Any] = ["sandbox": "player", "arguments": [channel], "channelSession": "parked player",
+                                   "functionDeclaration": "post => { window.send = post }"]
+        var values: [String] = [], drops = 0
+        let result = run(arm, "callFunction", args, message: { record in
+            if let json = record["json"] as? String { values.append(json) }
+            if record["retiredPost"] as? Bool == true { drops += 1 }
+        })
+        XCTAssertNil(result["error"])
+        XCTAssertNil(run(arm, "addPreloadScript", args, message: { _ in })["error"])
+        let script = try XCTUnwrap(web.configuration.userContentController.userScripts.last?.source)
+        let range = try XCTUnwrap(script.range(of: "_message[A-Fa-f0-9]+", options: .regularExpression))
+        let handler = script[range]
+        let unknown = "webkit.messageHandlers.\(handler).postMessage(['unissued','\(UUID().uuidString)','turn','99'])"
+        XCTAssertEqual(value(arm, "(\(unknown), true)", sandbox: "player") as? Bool, true)
+        waitForPostedTurn(arm)
+        XCTAssertTrue(values.isEmpty)
+        func post(_ n: Int) {
+            web.evaluateJavaScript("send(\(n))", in: nil, in: .world(name: "player"), completionHandler: nil)
+        }
+        post(1)
+        spin { values.count == 1 }
+        let parent = try XCTUnwrap(web.superview)
+        web.removeFromSuperview()
+        post(2)
+        spin { values.count == 2 }
+        parent.addSubview(web)
+        post(3)
+        spin { values.count == 3 }
+        seen.records.removeAll()
+        json(["element": "next", "partition": "next", "owner": Self.owner], arm.configure, handle)
+        post(4)
+        spin { drops > 0 }
+        spin { seen.records.contains { $0.event == "navigatesuccess" } }
+        XCTAssertTrue(seen.records.contains { $0.event == "navigatesuccess" })
+        var successor = args
+        successor["functionDeclaration"] = "post => post(5)"
+        XCTAssertNil(run(arm, "callFunction", successor, id: "next", message: { record in
+            if let json = record["json"] as? String { values.append(json) }
+        })["error"])
+        spin { values.last == "5" }
+        XCTAssertEqual(drops, 1)
+        XCTAssertEqual(values, ["1", "2", "3", "5"])
+        XCTAssertNil(run(arm, "releaseScriptChannels", ["channelSession": "parked player"])["error"])
+    }
+
     func testClosingASessionReleasesItsUnmountedReceiverBeforeTheFlush() throws {
         let arm = try arm(), seen = Seen()
         weak var retained: Seen?

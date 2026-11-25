@@ -2,8 +2,7 @@
 // iframe arm (`exact_web_automation`), which holds the frames. The runner has
 // admitted the call under `browser.automation` before it reaches here. A frame
 // is found by its `id` among the frames of this app: the arm knows each frame
-// by the temporary folder its session's module writes, the one `context.file`
-// resolves `app:/tmp/` in, so a call never reaches another app's frames. An
+// by its session's temporary directory, so a call never reaches another app's frames. An
 // arm not yet loaded holds no frame: NotFoundError.
 import ExactPackage
 import Foundation
@@ -16,9 +15,8 @@ public final class BrowserAutomationModule: ExactPackage {
     private let context: ExactPackageContext
 
     private var ended = false
-    private var unsent: [[String: Any]] = []
-    private var busy = false
-    private var reported = false
+    private typealias Hold = @convention(block) (Bool) -> Void
+    private var reportedRetiredPost = false
     private let session = UUID().uuidString
 
     public init(context: ExactPackageContext) {
@@ -27,36 +25,28 @@ public final class BrowserAutomationModule: ExactPackage {
 
     public func destroy(_ done: @escaping () -> Void) {
         ended = true
-        unsent.removeAll()
         later("releaseScriptChannels", [:], preferred: nil) { _ in done() }
     }
 
     private func post(_ message: [String: Any]) {
         guard !ended else { return }
-        let overflow = unsent.count >= 32
-        if overflow { unsent.removeFirst() }
-        unsent.append(message)
-        if overflow && !reported {
-            reported = true
-            context.invoke("script.message", "script.message", ["overflow": true]) { _ in }
-        }
-        drain()
-    }
-
-    private func drain() {
-        guard !busy, !unsent.isEmpty else { return }
-        busy = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self, !self.ended else { return }
-            let params = self.unsent.removeFirst()
-            let args: [String: Any] = ["params": params]
-            if self.unsent.isEmpty { self.reported = false }
-            self.context.invoke("script.message", "script.message", args) { [weak self] _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) { [weak self] in
-                    self?.busy = false
-                    self?.drain()
-                }
+        if message["retiredPost"] as? Bool == true {
+            if !reportedRetiredPost {
+                reportedRetiredPost = true
+                context.invoke("script.message", "script.message", ["retiredPost": true]) { _ in }
             }
+            return
+        }
+        if message["overflow"] as? Bool == true {
+            context.invoke("script.message", "script.message", ["overflow": true]) { _ in }
+            return
+        }
+        var params = message
+        guard let block = params.removeValue(forKey: "holdDelivery") else { return }
+        let hold = unsafeBitCast(block as AnyObject, to: Hold.self)
+        hold(true)
+        context.invoke("script.message", "script.message", ["params": params]) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) { hold(false) }
         }
     }
 
@@ -75,8 +65,7 @@ public final class BrowserAutomationModule: ExactPackage {
 
     public func later(_ name: String, _ args: [String: Any], preferred: Any?, reply: @escaping ([String: Any]) -> Void) {
         let id = args["id"] as? String ?? ""
-        guard let owner = context.file("app:/tmp/.browser-automation")?.deletingLastPathComponent().standardizedFileURL.path,
-              let automate = Self.automate() else {
+        guard let automate = Self.automate() else {
             if (args["target"] as? [String: Any])?["realm"] is String {
                 return reply(["error": "no such frame", "message": "the script realm is no longer live"])
             }
@@ -88,7 +77,7 @@ public final class BrowserAutomationModule: ExactPackage {
         // The files are this package's to resolve, never the caller's to name.
         request["pathFile"] = nil
         request["destinationFolderFile"] = nil
-        request["owner"] = owner
+        request["owner"] = context.temporary.standardizedFileURL.path
         // A path option is the app's own file (`app:/`), admitted by the runner against the app's `fs.write` lines.
         for option in ["path", "destinationFolder"] {
             guard let path = args[option] as? String else { continue }

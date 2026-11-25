@@ -68,7 +68,7 @@ test.skipIf(process.platform !== 'darwin')('a post during the overflow report ke
     const module = await Bun.file(join(import.meta.dir, '../apple/BrowserAutomation.swift')).text();
     const test = await Bun.file(join(import.meta.dir, 'Queue.swift')).text();
     await Bun.write(join(out, 'Queue.swift'), module + '\n' + test);
-    await $`xcrun swiftc -parse-as-library -I ${out} -L ${out} -lExactPackage ${out}/Queue.swift -o ${out}/queue`.quiet();
+    await $`xcrun swiftc -parse-as-library -I ${out} -L ${out} -lExactPackage ${root}/host/apple/webarm/ScriptMessageQueue.swift ${out}/Queue.swift -o ${out}/queue`.quiet();
     await $`${out}/queue`.quiet();
   } finally {
     await rm(out, { recursive: true, force: true });

@@ -195,6 +195,10 @@ impl<D: DataSource> Runner<D> {
             if !self.declares("browser.automation") {
                 return reply(json!({"error": "NotAllowedError", "message": "script.message requires browser.automation"}).to_string());
             }
+            if v["args"]["retiredPost"] == true {
+                self.log("script.message: dropped a post from a retired web view");
+                return reply("{}".into());
+            }
             if v["args"]["overflow"] == true {
                 self.log("script.message: dropped oldest unsent messages (queue limit 32)");
                 return reply("{}".into());

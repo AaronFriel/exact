@@ -178,23 +178,26 @@ fn script_message_requires_a_channel_and_a_complete_source() {
 }
 
 #[test]
-fn a_channel_overflow_journals_without_starting_a_guest_handler() {
+fn dropped_channel_posts_journal_without_starting_a_guest_handler() {
     let mut r = runner("browser.automation");
-    let message = serde_json::json!({
-        "extension": "browser-automation", "handle": "script.message", "handler": "script.message",
-        "args": {"overflow": true}
-    });
-    r.invoke_module(
-        &message.to_string(),
-        Box::new(|reply| assert_eq!(reply, "{}")),
-    );
-    assert!(r.take_request_refusal(true).is_none());
-    assert_eq!(
-        r.journal()
-            .filter(|line| line.contains("dropped oldest unsent"))
-            .count(),
-        1
-    );
+    for (reason, diagnostic) in [
+        ("overflow", "dropped oldest unsent"),
+        ("retiredPost", "dropped a post from a retired web view"),
+    ] {
+        let message = json!({
+            "extension": "browser-automation", "handle": "script.message", "handler": "script.message",
+            "args": {(reason): true}
+        });
+        r.invoke_module(
+            &message.to_string(),
+            Box::new(|reply| assert_eq!(reply, "{}")),
+        );
+        assert!(r.take_request_refusal(true).is_none());
+        assert_eq!(
+            r.journal().filter(|line| line.contains(diagnostic)).count(),
+            1
+        );
+    }
 }
 
 #[test]
