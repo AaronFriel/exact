@@ -1,6 +1,7 @@
 # Exponential AST blowup and unbounded recursion in child derive resolution (`inline/derives.rs`) for conditional reads
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Make derive dependency DFS iterative in inline/derives.rs and types/src/component/derives.rs, chase alias chains iteratively, and bound expanded child-derive depth and AST node count.
 **Systems:** contract-syntax (derive resolution), contract-types
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

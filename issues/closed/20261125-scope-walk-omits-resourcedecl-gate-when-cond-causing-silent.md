@@ -1,6 +1,7 @@
 # `scope::walk` omits `ResourceDecl.gate` (`when cond`), causing silent cross-file call misbinding and scope-isolation bypass
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Walk ResourceDecl.gate in scope::walk and record resource gate/each, mutation refreshes, and sequence references in symbols.rs.
 **Systems:** contract-syntax, contract-cli (multi-file scoping & symbol graph)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

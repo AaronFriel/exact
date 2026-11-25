@@ -187,6 +187,18 @@ pub(crate) fn compile_or_none(
     }
 }
 
+/// Bounds inline `fn` expansion depth and total work per top-level call.
+#[derive(Default)]
+pub(crate) struct FnBudget {
+    depth: u32,
+    expansions: u32,
+    steps: u32,
+}
+
+const MAX_FN_DEPTH: u32 = 32;
+const MAX_FN_EXPANSIONS: u32 = 4096;
+const MAX_FN_STEPS: u32 = 32_768;
+
 /// Emit `e` onto `asm` in `scope` and return its type. `locals` counts
 /// inline-`match` bindings in force, so nested ones index the VM's locals
 /// stack correctly.
@@ -197,6 +209,18 @@ pub(crate) fn compile(
     scope: &Scope,
     locals: &mut u16,
 ) -> Result<Ty, LowerError> {
+    if l.fn_budget.depth > 0 {
+        if l.fn_budget.steps >= MAX_FN_STEPS {
+            return err(
+                "lower-fn-size",
+                format!(
+                    "`fn` expansion exceeded {MAX_FN_STEPS} steps: each `fn` call expands inline; move shared work into a `derive`"
+                ),
+                e.span(),
+            );
+        }
+        l.fn_budget.steps += 1;
+    }
     if !scope.in_action() {
         if let Some((row, ty)) = l.shared_expression(e, scope)? {
             asm.load_derive(row);
@@ -432,7 +456,7 @@ pub(crate) fn compile(
                 // as a local, the body compiled in a scope of the parameters
                 // only, the locals dropped after — no new opcode, no table,
                 // and (the type pass having refused a cycle) no recursion.
-                if l.fn_depth > 32 {
+                if l.fn_budget.depth > MAX_FN_DEPTH {
                     return err(
                         "lower-fn-depth",
                         format!("`{name}` expands too deeply"),
@@ -445,6 +469,20 @@ pub(crate) fn compile(
                     asm.bind_local();
                     *locals += 1;
                 }
+                if l.fn_budget.depth == 0 {
+                    l.fn_budget.expansions = 0;
+                    l.fn_budget.steps = 0;
+                }
+                if l.fn_budget.expansions >= MAX_FN_EXPANSIONS {
+                    return err(
+                        "lower-fn-size",
+                        format!(
+                            "`{name}` expands past {MAX_FN_EXPANSIONS} calls: each `fn` call expands inline; move shared work into a `derive`"
+                        ),
+                        *span,
+                    );
+                }
+                l.fn_budget.expansions += 1;
                 let param_tys = &l.types.shapes.fns[name].0;
                 let mut inner = Scope::default();
                 inner.push(
@@ -460,9 +498,9 @@ pub(crate) fn compile(
                         })
                         .collect(),
                 );
-                l.fn_depth += 1;
+                l.fn_budget.depth += 1;
                 let body = compile(l, asm, shared, &inner, locals);
-                l.fn_depth -= 1;
+                l.fn_budget.depth -= 1;
                 body?;
                 for _ in &f.params {
                     *locals -= 1;

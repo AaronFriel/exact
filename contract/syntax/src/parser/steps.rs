@@ -496,49 +496,6 @@ impl Parser {
         })
     }
 
-    /// A JSON value from its tokens, as JSON text. Its
-    /// brackets may span lines.
-    fn json_value(&mut self) -> R<String> {
-        let token = self.next();
-        Ok(match token.kind {
-            TokenKind::Json(raw) => raw,
-            TokenKind::Punct(open @ ("{" | "[")) => {
-                let close = if open == "{" { "}" } else { "]" };
-                let mut out = String::from(open);
-                while !self.eat_punct(close) {
-                    if out.len() > 1 {
-                        self.expect_punct(",")?;
-                        out.push(',');
-                    }
-                    if open == "{" {
-                        out.push_str(&json_string(&self.str_lit("a key")?));
-                        self.expect_punct(":")?;
-                        out.push(':');
-                    }
-                    out.push_str(&self.json_value()?);
-                }
-                out.push_str(close);
-                out
-            }
-            TokenKind::Str(s) => json_string(&s),
-            TokenKind::Number(n) => format!("{n}"),
-            TokenKind::Punct("-") if matches!(self.peek_kind(), TokenKind::Number(_)) => {
-                format!("-{}", self.step_number("a number")?)
-            }
-            TokenKind::Ident(w) if w == "true" || w == "false" || w == "null" => w,
-            other => {
-                return Err(SyntaxError {
-                    id: "syntax-expected-step",
-                    message: format!(
-                    "expected a JSON object, list, string, number, true, false or null, found {}",
-                    describe(&other)
-                ),
-                    span: token.span,
-                })
-            }
-        })
-    }
-
     pub(super) fn step(&mut self) -> R<Step> {
         let (word, span) = match self.peek_kind().clone() {
             TokenKind::Ident(w) => (w, self.peek().span),
@@ -1311,7 +1268,7 @@ impl Parser {
 }
 
 /// A string as JSON writes it.
-fn json_string(s: &str) -> String {
+pub(super) fn json_string(s: &str) -> String {
     let mut out = String::from('"');
     for c in s.chars() {
         match c {

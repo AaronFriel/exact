@@ -213,11 +213,9 @@ pub(crate) fn foreign_source(file: &contract_syntax::File, child: &Component) ->
         span,
     }
     };
-    if let Some(r) = child
-        .resources
-        .iter()
-        .find(|r| !contract_syntax::inline::reads_device(r) && !declared(&r.source))
-    {
+    if let Some(r) = child.resources.iter().find(|r| {
+        !contract_syntax::inline::DEVICE_FACTS.contains(&r.source.as_str()) && !declared(&r.source)
+    }) {
         return Some(foreign(format!("`resource {}`", r.name), &r.source, r.span));
     }
     child.actions.iter().find_map(|a| {

@@ -462,6 +462,9 @@ impl Rewriter<'_> {
             if let Some(inner) = inner {
                 self.unbind(inner);
             }
+            if let Some(gate) = &mut res.gate {
+                self.expr(gate)?;
+            }
             self.ty(&mut res.shape)?;
             if let Some(p) = &mut res.placeholder {
                 self.source(&p.source);

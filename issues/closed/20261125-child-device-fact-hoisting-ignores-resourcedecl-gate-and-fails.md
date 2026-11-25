@@ -1,6 +1,7 @@
 # Child device-fact hoisting ignores `ResourceDecl.gate` and fails to rewrite `MutationDecl.refreshes`, causing silent cross-component misbinding
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Require an absent gate in reads_device so gated child device facts lift per instance, exempt DEVICE_FACTS in foreign_source, and map hoisted device facts in names so MutationDecl.refreshes rewrites them.
 **Systems:** contract-syntax (component inliner), contract-types, contract-lower
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

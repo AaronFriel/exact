@@ -1,6 +1,7 @@
 # Exponential bytecode/work blowup in `fn` expansion (`lower/src/expr.rs`) and sibling `analyze::suggestions::values`
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Enforce per-call fn expansion and step budgets (lower-fn-size) in lower/src/expr.rs, and precompute derives in iterative dependency order with eval step and depth limits in analyze::suggestions::values.
 **Systems:** contract-lower (expression bytecode compiler), contract-analyze (suggestions evaluator)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

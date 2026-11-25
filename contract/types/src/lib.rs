@@ -334,32 +334,6 @@ impl Shapes {
         Ok(ty)
     }
 
-    fn resolve_unbounded(&self, t: &TypeExpr) -> Result<Ty, TypeError> {
-        Ok(match t {
-            TypeExpr::Enum(values, _) => Ty::Enum(values.clone()),
-            TypeExpr::Named(n, span) => match n.as_str() {
-                "number" => Ty::Number,
-                "string" => Ty::String,
-                "bool" => Ty::Bool,
-                "unit" => Ty::Unit,
-                other => {
-                    if self.map.contains_key(other) {
-                        Ty::Record(other.to_string())
-                    } else if other == "action" {
-                        // Bare `action` is an action prop of inferred arity
-                        // (LLP 1006 §2). Near-prefix names are ordinary
-                        // unknown types, never action typos accepted silently.
-                        Ty::Action(Vec::new())
-                    } else {
-                        return Err(self.unknown_type(other, *span));
-                    }
-                }
-            },
-            TypeExpr::Option(inner, _) => Ty::Option(Box::new(self.resolve_unbounded(inner)?)),
-            TypeExpr::List(inner, _) => Ty::List(Box::new(self.resolve_unbounded(inner)?)),
-        })
-    }
-
     /// A field's position and borrowed type in a shape.
     pub fn field(&self, shape: &str, name: &str) -> Option<(usize, &Ty)> {
         self.map

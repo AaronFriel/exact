@@ -695,3 +695,28 @@ fn a_renamed_expression_let_preserves_call_heads_and_renames_value_references() 
         call("choose", vec![Expr::Number(3.0, span), id("pick")])
     );
 }
+
+#[test]
+fn gated_device_fact_is_lifted_per_instance_and_hoisted_refreshes_rewrite() {
+    let gated = crate::parse(
+        "shape VP\n  width: number\ncomponent App\n  state flag = true\n  view\n    Child(active=flag)\ncomponent Child\n  props\n    active: bool\n  resource vp = exactViewport() when active as shape VP\n  view\n    text `${vp.width}`\n",
+    )
+    .unwrap();
+    let expanded = super::expand(&gated).unwrap();
+    assert!(!expanded.root.resources.iter().any(|r| r.name == "vp@Child"));
+    assert_eq!(expanded.root.resources.len(), 1);
+    assert_eq!(expanded.resource_owners, vec![super::Owner::Instance]);
+    assert!(matches!(
+        expanded.root.resources[0].gate.as_ref(),
+        Some(Expr::Ident(name, _)) if name == "flag"
+    ));
+
+    let refreshed = crate::parse(
+        "shape VP\n  width: number\ncomponent App\n  view\n    Child()\ncomponent Child\n  resource vp = exactViewport() as shape VP\n  mutation save as shape number refreshes vp\n  view\n    text `${vp.width}`\n",
+    )
+    .unwrap();
+    let expanded = super::expand(&refreshed).unwrap();
+    assert!(expanded.root.resources.iter().any(|r| r.name == "vp@Child"));
+    assert_eq!(expanded.root.mutations.len(), 1);
+    assert_eq!(expanded.root.mutations[0].refreshes[0].0, "vp@Child");
+}

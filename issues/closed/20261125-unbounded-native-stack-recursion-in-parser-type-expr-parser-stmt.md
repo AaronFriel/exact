@@ -1,6 +1,7 @@
 # Unbounded native-stack recursion in `Parser::type_expr`, `Parser::stmt`, `Parser::json_value`, and type-depth checks crashes the compiler
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Bound nesting depth in Parser::type_expr, Parser::stmt, and Parser::json_value (appending JSON into one buffer), make type-depth walks iterative, and split platform-match helpers out of Parser::node_match.
 **Systems:** contract-syntax (parser), contract-types (type resolution & depth bounds)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

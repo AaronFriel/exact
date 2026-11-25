@@ -427,3 +427,74 @@ fn suggestion_values_refuse_host_parameters_resets_and_fractional_or_shadowed_bu
         assert!(matches!(&result[0], contract::SuggestionCheck::Drop { rule: r, .. } if *r == rule), "{source}: {result:?}");
     }
 }
+
+#[test]
+fn suggestion_values_bound_fn_dags_derive_dags_and_long_derive_chains_on_small_stack() {
+    let mut fn_dag = String::from("fn f0(): number = 1\n");
+    for i in 1..=20 {
+        let p = i - 1;
+        fn_dag.push_str(&format!("fn f{i}(): number = f{p}() + f{p}() + f{p}()\n"));
+    }
+    fn_dag.push_str("component App\n  state x = f20()\n  view\n    text `${x}`\n");
+
+    let mut derive_dag = String::from("component App\n  derive d0 = 0\n");
+    for i in 1..=26 {
+        let p = i - 1;
+        derive_dag.push_str(&format!("  derive d{i} = d{p} + d{p}\n"));
+    }
+    derive_dag.push_str("  view\n    text `${d26}`\n");
+
+    let linear_derives = |n: usize, reverse: bool| {
+        let mut lines: Vec<String> = (0..n)
+            .map(|i| {
+                if i == 0 {
+                    "  derive d0 = 0\n".to_owned()
+                } else {
+                    format!("  derive d{i} = d{} + 1\n", i - 1)
+                }
+            })
+            .collect();
+        if reverse {
+            lines.reverse();
+        }
+        format!(
+            "component App\n{}  view\n    text `${{d{}}}`\n",
+            lines.concat(),
+            n - 1
+        )
+    };
+
+    std::thread::Builder::new()
+        .stack_size(2 << 20)
+        .spawn(move || {
+            let started = std::time::Instant::now();
+            for (src, target, keep) in [
+                (fn_dag, "x", false),
+                (derive_dag, "d26", false),
+                (linear_derives(3_000, false), "d2999", true),
+                (linear_derives(3_000, true), "d2999", true),
+            ] {
+                let file = contract_syntax::parse(&src).unwrap();
+                let expanded = contract_syntax::expand(&file).unwrap();
+                let p =
+                    contract::properties(&format!("always \"p\"\n  expect state {target} whole\n"))
+                        .unwrap();
+                let result = contract_analyze::check_suggestions(&expanded, &file, &p);
+                if keep {
+                    assert_eq!(result, vec![contract::SuggestionCheck::Keep], "{target}");
+                } else {
+                    assert!(
+                        matches!(
+                            &result[0],
+                            contract::SuggestionCheck::Drop { rule: "whole", .. }
+                        ),
+                        "{target}: {result:?}"
+                    );
+                }
+            }
+            assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}

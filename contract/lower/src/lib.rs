@@ -280,8 +280,8 @@ pub(crate) struct Lowerer<'a> {
     /// Each font file whose faces' weights `declare_fonts` read from it, as
     /// it was then (the design server's write check, `theme::rows`).
     font_files: Vec<theme::rows::FontFile>,
-    /// How many `fn` bodies are being expanded now (a guard; the type pass refuses a cycle).
-    pub fn_depth: u32,
+    /// Inline `fn` expansion depth and work budget (the type pass refuses cycles).
+    pub fn_budget: expr::FnBudget,
     panel_action: Option<exact_plan::ActionsId>,
     /// Tags' fixed row values already built (`Lowerer::fixed`).
     fixed: BTreeMap<(bool, &'static str), Code>,
@@ -487,7 +487,7 @@ fn lower_with_sites(
             .zip(&shared)
             .map(|(f, body)| (f.name.as_str(), (f, body)))
             .collect(),
-        fn_depth: 0,
+        fn_budget: expr::FnBudget::default(),
         svg_depth: 0,
         in_dl_group: false,
         element_children: false,
