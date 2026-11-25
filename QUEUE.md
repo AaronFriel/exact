@@ -3,7 +3,7 @@
 - Restore the four JS package-view seam tests that fail in `views.js` at `constructed.add(element)`. Run `bun test ./host/web-js/module-seam.test.mjs -t "a view validates|preferences cancel the camera clip"` (#1608 integration, parent ac85d318a).
 - Consider optional types for direct imports of a development package from `app.json`. In a production build, `manifest.development.packages.swatch?.web?.label` checks against an empty package map. Packages read the selected key through `context.config` (#1608).
 
-- Detect a silent macOS single-side shortcut (#1413). With Accessibility granted, suppress delivery of Right Command and make the Quartz event tap unavailable. Press and release Right Command 4 ms apart between flag samples. The candidate still reports `MetaRight` registered five seconds later.
+- When Exact supports a new macOS version, repeat the modifier shortcut measurement in a guest with real key events and another app frontmost (#1413).
 - Apply each Linux portal binding change before submitting pending shortcuts (#1413). Bind F and K, hold F, request J, then reassign F and remove K in one `ShortcutsChanged`. The next `BindShortcuts` must contain F and J. The candidate also requests K again.
 - Android now supplies four of `ComponentActivity`’s view-tree owners for hosted views. Rule on the whole set before adding another. The activity-result registry is the likely next request (#1613).
 - Reproduce the keyboard navigation-scroller failure on iPad and record the test method, iPad model and OS version.

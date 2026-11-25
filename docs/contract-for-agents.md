@@ -2631,6 +2631,18 @@ can take a second argument of type `GlobalShortcutEvent` with `id` and
 macOS delivers both events. Windows supports presses only. Linux currently
 has no global shortcut registration.
 
+On macOS, `keys="MetaRight"` binds Right ⌘ and `keys="AltRight"` binds
+Right ⌥. Each fires on press and release. The monitor sees only modifier
+changes, so Right ⌘ fires as part of ⌘C and Right ⌥ fires when someone types
+a character with it. Windows returns `reason="unsupported"` for both codes.
+Hosts without global shortcuts report `NotSupportedError` for the operation.
+
+Like modifier pairs, these triggers require the Accessibility grant. A missing
+grant gives `reason="not-allowed"`. For a modifier trigger, `registered: true`
+means the permission gate passed and the system accepted the monitor. It is
+not proof of delivery. Modifier triggers depend on the system delivering
+modifier-flag changes to a global monitor, as measured on macOS 27.2.
+
 ## Views, layout, and interaction
 
 For an attachment of any type, use `input type="file"` with no `accept` (or

@@ -117,6 +117,7 @@ export function helperClassifications(group) {
     ["runner:runner/src/runner/field.rs", "Event::edit_payload Event::field_payload FieldSelection::at_end FieldSelection::caret FieldSelection::clamped FieldSelection::parse SelectionDirection::name SelectionDirection::of utf16_len"],
     ["runner:runner/src/runner/host_kinds.rs", "Event::clipboard_payload Event::media_payload Event::of_host_kind Event::paste_files_payload Event::selection_change_payload Event::selection_payload"],
     ["runner:runner/src/runner/modules/declared/desktop.rs", "chord_refusal"],
+    ["runner:runner/src/desktop.rs", "single_side_shortcut"],
     ["runner:runner/src/runner/pointer.rs",
       "AtomEvent::parse AtomEvent::value DropEvent::parse DropEvent::parse_point DropEvent::value Event::contextmenu_payload Event::pointer_payload MouseEvent::parse " +
       "MouseEvent::value PointerEvent::parse PointerEvent::value WheelEvent::parse WheelEvent::value"],
