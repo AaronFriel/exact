@@ -5,6 +5,7 @@ import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, wr
 import {tmpdir} from 'node:os';
 import {basename, resolve} from 'node:path';
 import {androidJavaEnv, androidSdk, androidSdkPackages, composeArgs, loadAlignment} from './agent-android.mjs';
+import {manifestFragment} from './android-manifest.mjs';
 import {ANDROID_TARGET, androidBakeLibraryName, androidToolchainEnv, stageAndroidBake} from './android-abi.mjs';
 
 test('Compose follows the plan and the Kotlin source directories Gradle compiles', () => {
@@ -110,6 +111,55 @@ test.skipIf(!process.env.ANDROID_NDK_HOME && !existsSync(resolve(releaseSdk, 'nd
     expect(link).toThrow('app.module.json');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test.skipIf(process.platform === 'win32' || !releaseJavaEnv || !androidSdkPackages().every(pkg => existsSync(resolve(releaseSdk, pkg.path))))(
+  'the release accepts a package POI session and refuses initialization or an allow-all validator on its service', () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'exact-car-service-')), source = resolve(dir, 'car');
+    try {
+      mkdirSync(source);
+      const appSource = resolve(dir, 'modules/android');
+      mkdirSync(appSource, {recursive:true});
+      writeFileSync(resolve(appSource, 'Poi.kt'), 'package fixture.car; class Museum');
+      writeFileSync(resolve(dir, 'package.json'), JSON.stringify({name:'car-fixture'}));
+      writeFileSync(resolve(dir, 'app.json'), JSON.stringify({app:{id:'dev.exact.ci', name:'CI'}}));
+      const name = 'fixture.car.Poi', declaration = {carAppService:{name, category:'POI', minCarApiLevel:1}};
+      writeFileSync(resolve(source, 'exact.json'), JSON.stringify({manifest:declaration}));
+      const fragment = manifestFragment([{extension:'fixture', className:'fixture.car.Module', manifest:declaration}]);
+      writeFileSync(resolve(dir, 'fragment.xml'), fragment);
+      const compile = (body, flags = []) => {
+        writeFileSync(resolve(source, 'Poi.kt'), `package fixture.car
+import androidx.car.app.*
+class Poi : dev.exact.car.PoiCarAppService() {
+    override fun onCreateSession(info: SessionInfo): Session = object : Session() {
+        override fun onCreateScreen(intent: android.content.Intent): Screen = error("fixture")
+    }
+    ${body}
+}
+`);
+        return spawnSync(resolve(import.meta.dir, '../host/android/gradlew'), [':app:checkReleaseCarManifest', '--console=plain',
+          '-PapplicationId=dev.exact.ci', '-PappName=CI', '-Papp=ci', `-PappDir=${dir}`, `-PappBuildDir=${dir}/app`,
+          `-PcanvasBuildDir=${dir}/canvas`, '--project-cache-dir', `${dir}/cache`, `-PextensionDirs=${source}`,
+          `-PcarDeclaration=${source}/exact.json`, `-PcarSourceDirs=${source}`, `-PcarAppService=${name}`, `-PmanifestFragment=${dir}/fragment.xml`,
+          '-Pmaven=androidx.car.app:app:1.7.0', `-PmavenLock=${dir}/gradle.lockfile`, ...flags],
+        {cwd:resolve(import.meta.dir, '../host/android'), encoding:'utf8', timeout:180000, env:{...releaseJavaEnv, ANDROID_HOME:releaseSdk}});
+      };
+      const valid = compile('', ['--write-locks']);
+      expect(valid.status, valid.stdout + valid.stderr).toBe(0);
+      for (const [body, error] of [
+        ['init { android.util.Log.i("Fixture", "initialization") }', 'must have an empty constructor'],
+        ['override fun createHostValidator() = androidx.car.app.validation.HostValidator.ALLOW_ALL_HOSTS_VALIDATOR', 'final and cannot be overridden'],
+      ]) {
+        const refused = compile(body);
+        expect(refused.status).toBe(1);
+        expect(refused.stdout + refused.stderr).toContain(error);
+      }
+      writeFileSync(resolve(dir, 'fragment.xml'), fragment.replace('</application>',
+        '<provider android:name="fixture.car.Init" android:authorities="dev.exact.ci.init" android:exported="false" /></application>'));
+      const startup = compile('');
+      expect(startup.status).toBe(1);
+      expect(startup.stdout + startup.stderr).toContain('cannot start provider fixture.car.Init');
+    } finally { rmSync(dir, {recursive:true, force:true}); }
+  }, 550000);
 
 for (const [id, minimumOS, development = false] of [[undefined, '12'], [undefined, '12', true], ['com.example.android_app', '11'], ['com.example.android_app', '12']]) test.skipIf(process.platform !== 'darwin' || !releaseJavaEnv ||
   !androidSdkPackages().every(pkg => existsSync(resolve(releaseSdk, pkg.path))))(`Android release metadata and signing reach Gradle with ${id ?? 'the default package'} on Android ${minimumOS}, development=${development}`, async () => {

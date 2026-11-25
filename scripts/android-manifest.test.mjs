@@ -79,6 +79,34 @@ test("alarms' fragment is allowed, unexported, and nothing beyond what it names"
   assert.match(xml, /<receiver android:name="exact\.alarms\.AlarmReceiver" android:exported="false" android:directBootAware="true" \/>/);
 });
 
+test("one package can declare its own POI car service and map templates", () => {
+  const name = 'uz.voltai.car.VoltaiCarAppService', permission = 'androidx.car.app.MAP_TEMPLATES';
+  const carAppService = { name, category: 'POI', minCarApiLevel: 1 };
+  const impl = manifest => ({ extension: 'voltai', className: 'uz.voltai.car.CarModule', manifest });
+  const bound = [impl({ carAppService, permissions: [permission] })];
+  const xml = manifestFragment(bound);
+  assert.equal((xml.match(/<service /g) ?? []).length, 1);
+  assert.ok(xml.includes(`<service android:name="${name}" android:exported="true" tools:node="replace">`));
+  assert.match(xml, /<action android:name="androidx\.car\.app\.CarAppService" \/>\s*<category android:name="androidx\.car\.app\.category\.POI" \/>/);
+  assert.match(xml, /com\.google\.android\.gms\.car\.application" android:resource="@xml\/automotive_app_desc"/);
+  assert.match(xml, /androidx\.car\.app\.minCarApiLevel" android:value="1"/);
+  assert.deepEqual(fragmentPermissions(bound), [permission]);
+  assert.deepEqual(fragmentPermissions([impl({ carAppService })]), []);
+  assert.throws(() => fragmentPermissions([impl({ permissions: [permission] }), ...bound]), /MAP_TEMPLATES without its own carAppService/);
+  assert.throws(() => manifestFragment([...bound, impl({ carAppService: { ...carAppService, name: name + '2' } })]), /second car service.*VoltaiCarAppService2/);
+  assert.throws(() => manifestFragment([impl({ carAppService, services: [{ name }] })]), /declares .* twice/);
+  const fragment = row => manifestFragment([impl({ carAppService: row })]);
+  assert.match(fragment({ ...carAppService, minCarApiLevel: 8 }), /minCarApiLevel" android:value="8"/);
+  for (const category of ['CHARGING', 'PARKING', 'NAVIGATION']) {
+    assert.throws(() => fragment({ ...carAppService, category }), new RegExp(category));
+  }
+  for (const level of [0, 9, 2.5, '1', null]) assert.throws(() => fragment({ ...carAppService, minCarApiLevel: level }), /minCarApiLevel/);
+  assert.throws(() => fragment([carAppService, { ...carAppService, name: name + '2' }]), /second car service.*VoltaiCarAppService2/);
+  for (const row of [null, [carAppService]]) assert.throws(() => fragment(row), /one service object/);
+  assert.throws(() => fragment({ ...carAppService, name: 'other.Car' }), /other.Car.*uz.voltai.car/);
+  assert.throws(() => fragment({ ...carAppService, validator: 'ALLOW_ALL_HOSTS_VALIDATOR' }), /validator.*ALLOW_ALL_HOSTS_VALIDATOR/);
+});
+
 test('an implementation with no fragment adds nothing', () => {
   assert.equal(manifestFragment(impl(undefined)), '');
   assert.equal(manifestFragment([]), '');

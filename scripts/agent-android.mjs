@@ -35,7 +35,7 @@ import { guardFlags, reportBuilt } from './help.mjs';
 import { androidImplementations } from '../js/bake/src/typescript.mjs';
 import { packageConfigs, sourceString } from '../js/bake/src/package-config.mjs';
 import { recordBuiltSettings } from '../js/bake/src/__exact_env.mjs';
-import { configMetaData, fragmentPermissions, manifestFragment, withAppLinks, withProtocolHandlers, withMetaData, withAuthCallbacks } from './android-manifest.mjs';
+import { carAppService, configMetaData, fragmentPermissions, manifestFragment, withAppLinks, withProtocolHandlers, withMetaData, withAuthCallbacks } from './android-manifest.mjs';
 import { androidLinkFilters, androidLinkNotes } from './links.mjs';
 import { androidShareActivity } from './share-target.mjs';
 import { CHANNELS_RECEIVER, androidNotificationResources, googleServices } from './android-channels.mjs';
@@ -1211,6 +1211,7 @@ export function mavenCoordinates(app, bound) {
   const declarations = [
     { source: `${resolve(app.dir, 'app.json')} host.android.maven`, values: app.manifest?.host?.android?.maven },
     ...bound.map(b => ({ source: `${b.mavenSource} maven`, values: b.maven })),
+    ...(carAppService(bound) ? [{ source: 'carAppService', values: ['androidx.car.app:app:1.7.0'] }] : []),
   ];
   const versions = new Map();
   for (const { source, values } of declarations) {
@@ -1298,7 +1299,9 @@ function extensionArgs(app, out, config, bound, firebase, development) {
   // A live activity's notification asks to be promoted (Android 16's Live Updates, LLP 1126 D13): a normal
   // permission, which the person can still turn off in Settings.
   const promoted = reach?.androidActivities?.length ? ['android.permission.POST_PROMOTED_NOTIFICATIONS'] : [];
-  permissions = [...new Set([...permissions, ...fragmentPermissions(bound), ...promoted])].sort();
+  const declared = fragmentPermissions(bound);
+  permissions = [...new Set([...permissions, ...declared, ...promoted])].sort();
+  const car = carAppService(bound), carOwner = car && bound.find(b => b.manifest?.carAppService === car);
   if (bound.length) {
     mkdirSync(resolve(generated, 'exact/app'), { recursive: true });
     writeFileSync(resolve(generated, 'exact/app/ExactExtensions.kt'), ['// Written by scripts/agent-android.mjs (LLP 1133.001 D5); never edited.', 'package exact.app', '',
@@ -1330,7 +1333,7 @@ function extensionArgs(app, out, config, bound, firebase, development) {
   rmSync(fragmentFile, { force: true });
   if (fragment) { mkdirSync(dirname(fragmentFile), { recursive: true }); writeFileSync(fragmentFile, fragment); }
   return [...(bound.length ? [`-PextensionDirs=${[...bound.flatMap((b) => b.dirs), generated].join(',')}`] : []), ...(permissions.length ? [`-Ppermissions=${permissions.join(',')}`] : []),
-    ...(fragment ? [`-PmanifestFragment=${fragmentFile}`] : []), ...(Object.keys(services).length ? [`-PforegroundServices=${JSON.stringify(services)}`] : []),
+    `-PcarAppService=${car?.name ?? ''}`, ...(car ? [`-PcarSourceDirs=${carOwner.dirs.join(',')}`, `-PcarMapTemplates=${declared.includes('androidx.car.app.MAP_TEMPLATES') ? 1 : 0}`, `-PcarDeclaration=${carOwner.mavenSource}`] : []), ...(fragment ? [`-PmanifestFragment=${fragmentFile}`] : []), ...(Object.keys(services).length ? [`-PforegroundServices=${JSON.stringify(services)}`] : []),
     ...(features.length ? [`-PandroidFeatures=${features.join(',')}`] : [])];
 }
 

@@ -2095,7 +2095,7 @@ builds an APK without querying adb. `bun exact.mjs android --bundle --json`
 builds a production App Bundle (`.aab`) without installing. Both report the
 artifact's absolute path. An outside app's outputs are `target/android/app/outputs/apk/release/app-release.apk` and `target/android/app/outputs/bundle/release/app-release.aab`.
 
-For Android package visibility, put `"queries": [{"action": "android.intent.action.TTS_SERVICE"}]` in `host.android`. Entries take `{package}`, `{action}` or `{action, scheme}` under the same allow-list as a bound package's `manifest.queries`. The APK merges matching entries once.
+For Android package visibility, put `"queries": [{"action": "android.intent.action.TTS_SERVICE"}]` in `host.android`. Entries take `{package}`, `{action}` or `{action, scheme}` under the same allow-list as a bound package's `manifest.queries`. The APK merges matching entries once. A package with a Kotlin POI car service declares `manifest.carAppService` in its Android implementation. [Android module implementations](../host/android/README.md#module-implementations-llp-1133001-d5)
 
 `EXACT_BUILD_NUMBER` sets Android's `versionCode` (1 by default, an integer
 from 1 through 2100000000); `EXACT_VERSION` sets `versionName` (0.1.0 by
