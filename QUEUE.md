@@ -72,7 +72,6 @@
 
 - Run `bun test ./scripts/agent.test.mjs -t 'the driver grammar names an unquoted mediasession action'`. The no-argument usage omits the pinch and mediasession forms the test expects.
 
-- Compare a first visit to Sound after Labs and Controls on a three-tab iPhone at 26.5. Its single Widget is fully covered. At launch and on push its frame matches stock. On first selection Exact measured 78.33 pt wide and a stock stack loaded before selection measured 80.33 pt. Repeat on 27.2 alongside the stock placement check (#1422).
 
 - On iPhone 17 and iPad (A16) at 26.5, open a three-tab app with a route toolbar and run `tree --ax`. Join the missing Reshape and Widget buttons to their test IDs in the containment walk. XCTest's system accessibility snapshot includes both (#1422).
 
