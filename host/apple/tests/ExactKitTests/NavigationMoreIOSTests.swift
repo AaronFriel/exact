@@ -179,9 +179,7 @@ final class NavigationMoreIOSTests: XCTestCase {
         let root = try XCTUnwrap(navigation.observation()["route"] as? String)
         try tapNode(session, "open-deeper")
         waitFor("Deeper pushed onto More") { more.stackRoutes.count == 2 && more.transitionCoordinator == nil && !navigation.changing }
-        tabs.traitOverrides.horizontalSizeClass = .regular
-        tabs.view.setNeedsLayout()
-        tabs.view.layoutIfNeeded()
+        try showAllTabs(tabs)
         let five = try XCTUnwrap(tabs.tabControllers?[4] as? UINavigationController)
         waitFor("Five's routes are in its own stack, which navigation follows") { five.viewControllers.count == 2 && navigation.primaryNavigation === five }
         five.popViewController(animated: false)
@@ -204,7 +202,7 @@ final class NavigationMoreIOSTests: XCTestCase {
         waitFor("Deeper pushed onto More") { first.stackRoutes.count == 2 && first.transitionCoordinator == nil && !navigation.changing }
         let deeper = try XCTUnwrap(first.topViewController as? RouteController)
         let five = try XCTUnwrap(tabs.tabControllers?[4] as? UINavigationController)
-        setSizeClasses(tabs, horizontal: .regular)
+        try showAllTabs(tabs)
         waitFor("Five's routes are in its own stack") { deeper.navigationController === five && navigation.primaryNavigation === five && !navigation.changing }
         setSizeClasses(tabs, horizontal: .compact)
         let again = try waitForAdoptedMore(navigation, holding: deeper, apart: five)
@@ -254,7 +252,7 @@ final class NavigationMoreIOSTests: XCTestCase {
     func testASyncHeldThroughUIKitsMoveIntoMoreRunsAfterIt() throws {
         let (session, tabs, _) = try moreFixture("more-held")
         let navigation = session.presenter.navigationHost
-        setSizeClasses(tabs, horizontal: .regular)
+        try showAllTabs(tabs)
         let five = try XCTUnwrap(tabs.tabControllers?[4] as? UINavigationController)
         tapTab(tabs, 4)
         waitFor("the router follows Five on the bar") { navigation.routerTab == 4 && five.viewControllers.count == 1 && navigation.primaryNavigation === five && !navigation.changing }
@@ -272,7 +270,7 @@ final class NavigationMoreIOSTests: XCTestCase {
         XCTAssertTrue(navigation.projectionHeld, "and the hold stands")
         waitFor("the next turn's sync projects it") { released() && navigation.syncCalls > syncs }
         XCTAssertNil(navigation.restDifference, "UIKit and the router agree")
-        setSizeClasses(tabs, horizontal: .regular)
+        try showAllTabs(tabs)
         XCTAssertTrue(navigation.resyncOwed)
         navigation.projectionHeld = true
         navigation.retireTabs()
@@ -445,9 +443,7 @@ final class NavigationMoreIOSTests: XCTestCase {
         let session = try fixture("more-plain-bar")
         let navigation = session.presenter.navigationHost
         let tabs = try XCTUnwrap(navigation.tabController)
-        tabs.traitOverrides.horizontalSizeClass = .regular
-        tabs.view.setNeedsLayout()
-        tabs.view.layoutIfNeeded()
+        try showAllTabs(tabs)
         let six = try XCTUnwrap(tabs.tabControllers?[5] as? PlainTab)
         waitFor("the bar shows Six") { navigation.barItem(ofTab: 5) != nil }
         tapTab(tabs, 5)
@@ -505,7 +501,7 @@ final class NavigationMoreIOSTests: XCTestCase {
     func testMoreTappedAgainAfterAWidthMovedATabsStackIntoItTakesTheRouterBackToItsRoot() throws {
         let (session, tabs, _) = try moreFixture("more-retap-moved")
         let navigation = session.presenter.navigationHost
-        setSizeClasses(tabs, horizontal: .regular)
+        try showAllTabs(tabs)
         let five = try XCTUnwrap(tabs.tabControllers?[4] as? UINavigationController)
         tapTab(tabs, 4)
         waitFor("the router follows Five on the bar") { navigation.routerTab == 4 && five.viewControllers.count == 1 && navigation.primaryNavigation === five && !navigation.changing }
@@ -659,7 +655,7 @@ final class NavigationMoreIOSTests: XCTestCase {
         guard hostedWindowScene() != nil else { throw missing("scene", "UIKit ends More's pop off screen as in an app only in a scene's window") }
         let (session, tabs, _, _) = try leaveMoresBackForHome("more-kept-width")
         let navigation = session.presenter.navigationHost
-        setSizeClasses(tabs, horizontal: .regular)
+        try showAllTabs(tabs)
         let five = try XCTUnwrap(tabs.tabControllers?[4] as? UINavigationController)
         waitFor("Five is on the bar") { navigation.barItem(ofTab: 4) != nil }
         waitForMainQueue()
