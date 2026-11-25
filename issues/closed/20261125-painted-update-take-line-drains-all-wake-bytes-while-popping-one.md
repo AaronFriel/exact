@@ -1,6 +1,7 @@
 # `painted-update` `take_line()` drains all wake bytes while popping one message, and `check_and_wake()` clears `checking` before enqueueing, stranding check outcomes and breaking `immediate` activation
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Queue painted-update check outcomes behind a mutex synchronized with the wake descriptor, clear checking only after enqueueing and signaling (and after the Apple completion callback), and drain all ready outcomes before ticking in Presenter::poll_update.
 **Systems:** painted host update loop (`exact-painted-update`, Linux and Android)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

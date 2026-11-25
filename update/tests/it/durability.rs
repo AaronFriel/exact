@@ -686,3 +686,88 @@ fn repeated_entry_refused_and_fallback_first_pixel_preserve_crash_recovery() {
         "fallback first pixel keeps the last-good entry"
     );
 }
+
+/// Under `next-launch`, a staged bundle waiting for activation or relaunch
+/// whose `app.plan` rots on disk must be repaired by the next check rather
+/// than reported `Current` without rewriting it.
+#[test]
+#[cfg_attr(
+    windows,
+    ignore = "Windows durable store is not qualified (LLP 1026 D11a)"
+)]
+fn a_staged_next_launch_entry_whose_plan_rotted_is_repaired_on_check() {
+    let temp = Temp::new("next-launch-rot");
+    let mut origin = Origin::of(&Bundle::new(4, b"plan four"));
+    let mut store = open(&temp);
+    let Ok(Check::Staged { entry, .. }) = origin.check(&mut store) else {
+        panic!("the head stages");
+    };
+    let plan = temp.path().join("entries").join(&entry).join("app.plan");
+    std::fs::remove_file(&plan).unwrap();
+    std::fs::write(&plan, b"plan FOUR").unwrap();
+
+    assert!(origin.check(&mut store).is_ok());
+    let prepared = store.prepare_activation().unwrap().unwrap();
+    assert_eq!(&*prepared.plan, b"plan four");
+}
+
+/// Failing a repair download for a damaged entry must never delete the
+/// existing `entries/<digest>/exact.json` witness before `fill` finishes, so
+/// the anti-rollback floor still survives `record.json` loss.
+#[test]
+#[cfg_attr(
+    windows,
+    ignore = "Windows durable store is not qualified (LLP 1026 D11a)"
+)]
+fn a_failed_repair_download_preserves_the_signed_floor_witness() {
+    let temp = Temp::new("failed-repair-witness");
+    let four = Bundle::new(4, b"plan four");
+    let six = Bundle::new(6, b"plan six");
+    let mut origin = Origin::of(&six);
+    let mut store = open(&temp);
+    let Ok(Check::Staged { entry, .. }) = origin.check(&mut store) else {
+        panic!("seq 6 stages");
+    };
+    // Corrupt both the entry's plan and its blob so repair must fetch over the network.
+    let plan = temp.path().join("entries").join(&entry).join("app.plan");
+    std::fs::remove_file(&plan).unwrap();
+    std::fs::write(&plan, b"rotten!!").unwrap();
+    let plan_blob = temp
+        .path()
+        .join("blobs")
+        .join(exact_update::sha256_hex(b"plan six"));
+    std::fs::remove_file(&plan_blob).unwrap();
+
+    // Fail the plan blob download while serving the signed head.
+    let head = exact_update::head_url(ORIGIN, "release", COHORT);
+    let head_bytes = origin.files[&head].clone();
+    let err = store
+        .check(
+            &head,
+            &mut |url| {
+                if url == head {
+                    Ok(head_bytes.clone())
+                } else {
+                    Err("network offline".into())
+                }
+            },
+            &mut |_| None,
+        )
+        .unwrap_err();
+    assert!(err.contains("network offline"), "{err}");
+
+    // The signed witness survived the failed repair and preserves the seq 6 floor after record loss.
+    assert!(
+        temp.path()
+            .join("entries")
+            .join(&entry)
+            .join("exact.json")
+            .is_file(),
+        "signed floor witness must survive a failed repair download"
+    );
+    drop(store);
+    std::fs::write(temp.path().join("record.json"), b"").unwrap();
+    let mut reopened = open(&temp);
+    let refusal = Origin::of(&four).check(&mut reopened).unwrap_err();
+    assert!(refusal.contains("below the accepted seq 6"), "{refusal}");
+}

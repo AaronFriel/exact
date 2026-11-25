@@ -1,6 +1,7 @@
 # Android "linux" vs "android" split-brain in bake breaks Android OTA push for faced tools, drops reach/color/privacy-policy gates on `--platform android`, emits Apple sign-in audiences on APK builds, and misnames `.entries`
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Normalize Android targets to platform "android" at the start of compatibility_id_pinned, accept "android" in reach and color checks, restrict Apple sign-in audiences to Apple hosts, and emit android-<target> bake stems without Linux displayName.
 **Systems:** bake (compatibility id, reach, colors, receipt) / Android OTA push
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

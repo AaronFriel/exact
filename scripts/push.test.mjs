@@ -1412,3 +1412,33 @@ test('updates require the raster renditions installed by their Apple cohort', ()
   }
   expect(classifyArtifacts(candidate({ 'two.svg': red }), { ...cohort, compat: { inputs: { store: { L: 'A' } } } }).bundle).toBe(false);
 });
+
+test('older cohorts reject bundles that add, change, or remove plan-bound requirements', () => {
+  const base = {
+    commands: '1111111111111111',
+    iconFillRules: ['evenodd'],
+    atomFace: ['source', 'label'],
+    alternateIcons: ['dark'],
+    faces: [{ signature: 'add(number)', face: { doors: ['apple'] } }],
+    controls: [{ control: { kind: 'go' }, digest: 'a' }],
+  };
+  const makeCohort = inputs => ({ sources: {}, binary: 'same', compat: { inputs: { store: { L: 'A' }, ...inputs } } });
+  const makeCandidate = (requires, extra = []) => ({ binary: { sha256: 'same' }, graph: { sources: {}, artifacts: [{ name: 'app.plan', requires }, ...extra] } });
+  expect(classifyArtifacts(makeCandidate(base), makeCohort(base)).bundle).toBe(true);
+  for (const key of Object.keys(base)) {
+    const missing = { ...base };
+    delete missing[key];
+    const r = classifyArtifacts(makeCandidate(base), makeCohort(missing));
+    expect(r.bundle, `missing ${key}`).toBe(false);
+    expect(r.missing[0]).toContain(key);
+    const differed = { ...base, [key]: ['other'] };
+    expect(classifyArtifacts(makeCandidate(base), makeCohort(differed)).bundle, `changed ${key}`).toBe(false);
+  }
+  for (const key of ['alternateIcons', 'faces', 'controls']) {
+    const removed = { ...base, [key]: null };
+    expect(classifyArtifacts(makeCandidate(removed), makeCohort(base)).bundle, `removed ${key}`).toBe(false);
+  }
+  const widget = { name: 'plans/card.plan', requires: { iconFillRules: ['evenodd'], atomFace: ['source', 'label'] } };
+  expect(classifyArtifacts(makeCandidate({}, [widget]), makeCohort({})).bundle).toBe(false);
+  expect(classifyArtifacts(makeCandidate({}, [widget]), makeCohort({ iconFillRules: ['evenodd'], atomFace: ['source', 'label'] })).bundle).toBe(true);
+});

@@ -21,6 +21,7 @@
 
 use crate::path_crates::path_crates;
 use contract::Manifest;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
@@ -378,6 +379,11 @@ pub fn compatibility_id_pinned(
     settings: &serde_json::Value,
     host_work: bool,
 ) -> Result<Compat, String> {
+    let platform = if target.contains("android") {
+        "android"
+    } else {
+        platform
+    };
     // A receipt that does not say links the executor: it cannot be shown unneeded.
     let host_work =
         host_work || module.is_some_and(|m| m["typescriptHostWork"].as_bool() != Some(false));
@@ -441,7 +447,7 @@ pub fn compatibility_id_pinned(
         if compat.inputs["store"]["L"] != "0" {
             compat.inputs["typescriptModule"] = serde_json::Value::String(sha.into());
         }
-        if target.contains("android") {
+        if platform == "android" {
             compat.inputs["hermesBytecode"] = meta["bytecodeVersion"].clone();
         }
         compat.id = compatibility_digest(&compat.inputs);
@@ -462,7 +468,7 @@ pub fn compatibility_id_pinned(
     crate::reach::derive(app_dir, platform, plan.as_ref(), &mut compat)?;
     localizations(platform, &mut compat);
     crate::sandbox::derive(app_dir, platform, plan.as_ref(), &mut compat);
-    if target.contains("android") {
+    if platform == "android" {
         crate::channels::derive(app_dir, &manifest.json, &mut compat)?;
     }
     // The plans that ship, each resolved once (the receipt writes the entry
@@ -477,7 +483,7 @@ pub fn compatibility_id_pinned(
     // From the plan that ships, which the APK's build reads: a TypeScript
     // bake's marks the resources its module answers, which link the host's
     // I/O, and the `app.contract` plan alone does not.
-    if let (true, Some(ships)) = (target.contains("android"), ships) {
+    if let (true, Some(ships)) = (platform == "android", ships) {
         compat.inputs["androidLinked"] = android_linked(
             ships,
             compat.inputs["grantCeiling"].as_str(),
@@ -535,28 +541,28 @@ pub fn compatibility_id_pinned(
     Ok(compat)
 }
 
-/// The faced tools this platform's binary compiles a door for (LLP 1133.023
-/// D8), and on the Mac those its tools helper lists (LLP 1111.000 D1): each
-/// one's signature and face join the id, so a plan that changes one is a
-/// binary change. tvOS (an `ios` bake for a tvOS target) and the web
-/// compile none.
-fn faces(compat: &mut Compat, plan: &exact_plan::Plan, platform: &str, target: &str) {
+/// The faced tools compiled into this binary's doors (LLP 1133.023 D8, LLP 1111.000 D1).
+pub(crate) fn faces_of(plan: &exact_plan::Plan, platform: &str, target: &str) -> Option<Value> {
     let doors: &[&str] = match platform {
-        _ if target.contains("tvos") => return,
+        _ if target.contains("tvos") => return None,
         "ios" => &["apple"],
         "macos" => &["apple", "mcp"],
-        "android" => &["android"],
-        _ => return,
+        _ if platform == "android" || target.contains("android") => &["android"],
+        _ => return None,
     };
-    let faced: Vec<serde_json::Value> = (0..plan.tools.len())
+    let faced: Vec<Value> = (0..plan.tools.len())
         .filter_map(|i| {
-            let face: serde_json::Value = serde_json::from_str(plan.str(plan.tools[i].face)).ok()?;
+            let face: Value = serde_json::from_str(plan.str(plan.tools[i].face)).ok()?;
             let named = face["doors"].as_array()?;
             named.iter().any(|d| doors.iter().any(|door| d == door)).then(|| serde_json::json!({ "signature": contract::faces::tool_signature(plan, i), "face": face }))
         })
         .collect();
-    if !faced.is_empty() {
-        compat.inputs["faces"] = serde_json::json!(faced);
+    (!faced.is_empty()).then(|| serde_json::json!(faced))
+}
+
+fn faces(compat: &mut Compat, plan: &exact_plan::Plan, platform: &str, target: &str) {
+    if let Some(faced) = faces_of(plan, platform, target) {
+        compat.inputs["faces"] = faced;
         compat.id = compatibility_digest(&compat.inputs);
     }
 }
@@ -615,7 +621,7 @@ pub(crate) fn compatibility_digest(inputs: &serde_json::Value) -> String {
     digest[..16].iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn commands_digest() -> String {
+pub(crate) fn commands_digest() -> String {
     let mut h = Sha256::new();
     for name in contract_syntax::HOST_COMMANDS {
         let shape = match *name {
@@ -645,7 +651,7 @@ pub(crate) fn compatibility_with_trust(
     grants: Option<&str>,
     trust: &str,
 ) -> Result<Compat, String> {
-    use serde_json::{json, Value};
+    use serde_json::json;
     if !matches!(trust, "production" | "development") {
         return Err("EXACT_UPDATE_TRUST must be production or development".into());
     }
@@ -664,7 +670,7 @@ pub(crate) fn compatibility_with_trust(
     // `deploy.store.android` is "0", not the native default of "A": Android
     // apps shipped binary-only, and "A" asks a production build for keys and
     // a stream.
-    let android = target.contains("android");
+    let android = platform == "android" || target.contains("android");
     let platform = if android { "android" } else { platform };
     let store = if android {
         match manifest.json.pointer("/deploy/store/android") {

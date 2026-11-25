@@ -1,6 +1,7 @@
 # `Store::write_entry` deletes existing `entries/<digest>` before network download, destroying the signed rollback-floor witness on failure and bypassing `disk::remove_entry`'s reader lock
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Download and verify entries into a temporary directory before touching an existing target, acquire a non-blocking exclusive advisory lock on exact.json before replacing it, and keep valid signed floor witnesses intact during in-place replacement.
 **Systems:** update store (`exact-update`)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

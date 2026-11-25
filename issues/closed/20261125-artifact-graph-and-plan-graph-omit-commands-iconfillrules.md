@@ -1,6 +1,7 @@
 # `artifact_graph` and `plan_graph` omit `commands`, `iconFillRules`, `atomFace`, `alternateIcons`, `faces`, and `controls` from `app.plan`'s `requires`, letting `deploy.mjs` (and `push.mjs` for baked even-odd icons) ship incompatible OTA plans to older cohorts
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Emit commands, iconFillRules, atomFace, alternateIcons, faces, and controls in artifact_graph and plan_graph requires and propagate iconFillRules and atomFace onto entry-plan cards.
 **Systems:** bake (artifact graph / plan_graph) / deploy.mjs & push.mjs OTA classifier
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

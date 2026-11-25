@@ -1,6 +1,7 @@
 # TOCTOU between `Store::download` and `Store::finish_check` plus unverified `app.plan` in `admit_check` resurrects a refused corrupt staged bundle
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Verify app.plan and entry metadata for staged next-launch entries in admit_check and refuse finish_check adoption when download skipped write_entry.
 **Systems:** update store (`exact-update`, `exact-apple-update`, `exact-painted-update`)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25
