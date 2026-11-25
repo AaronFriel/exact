@@ -2879,6 +2879,10 @@ platform tool.
 
 ### Inspect work and native presentation
 
+On iOS and the JS web target, `check` and `verify` count the part of
+`-exact-hit-slop` that accepts a press. A clip cuts that region, and a front
+control takes the overlap. A `target` finding gives both the tap area and the drawn box.
+
 `perf <target> during "<operation>"`
 reports the work that operation caused in the named subtree. Development measurements
 include virtual-row construction, rebinding and retirement; Apple also counts kernel

@@ -6166,7 +6166,9 @@ outside it. Where boxes overlap, the front one still takes the pointer, slop
 and all, so a button written after a slopped one keeps its own box. An
 `overflow` other than `visible` on the node or an ancestor clips the slop.
 `tap <target>` still aims at the box's middle, and `elementFromPoint` counts the
-slop. On the web the slop is a positioned pseudo-element, so it reaches from the
+slop. On iOS and the JS web target, `verify` counts the slop a press can reach.
+For example, `-exact-hit-slop="4px 0px"` can give a 36 pt pill the 44 pt tap
+height iOS checks. On the web the slop is a positioned pseudo-element, so it reaches from the
 padding edge (a border's width comes off it) and a node that says no `position`
 becomes `position: relative`. An `image`, `input` or other replaced element
 refuses it with `lower-hit-slop`; give it to the box or button that holds one.
