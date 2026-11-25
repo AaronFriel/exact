@@ -283,9 +283,20 @@ final class NavigationScrollerIOSTests: XCTestCase {
         XCTAssertTrue(field.becomeFirstResponder())
         waitFor("the search keyboard appears") { p.keyboardTop != nil && field.isFirstResponder }
         let column = nav.view.convert(nav.view.bounds, to: window)
-        let bar = search.searchBar.convert(search.searchBar.bounds, to: window)
-        XCTAssertGreaterThanOrEqual(bar.minX, column.minX - 1)
-        XCTAssertLessThanOrEqual(bar.maxX, column.maxX + 1)
+        XCTAssertIdentical(try XCTUnwrap(field.window), window)
+        // On iPad Pro 13-inch (M5), iPadOS 26.5 scales the focused bar to x=22…358 inside a column at x=24…344.
+        var visible = field.convert(field.bounds, to: window)
+        for parent in sequence(first: field as UIView, next: \.superview).dropFirst() where parent.clipsToBounds {
+            visible = visible.intersection(parent.convert(parent.bounds, to: window))
+        }
+        let center = field.convert(CGPoint(x: field.bounds.midX, y: field.bounds.midY), to: window)
+        XCTAssertTrue(visible.contains(center))
+        let layoutCenter = nav.view.convert(center, from: window)
+        XCTAssertGreaterThanOrEqual(layoutCenter.x - field.bounds.width / 2, nav.view.bounds.minX - 1)
+        XCTAssertLessThanOrEqual(layoutCenter.x + field.bounds.width / 2, nav.view.bounds.maxX + 1)
+        XCTAssertLessThanOrEqual(visible.maxY, try XCTUnwrap(p.keyboardTop) + 1)
+        XCTAssertGreaterThanOrEqual(visible.minX, column.minX - 1)
+        XCTAssertLessThanOrEqual(visible.maxX, column.maxX + 1)
         XCTAssertEqual(nav.view.bounds.width, 320, accuracy: 0.5)
         search.isActive = false
         field.resignFirstResponder()

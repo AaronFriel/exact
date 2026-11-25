@@ -9,7 +9,6 @@
 - When Exact supports a new macOS version, repeat the modifier shortcut measurement in a guest with real key events and another app frontmost (#1413).
 - Apply each Linux portal binding change before submitting pending shortcuts (#1413). Bind F and K, hold F, request J, then reassign F and remove K in one `ShortcutsChanged`. The next `BindShortcuts` must contain F and J. The candidate also requests K again.
 - Android now supplies four of `ComponentActivity`’s view-tree owners for hosted views. Rule on the whole set before adding another. The activity-result registry is the likely next request (#1613).
-- Reproduce the keyboard navigation-scroller failure on iPad and record the test method, iPad model and OS version.
 - Run `bun test ./scripts/links.test.mjs -t 'JavaScript derives callback associations'` on a loaded Mac with a cold fixture. Its native bake can still be compiling dependencies at the test's 120-second timeout.
 - On an iOS 26.5 simulator, install a single-picture app, cold-launch it, then change only its launch PNG and install over the same bundle ID and build number. The next launch can show the colour alone even though the compiled image has a new name. A fresh bundle ID shows the mark (#1595).
 - Compare a Maven-only Car App Library APK to the same app with a POI row. The POI row removes AndroidX’s connection query, car permission activity and notification receiver. A package needing one of those components requires a separate manifest decision (#1328).
