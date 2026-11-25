@@ -150,6 +150,10 @@ impl Kernel {
             receipt.epoch = self.epoch;
             return Ok(receipt);
         }
+        if !self.awaiting.is_empty() {
+            let arena = &self.arena;
+            self.awaiting.retain(|key| arena.resolve(*key).is_some());
+        }
         Ok(self.publish_document_commit(receipt))
     }
 
@@ -191,12 +195,11 @@ impl Kernel {
         if changed {
             self.epoch = receipt.epoch;
         }
-        // A row destroyed before it showed stops waiting, and its id created
-        // again, in this commit or later, does not wait for its former self.
+        // A row destroyed before it showed stops waiting; live generations
+        // awaited during a multi-phase commit remain held.
         if !receipt.destroyed.is_empty() && !self.awaiting.is_empty() {
-            let (arena, created) = (&self.arena, &receipt.created);
-            self.awaiting
-                .retain(|v| arena.key_of(*v).is_some_and(|k| !created.contains(&k)));
+            let arena = &self.arena;
+            self.awaiting.retain(|key| arena.resolve(*key).is_some());
         }
         receipt.epoch = self.epoch;
         // @ref LLP 1057.003 D4 — timeline names resolve against the tree

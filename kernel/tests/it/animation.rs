@@ -234,6 +234,48 @@ fn a_row_created_again_does_not_wait_for_its_former_self() {
     k.apply(0, 5, &again).unwrap();
     assert!(!k.is_awaiting(2), "in the batch that creates it again too");
     assert!(!paused(&k));
+
+    // A multi-phase commit that creates a row, awaits it before finish, and
+    // destroys another row keeps the newly awaited live row held.
+    k.apply(
+        0,
+        6,
+        &[
+            Op::DestroyView { id: 2 },
+            Op::CreateView {
+                id: 4,
+                node_type: NodeType::View,
+            },
+            Op::SetChildren {
+                id: 1,
+                children: vec![4],
+            },
+        ],
+    )
+    .unwrap();
+    let mut phase = vec![Op::DestroyView { id: 4 }];
+    phase.extend(ops(false));
+    k.begin_document_commit(0, 7, &phase, None).unwrap();
+    assert!(k.await_view(2));
+    k.finish_document_commit().unwrap();
+    assert!(
+        k.is_awaiting(2),
+        "live row awaited during a multi-phase commit stays held"
+    );
+    assert!(paused(&k));
+
+    // A row created, awaited, and destroyed across phases of one commit is
+    // forgotten when the commit finishes.
+    k.apply(0, 8, &[Op::DestroyView { id: 2 }]).unwrap();
+    k.begin_document_commit(0, 9, &ops(false), None).unwrap();
+    assert!(k.await_view(2));
+    k.continue_document_commit(&[Op::DestroyView { id: 2 }])
+        .unwrap();
+    k.finish_document_commit().unwrap();
+    assert!(!k.is_awaiting(2));
+    k.apply(0, 10, &ops(false)).unwrap();
+    assert!(!k.is_awaiting(2));
+    assert!(!paused(&k));
 }
 
 #[test]

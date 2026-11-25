@@ -393,7 +393,7 @@ pub struct Kernel {
     detached: bool,
     /// List rows mounted out of their port that hold an animation waiting
     /// for the row to show (`-exact-animation-trigger: view`, LLP 1055 D13).
-    pub(crate) awaiting: crate::id::IdSet<ViewId>,
+    pub(crate) awaiting: crate::id::IdSet<NodeKey>,
     /// The measurer's revision its symbols were last measured under, `None`
     /// before this kernel's measurer measured any: a new one asks about
     /// every symbol again (`measure_symbols`).

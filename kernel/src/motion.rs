@@ -872,6 +872,9 @@ impl Kernel {
     /// waits for the row to show (`-exact-animation-trigger: view`, LLP 1055 D13).
     /// Until [`Kernel::reveal`] those are held at their start.
     pub fn await_view(&mut self, row: crate::ViewId) -> bool {
+        let Some(key) = self.arena().key_of(row) else {
+            return false;
+        };
         let mut stack = vec![row];
         while let Some(id) = stack.pop() {
             let Some(d) = self.node(id) else {
@@ -880,25 +883,29 @@ impl Kernel {
             if !d.style.animation.0.is_empty()
                 && d.style.rare.animation_trigger == crate::AnimationTrigger::View
             {
-                self.awaiting.insert(row);
+                self.awaiting.insert(key);
                 return true;
             }
             stack.extend(d.children());
         }
-        self.awaiting.remove(&row);
+        self.awaiting.remove(&key);
         false
     }
 
     /// Whether animations wait on `row` ([`Kernel::await_view`]).
     pub fn is_awaiting(&self, row: crate::ViewId) -> bool {
-        self.awaiting.contains(&row)
+        self.arena()
+            .key_of(row)
+            .is_some_and(|key| self.awaiting.contains(&key))
     }
 
     /// The row shows (or is bound again where it shows): whether animations
     /// waited on it. The commit that says so names it in
     /// [`CommitReceipt::revealed`].
     pub fn reveal(&mut self, row: crate::ViewId) -> bool {
-        self.awaiting.remove(&row)
+        self.arena()
+            .key_of(row)
+            .is_some_and(|key| self.awaiting.remove(&key))
     }
 
     /// Whether the node's animations wait for a list row above it to show.
@@ -908,12 +915,12 @@ impl Kernel {
         {
             return false;
         }
-        let mut cur = Some(node.id);
-        while let Some(id) = cur {
-            if self.awaiting.contains(&id) {
+        let mut cur = Some((node.key, node.parent));
+        while let Some((key, parent)) = cur {
+            if self.awaiting.contains(&key) {
                 return true;
             }
-            cur = self.node(id).and_then(|n| n.parent);
+            cur = parent.and_then(|id| self.node(id).map(|n| (n.key, n.parent)));
         }
         false
     }
