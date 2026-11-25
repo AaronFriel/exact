@@ -1,6 +1,7 @@
 # Uncaught `NSRangeException` crash in iOS multi-paragraph `SelectionDocument.report` and `TextSelectionHost.selectWord` on Markdown paragraphs
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Clamp shaped selection offsets to node.paragraphText bounds via SelectableText.sourceSelection in SelectionDocument.report and TextSelectionHost.selectWord.
 **Systems:** ExactTextSelection (iOS) — SelectionDocument, TextSelectionHost
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

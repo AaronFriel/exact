@@ -1,6 +1,7 @@
 # TransferCarrier.retire leaves in-flight URLSessionTasks running with unversioned taskDescription keys, corrupting restarted transfers and allowing cross-package overwrites
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Namespace TransferCarrier records and folders by (package, id), stamp URLSessionTask descriptions with per-start generation tokens, cancel live tasks on retire and downloadTotal overflow, and drop stale-generation callbacks.
 **Systems:** ExactWakeCarriers / @exact/background-transfer (iOS, macOS)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

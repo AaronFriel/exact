@@ -95,7 +95,10 @@ package final class InputGates {
             let enabled = !node.disabled && !inert
             if let field = node.field, field.isEnabled != enabled { field.isEnabled = enabled }
             let editable = enabled && node.props["editable"] != "false"
-            if let area = node.textArea, area.isEditable != editable { area.isEditable = editable }
+            if let area = node.textArea {
+                if area.isEditable != editable { area.isEditable = editable }
+                if area.isSelectable != enabled { area.isSelectable = enabled }
+            }
             guard focused, unreachable || node.formDisabled, let window else { continue }
             if !unreachable {
                 presenter.tabStart = presenter.keyView(of: node)

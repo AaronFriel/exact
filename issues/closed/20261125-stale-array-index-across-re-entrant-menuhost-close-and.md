@@ -1,6 +1,7 @@
 # Stale array index across re-entrant `MenuHost.close` and `DialogHost.close` traps (`Index out of range`) or closes the wrong entry on macOS
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Re-resolve target entry indices after nested popover closes in MenuHost.close and DialogHost.close so re-entrant blur handlers cannot trap or close the wrong entry.
 **Systems:** ExactKit (macOS) — MenuHost, DialogHost, FocusEvents
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

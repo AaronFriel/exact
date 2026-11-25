@@ -1,6 +1,7 @@
 # RegionCarrier CLMonitor tasks race out of order (leaking removed geofences) with cross-package key collision, and macOS WakeStore stale callbacks consume rescheduled wakes
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Namespace RegionCarrier entries and CLMonitor identifiers by (package, name) with a serialized MainActor reconciler, and guard macOS WakeStore callbacks against invalidated or superseded schedulers.
 **Systems:** ExactWakeCarriers / @exact/geofencing / background wakes (iOS, macOS)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

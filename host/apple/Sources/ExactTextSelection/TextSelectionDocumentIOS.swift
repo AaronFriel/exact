@@ -130,12 +130,14 @@ final class SelectionDocument {
     func report(_ range: NSRange, host: TextSelectionHost) {
         for part in parts where part.node.handlers.contains("selectionchange") {
             let selected = NSIntersectionRange(range, part.range)
-            let lo = selected.length > 0 ? part.node.sourceOffset(selected.location - part.start) : 0
-            let hi = selected.length > 0 ? part.node.sourceOffset(NSMaxRange(selected) - part.start) : 0
-            let local = NSRange(location: lo, length: hi - lo)
+            let localShaped = selected.length > 0
+                ? NSRange(location: selected.location - part.start, length: selected.length)
+                : NSRange(location: 0, length: 0)
+            let found = SelectableText.sourceSelection(in: part.node, shaped: localShaped)
+            let local = found?.range ?? NSRange(location: 0, length: 0)
             guard reported[part.node.id] ?? NSRange(location: 0, length: 0) != local else { continue }
             reported[part.node.id] = local
-            host.report(part.node, (part.node.paragraphText as NSString).substring(with: local), local)
+            host.report(part.node, found?.text ?? "", local)
         }
     }
 }

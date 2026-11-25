@@ -112,9 +112,8 @@ final class TextSelectionHost: TextSelecting {
         if let document = held.document, let part = document.parts.first(where: { $0.node === node }) {
             let selected = NSIntersectionRange(held.selected, part.range)
             guard selected.length > 0 else { return nil }
-            let lo = node.sourceOffset(selected.location - part.start), hi = node.sourceOffset(NSMaxRange(selected) - part.start)
-            let range = NSRange(location: lo, length: hi - lo)
-            return ((node.paragraphText as NSString).substring(with: range), range)
+            let local = NSRange(location: selected.location - part.start, length: selected.length)
+            return SelectableText.sourceSelection(in: node, shaped: local)
         }
         return held.reportable
     }
@@ -272,15 +271,21 @@ final class SelectableText: UIResponder, UITextInput, UITextInteractionDelegate 
         }
         return out + text.substring(with: NSRange(location: cursor, length: end - cursor))
     }
+    /// Map shaped offsets inside `node` to a clamped slice of `node.paragraphText`.
+    static func sourceSelection(in node: NodeView, shaped: NSRange) -> (text: String, range: NSRange)? {
+        guard shaped.length > 0 else { return nil }
+        let source = node.paragraphText as NSString
+        let lo = min(max(0, node.sourceOffset(shaped.location)), source.length)
+        let hi = min(max(lo, node.sourceOffset(NSMaxRange(shaped))), source.length)
+        guard hi > lo else { return nil }
+        let range = NSRange(location: lo, length: hi - lo)
+        return (source.substring(with: range), range)
+    }
     /// The selection in the node's source text, as `selectionchange` has it.
     var reportable: (text: String, range: NSRange)? {
         guard let node, selected.length > 0 else { return nil }
         if document != nil { return (selectedText, selected) }
-        let source = node.paragraphText as NSString
-        let lo = min(node.sourceOffset(selected.location), source.length), hi = min(node.sourceOffset(NSMaxRange(selected)), source.length)
-        guard hi > lo else { return nil }
-        let range = NSRange(location: lo, length: hi - lo)
-        return (source.substring(with: range), range)
+        return Self.sourceSelection(in: node, shaped: selected)
     }
     private func set(_ range: NSRange) {
         let lo = min(max(0, range.location), text.length), hi = min(max(lo, NSMaxRange(range)), text.length)

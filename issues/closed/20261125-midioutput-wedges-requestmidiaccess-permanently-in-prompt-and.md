@@ -1,6 +1,7 @@
 # MIDIOutput wedges requestMIDIAccess() permanently in "prompt" and leaks open input subscriptions after session reload or plan replacement
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Reset open input and clock subscriptions on MIDI boot and re-deliver cached or unavailable port state on subsequent request ops in both Apple MIDIModule and web midi-glue.js.
 **Systems:** ExactMIDI / ExactKit (macOS, iOS); web wasm midi-glue.js sibling
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

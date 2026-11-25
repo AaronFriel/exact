@@ -469,13 +469,15 @@ package final class MenuHost: NSObject {
     func close(_ pop: NodeView, restoreFocus: Bool = true, cancelling: Bool = true) {
         presenter?.mouseChain.bubbledPress?.cancel(in: pop)
         if presenter?.alerts.close(pop) == true { return }
-        guard let index = entries.firstIndex(where: { $0.popover === pop }) else { return }
+        guard let initial = entries.firstIndex(where: { $0.popover === pop }) else { return }
         // Hiding an auto stack never hides a manual popover above it.
-        if entries[index].value != "manual" {
-            for entry in entries[(index + 1)...].reversed() where entry.value != "manual" {
+        if entries[initial].value != "manual" {
+            for entry in entries[(initial + 1)...].reversed() where entry.value != "manual" {
                 close(entry.popover, restoreFocus: restoreFocus)
             }
         }
+        // Nested closes can move focus and run blur handlers that mutate `entries`.
+        guard let index = entries.firstIndex(where: { $0.popover === pop }) else { return }
         // AppKit's popover held the keyboard in its own window, and the
         // window under it kept its first responder: nothing to give back.
         let entry = entries[index], window = entry.native == nil ? presenter?.viewport.window : nil

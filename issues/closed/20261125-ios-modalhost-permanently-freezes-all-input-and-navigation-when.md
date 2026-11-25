@@ -1,6 +1,7 @@
 # iOS `ModalHost` permanently freezes all input and navigation when UIKit refuses `owner.present(...)`, and `NavigationHost` drops modal routes on `canPresent` refusal
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Validate presenter readiness in ModalHost.canPresent, roll back presentation state when UIKit declines owner.present, and retry waiting modal routes via NavigationHost.modalWaiting and presentationCleared().
 **Systems:** ExactNavigation (iOS) — ModalHost, NavigationHost
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -603,10 +603,14 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
             return false
         }
         #endif
-        guard parent.presentedViewController == nil else {
+        guard parent.presentedViewController == nil, !parent.isBeingPresented, !parent.isBeingDismissed,
+              parent.viewIfLoaded?.window != nil else {
             if refusedRoute != route.id {
                 refusedRoute = route.id
-                presenter.session?.log("modal route #\(route.id) refused: the owning controller already presents")
+                let reason = parent.presentedViewController != nil ? "the owning controller already presents"
+                    : parent.viewIfLoaded?.window == nil ? "the owning controller has no window"
+                    : "the owning controller is in a transition"
+                presenter.session?.log("modal route #\(route.id) refused: \(reason)")
             }
             return false
         }
@@ -614,8 +618,9 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
         return true
     }
 
+    @discardableResult
     func present(_ route: NodeView, navigation: UIViewController, from background: UIViewController,
-                 preceding: NodeView?, owner: UIViewController) {
+                 preceding: NodeView?, owner: UIViewController) -> Bool {
         let layer = Presentation(host: self, route: route, navigation: navigation,
                                  background: background)
         // The press that opened the sheet may hand its control's focus to the
@@ -706,11 +711,11 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
         #endif
         let guarded = zoomGuard === controller
         zoomGuard = nil
-        defer { if owner.presentedViewController !== controller { endPress(layer) } } // UIKit refused it
         HostLog.note(presenter.session, "presentation: presenting the \(layer.kind) \(layer.route.props["navigationKey"] ?? "?")")
         owner.present(controller, animated: !ExactEnv.agentFreezes && !presenter.navigation.crossFading) { [weak self, weak layer, weak controller] in
             if guarded { UIView.performWithoutAnimation { controller?.view.alpha = 1 } }
-            guard let self, let layer else { return }
+            guard let self, let layer,
+                  layers.contains(where: { $0 === layer }) || retiring.contains(where: { $0 === layer }) else { return }
             HostLog.note(presenter.session, "presentation: presented the \(layer.kind) \(layer.route.props["navigationKey"] ?? "?")")
             layer.presenting = false
             #if os(iOS)
@@ -734,6 +739,23 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
                 presenter.menus.resumeAfterRouteDismissal()
             }
         }
+        guard owner.presentedViewController === controller else {
+            // UIKit refused the presentation and will not invoke its completion block.
+            layer.presenting = false
+            layers.removeAll { $0 === layer }
+            endPress(layer)
+            releaseBackground(layer)
+            controller.presentationController?.delegate = nil
+            #if os(iOS)
+            controller.popoverPresentationController?.delegate = nil
+            #endif
+            navigation.willMove(toParent: nil)
+            navigation.view.removeFromSuperview()
+            navigation.removeFromParent()
+            if guarded { UIView.performWithoutAnimation { controller.view.alpha = 1 } }
+            presenter.session?.log("modal route #\(route.id) refused: UIKit declined presentation")
+            return false
+        }
         if guarded {
             // Shown as the transition starts, in the block UIKit runs with
             // its first frame; at once if there is no coordinator or it
@@ -743,6 +765,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
             if !taken { show() }
         }
         fit()
+        return true
     }
 
     func fit() {
@@ -868,6 +891,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
         // Dismiss native owners from the top down, each keeping what it shows
         // for its dismissal. New projection waits until all retired owners finish.
         for layer in layers.reversed() {
+            if layer.controller.presentingViewController == nil { layer.presenting = false }
             layer.controller.freeze()
             layer.controller.retiringRoot = layer.route
             layer.controller.retiringNavigation = presenter.navigationHost.preserveModalContent(in: layer.controller)

@@ -360,6 +360,7 @@ package protocol NavigationHosting: AnyObject {
     func mounted()
     func unmounted()
     func replayHatches()
+    func presentationCleared()
 
     // Routes and containment.
     var container: NodeView? { get }
@@ -682,6 +683,7 @@ package final class NoNavigation: NavigationHosting {
     package func retheme() {}
     package func appearanceChanged() {}
     package func replayHatches() {}
+    package func presentationCleared() {}
 
     package var container: NodeView? { nil }
     package var routeSurfaces: [UInt32: any RouteSurface] { [:] }

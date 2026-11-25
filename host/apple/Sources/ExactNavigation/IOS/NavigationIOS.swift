@@ -208,6 +208,8 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     var tookWholeView = false
     /// A visible projection waits for a transition or a cover answer.
     var projectionHeld = false
+    /// A modal route waited on a non-transition presentation or refusal and retries when it clears.
+    var modalWaiting = false
     /// A refused write in the visible projection counts while its retry is active.
     var pendingSync: Bool { projectionHeld || stackWriteRefusals.values.contains { $0.visible && !$0.exhausted } }
     /// Whether another tab's stack write waits for a transition or a move UIKit runs there (`writable`, `runHeldSync`).
@@ -246,7 +248,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     /// A deferred projection, a removed owner or UIKit's disagreement with
     /// the router still owes a sync, even for a batch that only fills list rows.
     var syncOwed: Bool {
-        if heldSync != nil || pendingSync || tabsHeld || stackWritesOwed || changing || windowless
+        if heldSync != nil || pendingSync || modalWaiting || tabsHeld || stackWritesOwed || changing || windowless
             || nativeMove == .ownerRemoved || !settled || splitAskOwed
             || primaryNavigation?.transitionCoordinator != nil || split?.inTransition == true
             || presentedNavigations.contains(where: { $0.transitionCoordinator != nil }) { return true }
@@ -662,6 +664,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
             return
         }
         projectionHeld = false
+        modalWaiting = false
         // The press a deferred sync is owed to: what this sync presents or
         // pushes is that press's work, and it is owed again if this defers too.
         let owed = pendingPress.flatMap { $0 === presenter.pressHandoff ? $0 : nil }
@@ -743,7 +746,15 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         }
         if boundaries.count > mounted.count, let background = modalNavigation ?? primaryOwner, let owner {
             let part = parts[mounted.count + 1], route = wanted[part.lowerBound].node
-            guard presenter.modalHost.canPresent(from: owner, route: route) else { return }
+            func waitForOwner() {
+                modalWaiting = true
+                if let transition = owner.transitionCoordinator ?? owner.presentedViewController?.transitionCoordinator {
+                    transition.animate(alongsideTransition: nil) { [weak self] _ in
+                        DispatchQueue.main.async { self?.presentationCleared() }
+                    }
+                }
+            }
+            guard presenter.modalHost.canPresent(from: owner, route: route) else { waitForOwner(); return }
             // The sheet mounts its own navigation (`ModalHost.present`)
             let nav = makeNavigation(first: route)
             nav.view.frame = root.bounds
@@ -753,10 +764,16 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
             presenter.pressShows(wanted[part].last?.node) // a route pushed in the sheet as it opens
             watchPops(nav)
             nav.view.layoutIfNeeded()
-            projectionHeld = held || boundaries.count > mounted.count + 1
             let preceding = part.lowerBound > 0 ? wanted[part.lowerBound - 1].node : nil
-            presenter.modalHost.present(route, navigation: nav, from: background,
-                                     preceding: preceding, owner: owner)
+            guard presenter.modalHost.present(route, navigation: nav, from: background,
+                                              preceding: preceding, owner: owner) else {
+                retireNavigation(nav, preserving: false)
+                nav.setViewControllers([], animated: false)
+                for controller in wanted[part] { controller.held = false }
+                waitForOwner()
+                return
+            }
+            projectionHeld = held || boundaries.count > mounted.count + 1
         }
         // A presented navigation fills its sheet; the primary owner the root,
         // which no presentation resizes (LLP 1123 D1)
@@ -911,6 +928,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     func liftAnswered() {
         guard !liftHeld, !syncing, pendingSync else { return }
         projectionHeld = false
+        modalWaiting = false
         resync()
     }
 
@@ -918,8 +936,20 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         // A presentation or dismissal ended: run the edge passes that a selection made during it owes, when no sync is pending
         guard pendingSync else { return settleScrollEdges() }
         projectionHeld = false
+        modalWaiting = false
         sync(Batch(ops: [], timers: false, motion: false, clock: nil, error: nil))
         presenter.syncModal()
+    }
+
+    func presentationCleared() {
+        guard modalWaiting || pendingSync else { return }
+        modalWaiting = false
+        if pendingSync {
+            modalDidDismiss()
+        } else {
+            sync(Batch(ops: [], timers: false, motion: false, clock: nil, error: nil))
+            presenter.syncModal()
+        }
     }
 
     /// Retire only the named owner; a late completion cannot remove its
@@ -1383,6 +1413,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         controllers.removeAll()
         routeIDs = []
         projectionHeld = false
+        modalWaiting = false
         pendingPress?.pending = false; pendingPress?.settle(); pendingPress = nil
         lastTransition = "idle"; reselected = nil; tabsHeld = false
         stackWriteRefusals.removeAll()

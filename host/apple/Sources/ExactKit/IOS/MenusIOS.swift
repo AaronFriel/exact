@@ -621,7 +621,9 @@ package final class MenuHost {
         // root controller, which might now present something unrelated.
         owner.alert.dismiss(animated: false) { [weak self, owner] in
             _ = owner
-            if preservingPending { DispatchQueue.main.async { [weak self] in self?.resumeAfterRouteDismissal() } }
+            DispatchQueue.main.async { [weak self] in
+                if preservingPending { self?.resumeAfterRouteDismissal() } else { self?.presenter?.navigation.presentationCleared() }
+            }
         }
     }
     package func retire(over controller: UIViewController, removing route: NodeView) -> () -> Void {
@@ -671,6 +673,7 @@ package final class MenuHost {
                 presenter.popoverEvents.changed(pop, open: false)
             }
         }
+        if confirmation == nil { presenter.navigation.presentationCleared() }
     }
     func reset() {
         focus.reset()

@@ -177,10 +177,12 @@ package final class DialogHost {
         presenter?.mouseChain.bubbledPress?.cancel(in: dialog)
         // What stands on its sheet leaves first: an alert, a dialog opened over it.
         clear(above: dialog)
-        guard let i = entries.firstIndex(where: { $0.dialog === dialog }) else { return }
+        guard entries.contains(where: { $0.dialog === dialog }) else { return }
         for popover in presenter?.menus.presented ?? [] where presenter?.menus.contains(dialog, popover) == true {
             presenter?.menus.close(popover, restoreFocus: false)
         }
+        // Closing a nested popover can run blur handlers that mutate `entries`.
+        guard let i = entries.firstIndex(where: { $0.dialog === dialog }) else { return }
         // The window the focus goes back to: the page's, or the one a sheet stood on.
         let window = entries[i].sheet?.over ?? presenter?.viewport.window
         let hadFocus = window.map { ownsFocus($0) } ?? false

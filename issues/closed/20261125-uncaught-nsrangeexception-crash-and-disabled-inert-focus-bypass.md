@@ -1,6 +1,7 @@
 # Uncaught `NSRangeException` crash and `disabled`/`inert` focus bypass in `TextArea.pressAtom` on macOS and iOS
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Validate disabled, inert, isSelectable, and atom range bounds before and after focus in TextArea.pressAtom, gate pointer/accessibility/agent atom press paths, and sync macOS TextArea.isSelectable in InputGates.refresh.
 **Systems:** ExactKit (macOS & iOS) — TextArea inline atoms & AtomElement accessibility
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

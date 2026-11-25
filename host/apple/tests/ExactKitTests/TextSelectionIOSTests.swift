@@ -4,6 +4,7 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 import XCTest
 @testable import ExactKit
+@testable import ExactMarkdown
 @testable import ExactTextSelection
 
 /// LLP 1115.000 D11.6: `user-select="text"` on UIKit. Text its author made
@@ -822,6 +823,46 @@ final class TextSelectionIOSTests: XCTestCase {
             XCTAssertEqual(presses, [2], "selection clearing wins before or after touchesEnded")
             XCTAssertFalse(first.pressed)
             input.clear()
+        }
+    }
+
+    func testMultiParagraphMarkdownAtomSelectionClampsToSourceBounds() throws {
+        ExactMarkdown.install()
+        let p = mounted([
+            box(1, style: ["user_select": "text"]),
+            ["op": "create", "id": 2, "kind": "text",
+             "props": ["text": "Hi [a](x:1)", "markup": "markdown", "testId": "md1",
+                       "atoms": #"[{"name":"citation","link":"x:"}]"#,
+                       "atomFaces": #"[{"source":"[a](x:1)","label":"Very Long Expanded Atom Label","icon":"","title":""}]"#],
+             "style": ["font_size": 17.0, "line_height": "22px"],
+             "handlers": ["selectionchange"]],
+            text(3, "Second paragraph"),
+            ["op": "children", "id": 1, "ids": [2, 3]], ["op": "roots", "ids": [1]],
+            frame(1, 0, h: 180, w: 400), frame(2, 30, x: 20), frame(3, 80, x: 20),
+        ])
+        let first = try node(p, 2)
+        let sourceLen = (first.paragraphText as NSString).length
+        let shapedLen = SelectableText.shaped(first).length
+        XCTAssertGreaterThan(shapedLen, sourceLen, "expanded atom shaped length exceeds source length")
+        var heard: [(UInt32, String, Int, Int)] = []
+        p.onSelectionChange = { id, text, start, end, _ in heard.append((id, text, start, end)) }
+
+        let input = p.selectionHost.install(first)
+        XCTAssertNotNil(input.document, "shared SelectionDocument spans both paragraphs")
+        // Select purely in the trailing expanded region past sourceLen, then across the whole paragraph.
+        let at = { (offset: Int) in input.position(from: input.beginningOfDocument, offset: offset)! }
+        input.selectedTextRange = input.textRange(from: at(sourceLen + 2), to: at(shapedLen))
+        input.selectedTextRange = input.textRange(from: at(0), to: at(shapedLen))
+        XCTAssertTrue(heard.allSatisfy { $0.2 >= 0 && $0.3 <= sourceLen && $0.2 <= $0.3 })
+        XCTAssertEqual(heard.last?.1, "Hi [a](x:1)")
+        XCTAssertEqual(heard.last?.2, 0)
+        XCTAssertEqual(heard.last?.3, sourceLen)
+
+        // selectWord on the expanded atom word past sourceLen must clamp or return nil without trapping.
+        input.clear()
+        let picked = p.selectionHost.selectWord(in: first, at: try point(in: first, of: "Label"))
+        if let picked {
+            XCTAssertLessThanOrEqual(NSMaxRange(picked.range), sourceLen)
         }
     }
 

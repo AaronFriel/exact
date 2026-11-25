@@ -1,6 +1,7 @@
 # Document and save pickers omit SessionLease (dispatching handles/events to replaced or destroyed sessions) and leak scratch directories on iOS showSaveFilePicker
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Guard document, save, and share picker completions with SessionLease and clean up iOS showSaveFilePicker scratch directories on failure, close, completion, and Picker deinit.
 **Systems:** ExactPickers (iOS, macOS)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

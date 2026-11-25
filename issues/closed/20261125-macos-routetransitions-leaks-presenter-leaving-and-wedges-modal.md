@@ -1,6 +1,7 @@
 # macOS `RouteTransitions` leaks `presenter.leaving` and wedges modal sheets on root unmount, leaves popped modal sheets blank, and survives `reset()`
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Resync macOS NavigationHost after standalone route exits complete, add RouteTransitions.reset() to release exiting and leaving views, and invoke it on NavigationHost.reset() and root unmount.
 **Systems:** ExactNavigation (macOS) — RouteTransitions, RouteSheetMac, NavigationHost
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -73,7 +73,7 @@ final class NavigationHost {
     func groundChanged() { for ground in grounds.values { ground.needsDisplay = true }; split.groundChanged() }
     func reset() {
         refused.removeAll(); panels.removeAll(); shown.removeAll(); selection = nil; barRoute = false; root = nil; routeless = false
-        oneLocationAsked = nil; sheets = []; keptSheets.removeAll(); split.reset()
+        oneLocationAsked = nil; sheets = []; keptSheets.removeAll(); split.reset(); transitions.reset()
         for ground in grounds.values { ground.removeFromSuperview() }
         grounds.removeAll()
     }
@@ -159,6 +159,7 @@ final class NavigationHost {
             for routes in stacks { ground(routes, inPanel: nav === roots.first && presenter.root.window is RoutePanel, grounded: &grounded) }
             if nav === roots.first { root = (nav, tabs, tabs == nil ? nil : found); routeless = stacks.allSatisfy(\.isEmpty) }
             guard let at = found else {
+                if nav === roots.first { transitions.reset() }
                 managed.formUnion((tabs?.panels ?? []).map(\.id))
                 continue
             }
@@ -206,7 +207,7 @@ final class NavigationHost {
                 }
             }
         }
-        if roots.isEmpty { sheets = []; split.readNone() }
+        if roots.isEmpty { sheets = []; split.readNone(); transitions.reset() }
         // A sheet arrives and leaves after the batch: AppKit turns the main queue while it does.
         if !sheets.isEmpty || presenter.dialogs.entries.contains(where: \.route) { presenter.afterBatch { [weak presenter] in presenter?.dialogs.syncRoutes() } }
         for id in panels.subtracting(managed) {
