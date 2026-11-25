@@ -1030,6 +1030,61 @@ belongs to the root, which passes it down; name its declarations with the
 feature's prefix (`historyDays`), since the root and its members files share one
 set of names.
 
+#### Progressive tab traces
+
+In the [iOS simulator recipe](recipes/progressive-tabs.md), the warm snapshot showed
+Explore in `.state.slots.nav.tab`, rows ticket 4 in `.state.pending`, and both Stocks
+answers in `.state.instances`. Use those fields for component-owned resources.
+In this capture `.state.resourceStatus` reported a fallback while the rows were visible.
+
+The warm Explore press committed epoch 6. The journal tied the rows 503 to ticket 4,
+then recorded that rows kept its value and the failure update committed epoch 7.
+The display-link samples covering those epochs had `seq` ranges `[6,6]` and `[7,7]`.
+The first sample's `t` was 6,108.24 ms and the press was journaled at 6,126.14 ms.
+Use the epoch to identify the batch. Subtracting those times cannot give tap-to-frame
+latency. The frame's `apply` measures batch application and `commit` measures Core
+Animation commit duration. The trace has no physical presentation timestamp for the tab.
+
+In the ordered run the rows 200 journal entry reported `wall 623 ms; delivery wait 1020 ms`.
+Wall time includes the fixture holding the rows reply. Delivery wait measures the
+time from transport completion to delivery, including the wait behind history.
+History can opt into independent delivery because neither its GET nor its parser
+changes what rows will read. [Native HTTP scheduling](reference.md#what-a-data-module-can-use)
+
+To capture a slow return in your own development app on a connected iPhone, tap
+with four fingers and choose **Save Trace**. On the Mac run
+`bun scripts/agent.mjs trace --phone <phone-UDID> --app <app-directory>` from the Exact repo.
+The simulator can reach the Mac’s fixture at `127.0.0.1`. On a phone that address
+reaches the phone itself.
+
+**Linux and Chromium.**
+
+On the same Mac, leave the fixture running in terminal A. If the simulator app is
+still running, quit it from B with `xcrun simctl terminate "$sim" dev.exact.progressivetabs`.
+In B at the repo root, run the ordered comparison on the headless Linux host.
+
+```sh
+app=docs/recipes/progressive-tabs
+bun scripts/build-linux.mjs "$app"
+bun scripts/agent.mjs linux --app "$app" 'tap compare' 'tap tab-explore' 'clock until state pending == [] within 60000' logs
+```
+
+While B waits, release both replies in A within 60 seconds. After both `Held` lines,
+type `/rows/Stocks 200` and press Return, then `/history/Stocks 503` and Return.
+The rows `fulfil` line in B gives its HTTP wall time and delivery wait behind history.
+
+Browser fetch handles its own scheduling and ignores the native independence hint.
+After the Linux drive exits, run `bun host/web/dev.mjs --app "$app"` in B and open the
+printed URL in one Chromium tab. Click Explore and release the two Stocks 200s in A.
+Click Home, then Explore. With both replies held, run
+`await (await exact.attachReads())({op: 'state'})` in the browser console to read
+the route, pending tickets and epoch. Release `/rows/Stocks 503` in A. When the rows
+error appears, repeat the console read. Focus the page and press ⌥⇧T to save the
+trace, then release `/history/Stocks 503` in A. In B stop the dev server with
+Ctrl-C. Set `file` to the path the browser console printed and run
+`bun scripts/agent.mjs trace "$file"`. The Chromium trace omits the state snapshot.
+Match the epochs you read in the console to its frame callbacks’ `seq` ranges.
+
 ### Tabular numbers
 
 Use `font-variant-numeric="tabular-nums"` for **numeric columns** and **values that
