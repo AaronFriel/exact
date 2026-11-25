@@ -173,6 +173,15 @@ impl Device for Selected {
             Self::D3d11(d) => d.last_use(texture),
         }
     }
+    fn orders_upload(&self, texture: TextureId) -> Result<bool> {
+        match self {
+            Self::Wgpu(d) => d.orders_upload(texture),
+            #[cfg(exact_ink_metal)]
+            Self::Metal(d) => d.orders_upload(texture),
+            #[cfg(windows)]
+            Self::D3d11(d) => d.orders_upload(texture),
+        }
+    }
     fn generate_mips(&mut self, texture: TextureId) -> Result<Submission> {
         match self {
             Self::Wgpu(d) => d.generate_mips(texture),

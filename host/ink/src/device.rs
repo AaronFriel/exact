@@ -152,7 +152,9 @@ pub struct TextureUpload {
 /// The headless operations used by S0. Buffer uploads and draws are ordered on
 /// one queue. Each device orders mutations after the resource's last use, waits,
 /// or chooses fresh storage. Submissions include uploads; a larger completed value
-/// covers all earlier submissions. Retire keeps storage alive until its last use completes.
+/// covers all earlier submissions. A device may hold a call's work until a wait for
+/// it, a readback, a presentation or the end of a GPU span: `completed` stays before
+/// it until then. Retire keeps storage alive until its last use completes.
 /// Readback is synchronous on native devices; browser callers must
 /// use the device's asynchronous readback instead of blocking its event loop.
 pub trait Device {
@@ -189,6 +191,11 @@ pub trait Device {
     }
     /// Latest upload, read or write using this texture.
     fn last_use(&self, texture: TextureId) -> Result<Submission>;
+    /// Whether an upload to `texture` now takes its turn after the texture's last
+    /// use without waiting for it.
+    fn orders_upload(&self, _texture: TextureId) -> Result<bool> {
+        Ok(false)
+    }
     fn generate_mips(&mut self, texture: TextureId) -> Result<Submission>;
     fn create_target(&mut self, width: u32, height: u32) -> Result<TextureId> {
         self.create_texture(TextureDesc::rgba(width, height))
