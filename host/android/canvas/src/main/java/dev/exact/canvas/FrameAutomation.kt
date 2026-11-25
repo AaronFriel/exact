@@ -554,6 +554,10 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
                 if (recipient.sandbox != name) return@addWebMessageListener
                 val json = posted.opt("json") as? String ?: return@addWebMessageListener
                 if (json.toByteArray(Charsets.UTF_8).size > LIMIT) return@addWebMessageListener
+                if (this.view !== view || web() !== view) {
+                    if (reportedRetired.add(recipient.session)) Exact.journal("script.message: dropped a post from a retired web view")
+                    return@addWebMessageListener
+                }
                 val doc = markers.getOrPut(proxy) { Document() }
                 val route = routes.getOrPut(name) { UUID.randomUUID().toString() }
                 val source = JSONObject().put("realm", "$route.${doc.id}").put("origin", serializedOrigin(origin)).put("context", contextId())
@@ -677,7 +681,11 @@ internal class FrameAutomation(private val web: () -> WebView?, private val cont
 
         // A retired WebView can still deliver a post. Release the receiver there as well.
         private val instances = java.util.Collections.newSetFromMap(java.util.WeakHashMap<FrameAutomation, Boolean>())
-        fun release(session: String) { instances.toList().forEach { it.releaseSession(session) } }
+        private val reportedRetired = HashSet<String>()
+        fun release(session: String) {
+            reportedRetired.remove(session)
+            instances.toList().forEach { it.releaseSession(session) }
+        }
 
         /** The sandboxes the app has named, newest last, at most [KEPT], in its preferences across launches. */
         private var names: LinkedHashSet<String>? = null

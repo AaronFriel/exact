@@ -384,19 +384,19 @@ class FrameAutomationTest {
         assertEquals("5", other.single().getString("json"))
     }
 
-    private inner class Channel {
+    private inner class Channel(row: Int = 0, session: String = "") {
         val natives = natives()
         val world = "ordering"
         val web: WebView
         val frame: FrameAutomation
         private val key: String
-        private val messages = mutableListOf<JSONObject>()
+        val messages = mutableListOf<JSONObject>()
 
         init {
-            natives.ensure(1, 1, 0, 0, props("tab"), 0)
+            natives.ensure(1, 1, 0, 0, props("tab"), row)
             web = compat.last()
             frame = natives.automations("tab").single()!!
-            val args = JSONObject().put("id", "tab").put("sandbox", world)
+            val args = JSONObject().put("id", "tab").put("sandbox", world).put("channelSession", session)
                 .put("arguments", JSONArray("""[{"type":"channel","value":{"channel":"status"}}]"""))
                 .put("functionDeclaration", "post => post(1)")
             FrameAutomations.run("addPreloadScript", args, { messages.add(it) }) { assertTrue(it.has("script")) }
@@ -404,8 +404,10 @@ class FrameAutomationTest {
             commit(web, "https://example.com/first")
         }
 
+        fun send(doc: Proxy, json: String) = post(web, world, JSONObject().put("capability", key).put("json", json).toString(), doc)
+
         fun postSource(doc: Proxy): JSONObject? {
-            post(web, world, JSONObject().put("capability", key).put("json", "1").toString(), doc)
+            send(doc, "1")
             return if (messages.isEmpty()) null else messages.single().getJSONObject("source").also { messages.clear() }
         }
 
@@ -654,6 +656,58 @@ class FrameAutomationTest {
         }
         assertEquals("no such frame", channel.read(source).error())
         channel.natives.destroyAll()
+    }
+
+    @Test fun aKeptViewCanPostUntilTheFrameReleasesIt() {
+        val journal = NativesPartitionTest.Host.journal
+        journal.clear()
+        try {
+            for ((release, session) in listOf("partition" to "player", "park" to "player", "unmount" to "wallet")) {
+                val channel = Channel(row = 10, session = session)
+                channel.natives.near(setOf(10), setOf(10), setOf(10))
+                val doc = Proxy()
+                val source = channel.source(doc)
+                channel.ready(doc)
+                for (shown in listOf(emptySet(), setOf(10))) {
+                    channel.natives.near(shown, setOf(10), setOf(10))
+                    assertSame(channel.web, compat.last())
+                    assertEquals(source.toString(), channel.source(doc).toString())
+                }
+                channel.send(doc, "2")
+                when (release) {
+                    "partition" -> channel.natives.ensure(1, 1, 0, 0, props("tab", "persist:b"), 10)
+                    "park" -> {
+                        var replied = false
+                        val args = JSONObject().put("id", "tab").put("sandbox", channel.world).put("expression", "1")
+                        FrameAutomations.run("evaluate", args) {
+                            // Ending the call can run another frame command before park replaces the view.
+                            call("removePreloadScript", "script" to "missing")
+                            replied = true
+                        }
+                        channel.natives.near(emptySet(), emptySet(), setOf(10))
+                        assertTrue(replied)
+                    }
+                    else -> channel.natives.destroyAll()
+                }
+                repeat(2) { channel.send(doc, "3") }
+                val queued = channel.messages.single()
+                assertEquals("2", queued.getString("json"))
+                assertEquals(source.toString(), queued.getJSONObject("source").toString())
+                channel.messages.clear()
+                assertEquals("no such frame", channel.read(source).error())
+                if (release == "park") {
+                    channel.natives.near(setOf(10), setOf(10), setOf(10))
+                    assertNotSame(channel.web, compat.last())
+                    assertNull(channel.postSource(doc))
+                }
+                channel.natives.destroyAll()
+            }
+            assertEquals(List(2) { "script.message: dropped a post from a retired web view" }, journal)
+        } finally {
+            FrameAutomations.release("player")
+            FrameAutomations.release("wallet")
+            journal.clear()
+        }
     }
 
     @Test fun closingAPackageSessionRemovesItsPreloadWithoutArguments() {

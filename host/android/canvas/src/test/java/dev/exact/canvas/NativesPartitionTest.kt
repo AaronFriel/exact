@@ -40,6 +40,9 @@ class NativesPartitionTest {
             @JvmStatic @Implementation fun __staticInitializer__() {}
             val sent = ArrayList<Sent>()
 
+            val journal = ArrayList<String>()
+            @JvmStatic @Implementation fun journal(line: String) { journal.add(line) }
+
             val loads = ArrayList<Int>()
 
             @JvmStatic @Implementation fun frameLoaded(id: Int, slot: Int, generation: Int, session: Long) { loads.add(id) }

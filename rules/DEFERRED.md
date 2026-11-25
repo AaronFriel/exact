@@ -1255,6 +1255,10 @@ reading. Nothing that isn't HTML is added by it.
   holding `browser.automation` receives bounded `script.message` events from
   a named sandbox with the posting document’s realm and host-supplied origin.
   A posted event survives navigation and runs with the device’s authority.
+- **Current-document channels (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"; panel 4–0).**
+  LLP 1020.002 D9 closes the channel when the frame drops its web view. A
+  post already admitted keeps its source. A view held for redisplay keeps its channel.
+  Android enforces this rule. Apple still delivers new posts from a released view.
 - **Expanded (LLP 1096; admitted by the orchestrator under Charlie's
   2026-10-04 delegation, "make decisions without me"):** short sounds an
   action can schedule: a `sound` declaration (a WAV in `assets/`, at most 10
