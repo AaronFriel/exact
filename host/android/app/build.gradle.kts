@@ -6,10 +6,12 @@
 import com.android.build.api.artifact.ScopedArtifact
 import com.android.build.api.variant.ScopedArtifacts
 import java.net.URLClassLoader
+import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipFile
 import org.objectweb.asm.ClassReader
 import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
 import org.gradle.api.artifacts.result.ResolvedDependencyResult
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.DefaultVersionComparator
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionParser
@@ -438,6 +440,17 @@ if (maven.isNotEmpty()) {
         lockMode.set(LockMode.STRICT)
         lockFile.set(file(providers.gradleProperty("mavenLock").get()))
     }
+    val incompleteProbes = ConcurrentHashMap<String, Throwable>()
+    tasks.register("checkMavenLock") {
+        doLast {
+            val release = listOf(configurations.getByName("releaseRuntimeClasspath"), configurations.getByName("releaseCompileClasspath"))
+            for (configuration in (release + configurations.filter { it.isCanBeResolved }).distinct()) {
+                configuration.incoming.resolutionResult.allDependencies.filterIsInstance<UnresolvedDependencyResult>()
+                    .firstOrNull()?.let { throw it.failure }
+                incompleteProbes[configuration.name]?.let { throw it }
+            }
+        }
+    }
     val appMaven = configurations.dependencyScope("appMaven").get()
     configurations.implementation.get().extendsFrom(appMaven)
     dependencies {
@@ -481,7 +494,9 @@ if (maven.isNotEmpty()) {
                 val root = graph.rootComponent.get()
                 val shell = hierarchy.filter { it != appMaven }.flatMap { it.dependencies.withType<ExternalModuleDependency>() }
                     .map { it.module }.toSet()
-                val drift = graph.allDependencies.mapNotNull { edge ->
+                val edges = graph.allDependencies
+                edges.filterIsInstance<UnresolvedDependencyResult>().firstOrNull()?.let { incompleteProbes[name] = it.failure }
+                val drift = edges.mapNotNull { edge ->
                     val request = edge.requested as? ModuleComponentSelector ?: return@mapNotNull null
                     val fromShell = if (edge.from == root) request.moduleIdentifier in shell else edge.from.id is ProjectComponentIdentifier
                     if (edge.isConstraint || !fromShell) return@mapNotNull null

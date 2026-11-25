@@ -35,7 +35,8 @@ import { guardFlags, reportBuilt } from './help.mjs';
 import { androidImplementations } from '../js/bake/src/typescript.mjs';
 import { packageConfigs, sourceString } from '../js/bake/src/package-config.mjs';
 import { recordBuiltSettings } from '../js/bake/src/__exact_env.mjs';
-import { carAppService, configMetaData, extensionFactories, mlKitInitializer, fragmentPermissions, manifestFragment, withAppLinks, withProtocolHandlers, withMetaData, withAuthCallbacks } from './android-manifest.mjs';
+export { composeArgs } from './android-manifest.mjs';
+import { androidLibraryArgs, systemWidgets, carAppService, configMetaData, extensionFactories, mlKitInitializer, fragmentPermissions, manifestFragment, withAppLinks, withProtocolHandlers, withMetaData, withAuthCallbacks } from './android-manifest.mjs';
 import { androidLinkFilters, androidLinkNotes } from './links.mjs';
 import { androidShareActivity } from './share-target.mjs';
 import { CHANNELS_RECEIVER, androidNotificationResources, googleServices } from './android-channels.mjs';
@@ -788,22 +789,6 @@ export function loadAlignment(path) {
 /** The capabilities the plan uses (LLP 1047 D2), one a line in `uses.txt`; none when the crate writes none. */
 const planUses = (out) => out && existsSync(resolve(out, 'uses.txt')) ? readFileSync(resolve(out, 'uses.txt'), 'utf8').split('\n').filter(Boolean) : [];
 
-/** Leave an explicit Gradle property to Gradle. Otherwise select the graph from the sources it compiles. */
-export function composeArgs(uses, appDir, bound, env) {
-  if (uses.includes('dates')) return ['-Pcompose=1'];
-  if (['0', '1'].includes(env.ORG_GRADLE_PROJECT_compose)) return [];
-  const modules = env.ORG_GRADLE_PROJECT_modulesDir ?? resolve(appDir, 'modules/android');
-  const kotlin = new Bun.Glob('**/*.kt');
-  for (const dir of [resolve(READER, 'app', modules), ...bound.flatMap(b => b.dirs)]) {
-    if (!existsSync(dir)) continue;
-    for (const path of kotlin.scanSync({ cwd: dir, absolute: true, dot: true, followSymlinks: true })) {
-      const source = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
-      if (/\bimport\s+androidx\s*\.\s*compose\s*\.|@Composable\b/.test(source)) return ['-Pcompose=1'];
-    }
-  }
-  return [];
-}
-
 /** How the reader's Gradle wrapper starts on `platform`. Windows cannot run the POSIX `gradlew`, and Bun starts a `.bat`
  * only through cmd.exe, which would reparse every argument: there the JDK runs the wrapper jar with the arguments
  * `gradlew` gives it, JAVA_OPTS and GRADLE_OPTS among them (JAVA_HOME's java, else the one on PATH). */
@@ -1101,9 +1086,8 @@ function assembleApk(app, env, profile, writeLocks, bundle, abis, dirs) {
   catch (error) { for (const line of error.message.split('\n')) console.error(`${app.name}: ${line}`); return null; }
   const launch = androidLaunch(app.manifest, resolve(dirs.app, 'launch/res'), app.dir);
   // Home-screen widgets for the rows with a `system*` family (LLP 1126.003 D1); accessory-only rows are Apple's alone.
-  const androidWidgets = (app.manifest.widgets ?? []).filter((row) => (row.families ?? []).some((family) => family.startsWith('system')));
+  const androidWidgets = systemWidgets(app.manifest);
   if (app.manifest.widgets?.length && !androidWidgets.length) console.warn(`${app.name}: app.json's widgets declare only accessory families, which Android has no counterpart for, so this APK has no widget`);
-  const widgetArgs = androidWidgets.length ? ['-Pwidgets=1', `-PwidgetsBuildDir=${dirs.widgets}`] : [];
   const target = ANDROID_ABIS[abis[0]], bakeStarted = new Date().toISOString();
   const androidPayload = profile === HOST_DEV && !bundle && env.EXACT_UPDATE_TRUST !== 'production';
   const staged = resolve(dirs.app, 'rust'), out = resolve(staged, 'bake');
@@ -1166,15 +1150,10 @@ function assembleApk(app, env, profile, writeLocks, bundle, abis, dirs) {
   copyStaticTreeIfPresent(resolve(app.dir, 'assets'), resolve(staged, 'assets/app/assets'));
   // The modules' shader text (LLP 1030 D8), which the host registers from `shaders/` under the asset root.
   if (gpu.length) copyShaders(app, resolve(staged, 'assets/app/shaders'));
-  const compose = composeArgs(uses, app.dir, bound, env);
   // The library's baked identity is the one the APK installs under, as `assertAppleIdentity` holds an Apple build to it
   // (LLP 1030.008 D2): the JavaScript and the Rust readers resolved the same variant.
   if (compat.inputs?.app !== app.id) { console.error(`${app.name}: the library's baked app id is ${compat.inputs?.app}, not ${app.id}: build it again`); return null; }
-  // A `video` or `audio` plays on Media3, linked for a plan that makes one, and for every development build, whose
-  // plan may gain one and has no fallback (LLP 1042.001 D2). An app whose Maven graph is locked (LLP 1133.008 D8 item
-  // 5) is the exception: its lock is the graph each of its APKs resolves, development or production, so Media3 joins
-  // it only with a plan's video, and the app writes its locks again then.
-  const video = uses.includes('video') || (development && !maven.length) ? ['-Pvideo=1'] : [];
+  const librariesArgs = androidLibraryArgs(app, bound, uses, env, development && !maven.length);
   // The token names its hatches read (LLP 1121 D12), beside them in the build.
   if (existsSync(resolve(app.dir, 'modules/android'))) writeFormaNames(app, 'kotlin');
   const graph = mavenGraph(app, writeLocks, maven, env);
@@ -1186,7 +1165,7 @@ function assembleApk(app, env, profile, writeLocks, bundle, abis, dirs) {
     assembled = runGradle(['--no-watch-fs', ...(env.CI || graph.env.GRADLE_USER_HOME ? ['--no-daemon'] : []), bundle ? ':app:bundleRelease' : ':app:assembleRelease', ...gradleApp(app),
       `-Pabis=${abis.join(',')}`, `-PexactDevelopment=${development ? '1' : '0'}`, `-PapplicationId=${androidPackageId(app.manifest)}`, `-PappName=${app.displayName}`,
       `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PvideoBuildDir=${dirs.video}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
-      ...developmentApkArgs(development, profile, bundle), ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch.theme ? [`-PappTheme=${launch.theme}`] : []), ...compose, ...video, ...widgetArgs, ...extensionArgs(app, out, config, bound, firebase, development), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
+      ...developmentApkArgs(development, profile, bundle), ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch.theme ? [`-PappTheme=${launch.theme}`] : []), `-PwidgetsBuildDir=${dirs.widgets}`, ...librariesArgs, ...extensionArgs(app, out, config, bound, firebase, development), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
     if (assembled) graph.kept();
   } finally {
     graph.done();
@@ -1244,25 +1223,29 @@ export function mavenLocksPresent(app, maven) {
   return false;
 }
 
-/** The Maven libraries the app and bound modules name (LLP 1133.008 D8 item 5), as Gradle arguments: one graph with the
- * reader's own AndroidX, locked to the app's `gradle.lockfile` and verified against its `gradle-verification.xml`,
- * both beside its other locks. The verification file is Gradle's, which it reads only from the reader's `gradle/`:
- * it is put there for this build (`done` takes it away). `writeLocks` writes both from the graph as it resolves
- * (`kept` copies the verification back), in a Gradle user home of its own (`coldGradleHome`, its variables `env`).
- * Missing locks are refused before Gradle runs. */
-function mavenGraph(app, writeLocks, maven, env) {
+/** Gradle reads verification metadata only from its root project. A build or a lock report holds that
+ * location until Gradle exits. The writer resolves cold so a fresh build can verify every download. */
+export function mavenGraph(app, writeLocks, maven, env) {
   const placed = resolve(READER, 'gradle/verification-metadata.xml');
-  const none = { args: [], env: {}, kept() {}, done() {} };
-  if (!maven.length) return none;
+  if (!maven.length) return { args: [], env: {}, kept() {}, done() {} };
   const lock = resolve(app.dir, 'gradle.lockfile'), checksums = resolve(app.dir, 'gradle-verification.xml');
-  rmSync(placed, { force: true });
-  if (existsSync(checksums)) copyFileSync(checksums, placed);
-  const home = writeLocks ? coldGradleHome(env) : null;
+  mkdirSync(resolve(READER, '.gradle'), { recursive: true });
+  const release = takeLock(resolve(READER, '.gradle/verification.lock'), { waitMs: Infinity });
+  let home;
+  const done = () => {
+    try { rmSync(placed, { force: true }); if (home) rmSync(home, { recursive: true, force: true }); }
+    finally { release(); }
+  };
+  try {
+    rmSync(placed, { force: true });
+    if (existsSync(checksums)) copyFileSync(checksums, placed);
+    home = writeLocks ? coldGradleHome(env) : null;
+  } catch (error) { done(); throw error; }
   return {
     args: [`-Pmaven=${maven.join(',')}`, `-PmavenLock=${lock}`, `-PandroidLockCommand=${androidLockCommand(app)}`, ...(writeLocks ? ['--write-locks', '--write-verification-metadata', 'sha256'] : ['--dependency-verification=strict'])],
     env: home ? { GRADLE_USER_HOME: home } : {},
     kept() { if (writeLocks && existsSync(placed)) copyFileSync(placed, checksums); },
-    done() { rmSync(placed, { force: true }); if (home) rmSync(home, { recursive: true, force: true }); },
+    done,
   };
 }
 
@@ -1343,7 +1326,7 @@ function extensionArgs(app, out, config, bound, firebase, development) {
   rmSync(fragmentFile, { force: true });
   if (fragment) { mkdirSync(dirname(fragmentFile), { recursive: true }); writeFileSync(fragmentFile, fragment); }
   return [...(bound.length ? [`-PextensionDirs=${[...bound.flatMap((b) => b.dirs), generated].join(',')}`] : []), ...(permissions.length ? [`-Ppermissions=${permissions.join(',')}`] : []),
-    `-PcarAppService=${car?.name ?? ''}`, ...(car ? [`-PcarSourceDirs=${carOwner.dirs.join(',')}`, `-PcarMapTemplates=${declared.includes('androidx.car.app.MAP_TEMPLATES') ? 1 : 0}`, `-PcarDeclaration=${carOwner.mavenSource}`] : []), ...(fragment ? [`-PmanifestFragment=${fragmentFile}`] : []), ...(Object.keys(services).length ? [`-PforegroundServices=${JSON.stringify(services)}`] : []),
+    ...(car ? [`-PcarSourceDirs=${carOwner.dirs.join(',')}`, `-PcarMapTemplates=${declared.includes('androidx.car.app.MAP_TEMPLATES') ? 1 : 0}`, `-PcarDeclaration=${carOwner.mavenSource}`] : []), ...(fragment ? [`-PmanifestFragment=${fragmentFile}`] : []), ...(Object.keys(services).length ? [`-PforegroundServices=${JSON.stringify(services)}`] : []),
     ...(features.length ? [`-PandroidFeatures=${features.join(',')}`] : [])];
 }
 

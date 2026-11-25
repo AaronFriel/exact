@@ -281,6 +281,10 @@ test.skipIf(process.platform !== 'darwin' || !releaseJavaEnv ||
       if (p.path == ':app' && p.hasProperty('keepBeforeFold')) p.configurations.configureEach {
         resolutionStrategy.force('androidx.window:window:1.3.0')
       }
+      if (p.path == ':canvas' && p.hasProperty('unavailableWindow')) {
+        p.configurations.implementation.dependencies.removeIf { it.group == 'androidx.window' && it.name == 'window' }
+        p.dependencies.add('implementation', 'androidx.window:window:999.0.0')
+      }
       if (p.path == ':canvas' && p.hasProperty('beforeFold')) {
         p.configurations.implementation.dependencies.removeIf {
           it.group == 'androidx.window' || it.name == 'kotlinx-coroutines-android'
@@ -309,10 +313,16 @@ test.skipIf(process.platform !== 'darwin' || !releaseJavaEnv ||
     expect(stale.status).toBe(1);
     expect(stale.stderr).toMatch(/androidx.window:window.*1\.5\.0.*locked.*1\.3\.0/);
     expect(stale.stderr).toContain('--write-locks');
+    const report = run([':app:checkMavenLock']);
+    expect(report.status).toBe(1);
+    expect(report.stderr).toContain('androidx.window:window');
     const rewrite = run([':app:dependencies', ':app:resolveRuntime', '--write-locks']);
     expect(rewrite.status, rewrite.stdout + rewrite.stderr).toBe(0);
-    const current = run([':app:resolveRuntime']);
+    const current = run([':app:checkMavenLock']);
     expect(current.status, current.stdout + current.stderr).toBe(0);
+    const unchecked = run(['--offline', '-PunavailableWindow', ':app:checkMavenLock']);
+    expect(unchecked.status).toBe(1);
+    expect(unchecked.stderr).toContain('androidx.window:window:999.0.0');
   } finally { rmSync(dir, {recursive:true, force:true}); }
 }, 400000);
 

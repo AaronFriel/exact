@@ -2136,6 +2136,10 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - iPad directory inference (LLP 1127 D19). Distinguish a dashboard's short list below its statistics from a settings directory with a heading, search and two buttons above its scrolling list. The initial tree does not give their laid-out sizes.
 - Preserve Shift on modified printable keys in the terminal decoder. With a button declaring `Meta+Shift+O`, the terminal drive `key Meta+Shift+O` misses it. A button declaring `Meta+O` takes the same press (#1617).
 - Compare held modifiers as a set in Windows reserved-shortcut diagnostics. A Windows app warns for `Control+Escape` but misses `Control+Control+Escape`, which the host matches the same way (#1617).
+- Run `cargo test -p contract --bin contract --test it vocab::`. The vocabulary card panics on an empty row at `contract/cli/src/vocab/card.rs:46`, and the function table lacks a row for `formatShortcut`.
+- Run `bun test ./game/new.test.mjs -t 'ordinary cargo fmt accepts'`. Formatting a generated game's workspace asks to reorder the Android re-exports in `game/audio/src/native.rs`.
+- Run `bun test ./game/new.test.mjs -t 'Rivals.*captured lock|the SDK lock decides'`. Rivals resolves brotli-decompressor 6.0.0 against a captured 6.3.2, and the SDK fixture's generated lock fails Cargo metadata with `--locked`.
+- Run `bun test ./game/new.test.mjs -t 'a new game names its Rust type'`. The test follows the generated game's `.exact/checkout` link and finds the template name in the SDK's own `game/new.mjs`.
 - Settle the plan-header requirement for `formatShortcut` (#1617). Adding an unused formatter to the standard roster changes bytes 8–15 of an explicit-chord app’s plan. LLP 1004 D3 requires every reader to check that digest.
   Settled by LLP 1004 D3 and D4. The roster update changes those eight bytes and delivery requires a matching binary.
 - Wake a web page when its first interaction is a declared keyboard shortcut. On a route with `activate=interaction`, pressing an explicit `Meta+Shift+O` while the body has focus leaves the page asleep. Clicking the button wakes it (#1617).
