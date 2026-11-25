@@ -175,9 +175,9 @@ export const classifications = [
     ["painted:host/painted/src/presenter/picker.rs", "Presenter::open_document"],
     ["painted:host/painted/src/presenter/pan_release.rs", "Presenter::release_pan"],
     ["painted:host/painted/src/presenter/file_drop.rs",
-      "Presenter::deliver_drop Presenter::drag_at Presenter::drag_chain Presenter::drag_crossings Presenter::drag_dropped Presenter::drag_ended " +
-      "Presenter::drag_event Presenter::drag_flush Presenter::drag_left Presenter::drag_over Presenter::drag_renewed Presenter::drop_landed " +
-      "Presenter::drop_owner Presenter::drop_released Presenter::drop_target Presenter::dropped Presenter::field_drop Presenter::field_keeps"],
+      "Presenter::deliver_drop Presenter::drag_chain Presenter::drag_dropped Presenter::drag_event Presenter::drag_flush " +
+      "Presenter::drag_left Presenter::drag_over Presenter::drag_renewed Presenter::drop_landed Presenter::drop_owner " +
+      "Presenter::drop_released Presenter::dropped Presenter::field_drop"],
     ["painted:host/painted/src/presenter/pointer.rs", "Presenter::pointer_dispatch"],
     ["painted:host/painted/src/presenter/radio.rs", "Presenter::activate_radio"],
     ["painted:host/painted/src/presenter/replacement.rs", "Presenter::buttons_released Presenter::pointer_released Presenter::reader_touch Presenter::set_touching"],
