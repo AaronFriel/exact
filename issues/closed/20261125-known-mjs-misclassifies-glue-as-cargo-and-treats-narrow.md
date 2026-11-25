@@ -1,6 +1,7 @@
 # known.mjs misclassifies glue as cargo and treats narrow/unrelated checks without covers as whole-repo passes
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Anchor kindOf on subcommands, split xctest-ios and xctest-macos, match lane note checks by explicit whole/partial allowlists in known.mjs, and emit covers for narrow Bun/Cargo checks in async.mjs.
 **Systems:** scripts/known.mjs, scripts/async.mjs
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -1398,7 +1398,8 @@ export const cdpEscape = (call) => async () => { for (const type of ['rawKeyDown
 
 /** The lock file of a simulator's display (`['display', udid]`) or of one app on it (`[udid, bundle]`). */
 const simulatorLock = (key) => createHash('sha256').update(JSON.stringify(key)).digest('hex') + '/.lock';
-export const simulatorDisplayLockPath = udid => resolve(simulatorTempDirectory(), 'exact-ios-drives', simulatorLock(['display', udid]));
+const simulatorLockDir = () => resolve(simulatorTempDirectory(), 'exact-ios-drives');
+export const simulatorDisplayLockPath = udid => resolve(simulatorLockDir(), simulatorLock(['display', udid]));
 /** Runs `fn` holding the simulator lock `key`, trying again every 100 ms while another process holds it: `waiting`
  *  is called at the first refusal, and after `timeout` the error says `busy(seconds)`. */
 async function holdSimulator(key, fn, { directory, timeout, busy, waiting = () => {} }) {
@@ -1417,14 +1418,14 @@ async function holdSimulator(key, fn, { directory, timeout, busy, waiting = () =
 
 /** One simulator's display, across every drive and checkout: a capture that reads it (`withDisplay`) holds it, and so
  *  does a launch, which brings its app to the front over another drive's. Runs `fn` holding it. */
-export async function simulatorDisplay(udid, fn, { directory = resolve(simulatorTempDirectory(), 'exact-ios-drives'), timeout = 60000 } = {}) {
+export async function simulatorDisplay(udid, fn, { directory = simulatorLockDir(), timeout = 60000 } = {}) {
   return holdSimulator(['display', udid], fn, { directory, timeout, busy: (s) => `simulator ${udid}'s display busy: another drive still held it after ${s}s` });
 }
 
 /** Runs `fn`, an install or a launch outside a drive (`exact.mjs ios`), holding the lock of each of `bundles` on the
  *  simulator. A drive holds its app's from launch to close (`exclusiveIOS`), and an install over that app, or another
  *  launch of it, ends it under the drive: another checkout of the app (a git worktree) has the same bundle id. */
-export async function simulatorApps(udid, bundles, fn, { name = udid, directory = resolve(tmpdir(), 'exact-ios-drives'), timeout = 60000 } = {}) {
+export async function simulatorApps(udid, bundles, fn, { name = udid, directory = simulatorLockDir(), timeout = 60000 } = {}) {
   const [bundle, ...rest] = bundles;
   if (!bundle) return fn();
   return holdSimulator([udid, bundle], () => simulatorApps(udid, rest, fn, { name, directory, timeout }), {
@@ -1437,7 +1438,7 @@ export async function simulatorApps(udid, bundles, fn, { name = udid, directory 
 /** The simulator has one running process per bundle id, across every checkout.
  * Hold an OS lock through launch and close; a crashed driver releases it through
  * the helper's stdin. Permanent lock files avoid unlink/reacquire races. */
-export async function exclusiveIOS(udid, bundle, launch, { directory = resolve(tmpdir(), 'exact-ios-drives'), timeout = 60000 } = {}) {
+export async function exclusiveIOS(udid, bundle, launch, { directory = simulatorLockDir(), timeout = 60000 } = {}) {
   const path = simulatorLock([udid, bundle]);
   const started = Date.now();
   let release, holding;

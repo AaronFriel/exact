@@ -1467,3 +1467,17 @@ test('the module roster validates each tag once and checks factories on their ho
     assert.throws(() => checkModuleRoster(roster.tagsFor('android'), ['shared-view', 'other-view'], 'android', true), /phone-view/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('manifest app and variant display names reject control characters and blank strings', async () => {
+  const { readManifest } = await import('./app.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'manifest-display-name-'));
+  const read = value => { writeFileSync(resolve(dir, 'app.json'), JSON.stringify(value)); return readManifest(dir, 'name-check'); };
+  try {
+    assert.equal(read({ name: 'A/B Tester', app: { id: 'dev.exact.ab', name: 'A/B Tester' }, variants: { dev: { idSuffix: '.dev', name: 'A/B Dev' } } }).app.name, 'A/B Tester');
+    for (const bad of ['Foo\necho pwned', 'Foo\rBar', 'Foo\x00Bar', 'Foo\u2028Bar', '   ']) {
+      assert.throws(() => read({ name: bad, app: { id: 'dev.exact.ab', name: 'Safe' } }), /name/);
+      assert.throws(() => read({ name: 'Safe', app: { id: 'dev.exact.ab', name: bad } }), /app\.name/);
+      assert.throws(() => read({ name: 'Safe', app: { id: 'dev.exact.ab', name: 'Safe' }, variants: { dev: { idSuffix: '.dev', name: bad } } }), /variants\.dev\.name/);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

@@ -1,7 +1,7 @@
 // The app server's discovery, scratch databases and process lifetime.
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -433,16 +433,19 @@ async function started(dir, server, name, forward, give, takeOwnership) {
  * database as the file's text), and the last drive out stops them; one that did not start the server stops nothing, and the
  * builder's own is never in the list. With database: false, no database is passed, created or cleared; otherwise an entry
  * that does not read `DB` is refused (`appServer`'s `refusal`), as `test` refuses it. */
-export async function driveServer(dir, storage, say = (line) => console.error(line), { fresh = false } = {}) {
+export async function driveServer(dir, storage, say = (line) => console.error(line), { fresh = false, lockTimeoutMs = 15_000 } = {}) {
   const server = appServer(dir);
   if (!server?.url) return null;
   if (server.refusal) throw new Error(`agent: ${server.refusal}`);
   const lease = resolve(dir, '.exact/agent-server'), mine = resolve(lease, `drive-${process.pid}`), starting = resolve(lease, 'starting');
   const db = !server.database ? null : storage ? resolve(dir, '.exact/agent', storage.replace(/[^\w.-]+/g, '-'), 'db.sqlite') : resolve(lease, 'db.sqlite');
   const files = (kind) => { try { return readdirSync(lease).filter((f) => f.startsWith(`${kind}-`)).map((f) => [resolve(lease, f), Number(f.slice(kind.length + 1))]); } catch { return []; } };
-  let spawned = null, spawnedGroup = null;
-  mkdirSync(lease, { recursive: true });
-  writeFileSync(mine, '');
+  let spawned = null, spawnedGroup = null, recorded = false;
+  for (let attempt = 0; ; attempt++) {
+    mkdirSync(lease, { recursive: true });
+    try { writeFileSync(mine, ''); break; }
+    catch (e) { if (e.code !== 'ENOENT' || attempt >= 5) throw e; }
+  }
   // A refused drive may have found a copied record. Ending it must not lend that record authority to stop a process.
   const leave = () => {
     rmSync(mine, { force: true });
@@ -471,13 +474,22 @@ export async function driveServer(dir, storage, say = (line) => console.error(li
     });
   };
   const clean = () => {
-    if (files('server').length) return;
-    if (db) rmSync(lease, { recursive: true, force: true });
-    else { for (const [file] of [...files('ended'), [resolve(lease, 'log')]]) rmSync(file, { force: true }); try { rmdirSync(lease); } catch {} }
+    for (const [file, pid] of files('drive')) if (!alive(pid)) rmSync(file, { force: true });
+    if (files('drive').length || files('server').length || existsSync(starting)) return;
+    const extra = db ? ['', '-wal', '-shm', '-journal'].map((end) => [resolve(lease, `db.sqlite${end}`)]) : [];
+    for (const [file] of [...files('ended'), [resolve(lease, 'log')], ...extra]) rmSync(file, { force: true });
+    try { rmdirSync(lease); } catch {}
   };
   // A launch whose supervisor has not said the server runs is ended through it: the keeper ends with its supervisor.
   // A launch in flight keeps the lease: its keeper, ending with its supervisor, may not yet have ended the server.
-  const off = whenEnded(() => { const launching = spawned && !spawnedGroup; if (launching) spawned.kill('SIGKILL'); const ending = leave(); for (const { file, group } of ending ?? []) try { killGroup(group); rmSync(file, { force: true }); } catch {} if (ending && !launching) clean(); });
+  const off = whenEnded(() => {
+    const launching = spawned && !spawnedGroup;
+    if (launching) spawned.kill('SIGKILL');
+    if (spawnedGroup && !recorded) try { killGroup(spawnedGroup); } catch {}
+    const ending = leave();
+    for (const { file, group } of ending ?? []) try { killGroup(group); rmSync(file, { force: true }); } catch {}
+    if (ending && !launching) clean();
+  });
   const stop = async () => {
     const ending = leave();
     for (const { file, group, server } of ending ?? []) {
@@ -488,11 +500,39 @@ export async function driveServer(dir, storage, say = (line) => console.error(li
     if (ending) clean();
   };
   // One drive starts the server at a time: another waits, then finds it answering.
+  const lockToken = `${process.pid}:${randomUUID()}`;
+  const releaseStarting = () => { if (readIn(lease, 'starting') === lockToken) rmSync(starting, { force: true }); };
+  const pidOf = (text) => Number(/^(\d+)(?::|$)/.exec((text ?? '').trim())?.[1] ?? 0);
   let locked = false;
-  for (let i = 0; i < 150 && !locked; i++) {
-    try { writeFileSync(starting, String(process.pid), { flag: 'wx' }); locked = true; }
-    catch { const owner = Number(readIn(lease, 'starting')); if (owner && !alive(owner)) rmSync(starting, { force: true }); else await Bun.sleep(100); }
-  }
+  const lockDeadline = Date.now() + lockTimeoutMs;
+  try {
+    for (let attempt = 0; !locked; attempt++) {
+      try { writeFileSync(starting, lockToken, { flag: 'wx' }); locked = true; }
+      catch (e) {
+        if (e.code !== 'EEXIST') throw e;
+        if (attempt > 0 && Date.now() >= lockDeadline) throw new Error(`agent: timed out waiting for the app server startup lock (${starting})`);
+        const seen = readIn(lease, 'starting');
+        if (seen === null) continue;
+        const owner = pidOf(seen);
+        if (owner && !alive(owner)) {
+          const takeover = `${starting}.takeover`;
+          let took = false;
+          try { writeFileSync(takeover, lockToken, { flag: 'wx' }); took = true; }
+          catch (te) { if (te.code !== 'EEXIST') throw te; }
+          if (took) {
+            try { if (readIn(lease, 'starting') === seen) rmSync(starting, { force: true }); }
+            finally { rmSync(takeover, { force: true }); }
+            continue;
+          }
+          const tSeen = readIn(lease, 'starting.takeover');
+          const tOwner = pidOf(tSeen);
+          if (tOwner && !alive(tOwner) && readIn(lease, 'starting.takeover') === tSeen) { rmSync(takeover, { force: true }); continue; }
+        }
+        if (Date.now() >= lockDeadline) throw new Error(`agent: timed out waiting for the app server startup lock (${starting})`);
+        await Bun.sleep(100);
+      }
+    }
+  } catch (e) { off(); rmSync(mine, { force: true }); throw e; }
   try {
     // A store asked empty cannot be emptied under a server another drive (or the builder) is using: refused, and this
     // drive's lease given up, never the database deleted or kept as it was.
@@ -521,12 +561,16 @@ export async function driveServer(dir, storage, say = (line) => console.error(li
     spawned = child;
     const failed = async (e) => {
       spawned = null;
-      if (locked) { rmSync(starting, { force: true }); locked = false; }
+      if (spawnedGroup && !recorded) { const group = spawnedGroup; spawnedGroup = null; await stopGroup(group, server); }
+      if (locked) { releaseStarting(); locked = false; }
       await stop(); throw e;
     };
     try { spawnedGroup = await launchedGroup(child); } catch (e) { await failed(e); }
     if (!spawnedGroup) await failed(new Error(`agent: ${await untilAnswers(server, child, () => lastError(readIn(lease, 'log') ?? ''), null)}`));
-    writeFileSync(resolve(lease, `server-${spawnedGroup.pid}`), JSON.stringify({ directory: realpathSync(dir), origin: server.url, db, token: child.token }));
+    try {
+      writeFileSync(resolve(lease, `server-${spawnedGroup.pid}`), JSON.stringify({ directory: realpathSync(dir), origin: server.url, db, token: child.token }));
+      recorded = true;
+    } catch (e) { await failed(e); }
     const why = await untilAnswers(server, child, () => lastError(readIn(lease, 'log') ?? ''), spawnedGroup);
     if (why) { await stop(); throw new Error(`agent: ${why}`); }
     if (server.fixture && !ownsServer(dir, server, spawnedGroup.pid, spawnedGroup)) {
@@ -535,7 +579,7 @@ export async function driveServer(dir, storage, say = (line) => console.error(li
     }
     say(`agent: started ${server.entry} at ${server.url} for this drive (${!db ? 'no database' : storage ? `database ${relative(dir, db)}, kept for --storage ${storage}` : 'an empty database'}); stopped after${server.note ? `; ${server.note}` : ''}`);
     return { stop };
-  } finally { if (locked) rmSync(starting, { force: true }); }
+  } finally { if (locked) releaseStarting(); }
 }
 
 /** `fn` with the app's server running on an empty database, as verify runs it: its exit code, or 1 when the server cannot

@@ -1,6 +1,7 @@
 # `keptProducts` misses nightly Cargo's two-level build-script output path, recording `env: []` for all web wasm leaf modules and failing open on cache lookups
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Read both stable <unit>/output and nightly <pkg>/<hash>/run/stdout build-script outputs via buildScriptOutput in keptProducts.
 **Systems:** Cross-worktree web wasm build cache
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -1,6 +1,7 @@
 # Unvalidated remote `sdk.upstream` passed to `git fetch` and `git diff` enables argument/command injection (and unvalidated `accepted.id` in authenticated URLs)
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Validate sdk.upstream as a 40/64-char lowercase hex commit hash before git calls and validate accepted.id as a safe single path segment before polling or downloading.
 **Systems:** Exact Build client (share)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

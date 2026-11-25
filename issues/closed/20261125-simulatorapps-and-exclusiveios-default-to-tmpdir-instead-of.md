@@ -1,6 +1,7 @@
 # `simulatorApps` and `exclusiveIOS` default to `tmpdir()` instead of `simulatorTempDirectory()`, breaking simulator app exclusion locks across processes with different `TMPDIR`s
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Default simulatorApps and exclusiveIOS lock directories to resolve(simulatorTempDirectory(), 'exact-ios-drives') matching simulatorDisplay.
 **Systems:** iOS simulator drive & install locking
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

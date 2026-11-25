@@ -1,6 +1,7 @@
 # difftest lowering/lowering-corpus/expansion exit 0 on emit failures and unread corpus scripts, and async.mjs ignores several difftest failure prefixes
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Fail lowering on Verdict::Emit and strict-mode Verdict::Refused, fail lowering-corpus and expansion on corpus script errors, and extract ACCOUNTING, UNDECODED, OPCODES, EXPAND, STRUCTURE, and SKIPPED emit lines in async.mjs.
 **Systems:** semantics/difftest, scripts/async.mjs
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

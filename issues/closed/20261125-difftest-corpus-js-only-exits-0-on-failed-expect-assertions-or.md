@@ -1,6 +1,7 @@
 # difftest corpus --js-only exits 0 on failed expect assertions or refused corpus programs, and async.mjs caches that run as a pass
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Fail difftest corpus --js-only on failed expectations and strict compiler refusals in js::report, and run failures() before Store.record() in async.mjs so exit-0 logs with failures are never cached as passes.
 **Systems:** semantics/difftest, scripts/async.mjs
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

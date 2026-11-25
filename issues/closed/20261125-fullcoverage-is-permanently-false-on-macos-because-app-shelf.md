@@ -1,6 +1,7 @@
 # fullCoverage() is permanently false on macOS because app:shelf:windows always exits 77, forcing hourly full runs even when idle
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Decouple daily full-sweep scheduling (hostFullCoverage/shouldRunFull/nextFullState) from cross-platform fullCoverage so structurally inapplicable other-OS or optional vm-extract exit-77 steps do not force hourly full runs.
 **Systems:** scripts/async.mjs, scripts/affected.mjs
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

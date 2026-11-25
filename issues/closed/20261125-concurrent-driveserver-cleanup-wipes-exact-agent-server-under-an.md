@@ -1,6 +1,7 @@
 # Concurrent `driveServer` cleanup wipes `.exact/agent-server` under an active drive (orphaning its server), while the `starting` lock swallows `ENOENT` and fails open
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Guard driveServer cleanup against live drive/starting files with non-recursive rmdirSync, stop unrecorded servers if writing server-<pid> fails, and fail closed with serialized stale-lock takeover on starting lock contention.
 **Systems:** Agent drive app server
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

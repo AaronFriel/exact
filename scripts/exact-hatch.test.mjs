@@ -86,6 +86,12 @@ test('exact hatch writes each target\'s stub, wires it in, and declares the word
     assert.equal(mine.todo.length, 2);
     assert.ok(mine.todo.some(line => line.includes('if element.hatch == .seal { sealHatch(element) }')));
     assert.equal(readFileSync(resolve(dir, 'modules/apple/Mine.swift'), 'utf8').includes('sealHatch'), false);
+    // A display name containing `*/` stays inside Kotlin's block comment without breaking out.
+    rmSync(resolve(dir, 'modules/android'), { recursive: true });
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'A */ B', app: { id: 'com.example.scratch', name: 'A */ B' }, host: { android: {} } }));
+    hatch(['safe-comment'], () => {});
+    const escapedKotlin = readFileSync(resolve(dir, 'modules/android/Hatches.kt'), 'utf8');
+    assert.ok(escapedKotlin.includes("* A * / B's hatches on Android."));
   } finally {
     if (was === undefined) delete process.env.EXACT_APP_DIR; else process.env.EXACT_APP_DIR = was;
     rmSync(dir, { recursive: true, force: true });

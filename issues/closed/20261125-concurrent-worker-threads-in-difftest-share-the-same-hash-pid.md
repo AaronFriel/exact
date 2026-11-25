@@ -1,6 +1,7 @@
 # Concurrent worker threads in difftest share the same <hash>.<pid>.tmp staging path in leanrun::run and leanrun::memo
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Stage difftest leanrun cache writes to atomic <pid>-<serial>.tmp paths using a process-wide AtomicU64 counter and remove failed temp files.
 **Systems:** semantics/difftest
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

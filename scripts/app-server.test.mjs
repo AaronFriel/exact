@@ -298,7 +298,7 @@ function stubServerRun(body) {
   const script = `
     import assert from 'node:assert/strict';
     import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-    import { resolve } from 'node:path';
+    import { resolve, toNamespacedPath } from 'node:path';
     import { spawnSync } from 'node:child_process';
     import { mock, spyOn } from 'bun:test';
     const dir = ${JSON.stringify(dir)}, scripts = ${JSON.stringify(import.meta.dir)};
@@ -1195,3 +1195,56 @@ test.each(['SIGTERM', 'exit'])('a throwing server cleanup cannot interrupt %s', 
     assert.equal(existsSync(resolve(dir, 'cleaned-after')),true,'later exit listeners still run');
   } finally {rmSync(dir,{recursive:true,force:true});}
 });
+
+test('driveServer stop preserves concurrent leases, kills unrecorded servers on write failure, and fails closed on starting lock errors', () => {
+  stubServerRun(`
+    delete manifest.server; save();
+    writeFileSync(resolve(dir, 'server.ts'), "import { writeFileSync } from 'node:fs';\\nprocess.on('SIGTERM', () => {});\\nwriteFileSync(process.env.DB, 'db');\\n" + serving);
+    const lease = resolve(dir, '.exact/agent-server');
+    const running = await driveServer(dir, null, () => {});
+    // While stopGroup awaits shutdown, a concurrent drive enters and writes its lease and starting lock.
+    const kill = process.kill.bind(process);
+    let injected = false;
+    const killSpy = spyOn(process, 'kill').mockImplementation((pid, signal) => {
+      if (!injected && signal === 'SIGTERM' && children[0] && pid === -groupOf(children[0])) {
+        injected = true;
+        writeFileSync(resolve(lease, 'drive-' + process.ppid), '');
+        writeFileSync(resolve(lease, 'starting'), process.ppid + ':peer');
+      }
+      return kill(pid, signal);
+    });
+    try { await running.stop(); } finally { killSpy.mockRestore(); }
+    assert.equal(existsSync(resolve(lease, 'drive-' + process.ppid)), true, 'live peer drive lease survives stop cleanup');
+    assert.equal(existsSync(resolve(lease, 'starting')), true, 'peer starting lock survives stop cleanup');
+    // A live starting lock fails closed on timeout instead of proceeding unlocked.
+    await assert.rejects(driveServer(dir, null, () => {}, { lockTimeoutMs: 120 }), /timed out waiting for the app server startup lock/);
+    assert.equal(existsSync(resolve(lease, 'drive-' + process.pid)), false, 'timed-out drive cleans its own drive lease');
+    assert.equal(readFileSync(resolve(lease, 'starting'), 'utf8'), process.ppid + ':peer', 'live peer starting lock is never unlinked');
+    // A dead owner's starting lock is reclaimed via takeover.
+    rmSync(resolve(lease, 'drive-' + process.ppid), { force: true });
+    writeFileSync(resolve(lease, 'starting'), '999999:dead');
+    rmSync(ready, { force: true });
+    const recovered = await driveServer(dir, null, () => {}, { lockTimeoutMs: 500 });
+    await recovered.stop();
+    assert.equal(existsSync(lease), false, 'clean stop removes empty lease directory');
+    // Non-EEXIST errors while taking the starting lock fail closed immediately without sleeping.
+    const fs = await import('node:fs'), writeReal = fs.writeFileSync;
+    let mode = 'starting-enoent';
+    mock.module('node:fs', () => ({ ...fs, writeFileSync: (path, data, opts) => {
+      if (mode === 'starting-enoent' && String(path).endsWith('/starting')) throw Object.assign(new Error('missing lease'), { code: 'ENOENT' });
+      if (mode === 'server-fail' && /\\/server-\\d+$/.test(String(path))) throw Object.assign(new Error('disk full'), { code: 'ENOSPC' });
+      return writeReal(path, data, opts);
+    } }));
+    const started = Date.now();
+    await assert.rejects(driveServer(dir, null, () => {}, { lockTimeoutMs: 5000 }), /missing lease/);
+    assert.ok(Date.now() - started < 2000, 'non-EEXIST fails immediately');
+    // A failure writing server-<pid> kills the spawned server instead of orphaning it.
+    rmSync(ready, { force: true });
+    mode = 'server-fail';
+    const before = children.length;
+    await assert.rejects(driveServer(dir, null, () => {}, { lockTimeoutMs: 500 }), /disk full/);
+    mode = 'none';
+    assert.equal(children.length, before + 1);
+    assert.equal(groupAlive(children.at(-1)), false, 'unrecorded server group is killed when server-<pid> write fails');
+  `);
+}, 30_000);

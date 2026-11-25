@@ -1,6 +1,7 @@
 # Unsanitized `app.json` `app.name` enables shell command injection in `exact install`'s `0755` PATH shim and path traversal in `exact release` and `exact appstore`
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Reject control characters in manifest app/variant names in app.schema.json, sanitize display names in shim and generated comments, and use appleExecutableName(app) for release and appstore artifacts.
 **Systems:** macOS install / release / appstore / shell generation
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

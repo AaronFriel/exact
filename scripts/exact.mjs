@@ -231,6 +231,7 @@ function developerID() {
  * keychain (`xcrun notarytool store-credentials`), and this passes the
  * profile's name; an app-specific password on a command line ends up in the
  * shell history and the process table. */
+export const releaseArtifacts = (app, out) => { const name = appleExecutableName(app); return { name, staged: resolve(out, `${name}.app`), symbols: resolve(out, `${name}.dSYM`), zip: resolve(out, `${name}.zip`), dmg: resolve(out, `${name}.dmg`) }; };
 function release(app) {
   const identity = developerID();
   if (!identity) {
@@ -246,10 +247,9 @@ function release(app) {
   const out = resolve(app.target, 'dist', app.name);
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  const staged = resolve(out, `${appleExecutableName(app)}.app`);
+  const { name: artifact, staged, symbols, zip, dmg } = releaseArtifacts(app, out);
   sh('/usr/bin/ditto', [bundle, staged]);
   // The production build already stripped the executable; keep its matching dSYM with the release.
-  const symbols = resolve(out, `${app.displayName}.dSYM`);
   sh('/usr/bin/ditto', [`${appleArtifacts(app, { trust: 'production' }).binary}.dSYM`, symbols]);
   console.log(`symbols: ${symbols}`);
   // Sign inside out, with the hardened runtime and a timestamp, which notarisation
@@ -262,7 +262,6 @@ function release(app) {
 
   // A zip is what notarytool takes for an app; ditto and not zip, which
   // mangles the bundle's symlinks and its signature.
-  const zip = resolve(out, `${app.displayName}.zip`);
   sh('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', staged, zip]);
 
   const notarise = (artifact, label) => {
@@ -285,13 +284,13 @@ function release(app) {
   notarise(zip, app.displayName);
   // Staple the ticket into the app, then sign, notarise and staple the DMG (LLP 1156.007 §5.1).
   sh('xcrun', ['stapler', 'staple', staged]);
-  const dmg = resolve(out, `${app.displayName}.dmg`), image = mkdtempSync(resolve(out, '.dmg-'));
-  sh('/usr/bin/ditto', [staged, resolve(image, `${appleExecutableName(app)}.app`)]);
+  const image = mkdtempSync(resolve(out, '.dmg-'));
+  sh('/usr/bin/ditto', [staged, resolve(image, `${artifact}.app`)]);
   symlinkSync('/Applications', resolve(image, 'Applications'));
   sh('hdiutil', ['create', '-volname', app.displayName, '-srcfolder', image, '-ov', '-format', 'UDZO', '-quiet', dmg]);
   rmSync(image, { recursive: true, force: true });
   sh('codesign', ['--force', '--sign', identity, '--timestamp', dmg]);
-  notarise(dmg, `${app.displayName}.dmg`);
+  notarise(dmg, `${artifact}.dmg`);
   sh('xcrun', ['stapler', 'staple', dmg]);
   // The zip carries no ticket of its own; rebuild it from the stapled app.
   rmSync(zip, { force: true });
@@ -924,7 +923,7 @@ export function hatch(args, say = console.log) {
   if (scope === 'element' && !/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$/.test(word ?? '')) throw new Error('hatch: name a word, lowercase letters and digits joined by "-" (exact hatch avatar), or --app, or --window');
   const app = resolveApp(names[0]), dir = app.dir, manifestPath = resolve(dir, 'app.json');
   const manifest = existsSync(manifestPath) ? app.manifest : {};
-  const title = manifest.app?.name ?? manifest.name ?? app.name;
+  const title = String(manifest.app?.name ?? manifest.name ?? app.name).replace(/[\r\n\u2028\u2029]+/g, ' ');
   const camel = (word ?? scope).replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase()), Camel = camel[0].toUpperCase() + camel.slice(1);
   const wrote = [], todo = [];
   const write = (path, text) => { if (existsSync(path)) return false; mkdirSync(resolve(path, '..'), { recursive: true }); writeFileSync(path, text); wrote.push(path); return true; };
@@ -1169,7 +1168,7 @@ import dev.exact.canvas.ExactApp
 import dev.exact.canvas.ExactElement
 import dev.exact.canvas.ExactHatches
 /**
- * ${title}'s hatches on Android. Written by \`exact hatch\`; yours from here. Called on the main thread. A node is
+ * ${title.replaceAll('*/', '* /')}'s hatches on Android. Written by \`exact hatch\`; yours from here. Called on the main thread. A node is
  * painted by exact2: a hatch has its box and words, acts on it as a person would (click, focus, blur, input), hears
  * its input (observe), shows a view of its own in its box (host), and keeps time by exact2's clock (frames, after).
  */

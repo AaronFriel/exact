@@ -779,7 +779,7 @@ export function patternFiles(pattern, { id, title }) {
     if (!entry.isFile() || entry.name === 'pattern.json' || entry.name === 'app.contract.d.ts') continue;
     const path = relative(dir, resolve(entry.parentPath, entry.name));
     let text = readFileSync(resolve(dir, path), 'utf8').replaceAll('com.example.starter', id);
-    if (path.endsWith('.contract')) text = text.replaceAll('"Starter"', `"${quoted}"`).replace(/^\/\/ Starter: /, `// ${title}: `);
+    if (path.endsWith('.contract')) text = text.replaceAll('"Starter"', `"${quoted}"`).replace(/^\/\/ Starter: /, `// ${String(title).replace(/[\r\n\u2028\u2029]+/g, ' ')}: `);
     files[path] = text;
   }
   const keys = existsSync(resolve(dir, 'pattern.json')) ? JSON.parse(readFileSync(resolve(dir, 'pattern.json'), 'utf8')) : {};
