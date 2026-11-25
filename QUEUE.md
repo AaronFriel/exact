@@ -2111,3 +2111,6 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - The first Apple release build of a variant compiles unchanged dependencies into its own Cargo directory. Build the base release, build a new variant, and compare Cargo’s compilation lists. Development builds can reuse the machine’s crate cache (#1590).
 - A caller holding an old manifest can undo a platform addition in the generated workspace. Resolve a Mac variant, add Linux with `namePlatform`, run `ensureShells(dir)`, then pass the saved manifest to `ensureShells`. The last call removes the Linux crate (#1590).
 - For #1582, verify the Windows.Graphics.Capture texture's extent and desktop frame, cursor and first usable frame on a real Windows desktop with overlapping windows and mixed DPI. Enable the window lookups and targeted stills once clicks map to the saved pixels.
+
+- iPad directory inference (LLP 1127 D19). A list with `grid-template-columns="repeat(auto-fill, minmax(160px, 1fr))"` has one column at 200 points and several at 800. Both report zero width before the first layout. Decide at the width the person will see.
+- iPad directory inference (LLP 1127 D19). Distinguish a dashboard's short list below its statistics from a settings directory with a heading, search and two buttons above its scrolling list. The initial tree does not give their laid-out sizes.
