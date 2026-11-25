@@ -850,13 +850,14 @@ export function jvmOptions(value = '', name = 'the JVM options') {
 async function gradleWithAdvice(command, args, advice) {
   const { spawn } = await import('node:child_process');
   const child = spawn(command, args, { stdio: ['inherit', 'pipe', 'pipe'] });
-  let dependencyFailure = false;
+  let dependencyFailure = false, namedRepair = false;
   for (const [source, destination] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
     let tail = '';
     source.on('data', chunk => {
       destination.write(chunk);
-      const text = tail + chunk.toString('utf8');
-      dependencyFailure ||= /dependency verification failed|dependency lock state|strict dependency locking/i.test(text.replace(/\x1b\[[0-9;]*m/g, ''));
+      const text = (tail + chunk.toString('utf8')).replace(/\x1b\[[0-9;]*m/g, '');
+      namedRepair ||= /Gradle lock lowers shell dependency/i.test(text);
+      dependencyFailure ||= /dependency verification failed|dependency lock state|strict dependency locking/i.test(text);
       tail = text.slice(-256);
     });
   }
@@ -864,7 +865,7 @@ async function gradleWithAdvice(command, args, advice) {
     child.once('error', error => { console.error(`could not start Gradle (${command}): ${error.message}`); resolve({ code: 1 }); });
     child.once('close', (code, signal) => resolve({ code, signal }));
   });
-  if (result.code && dependencyFailure) console.error(advice);
+  if (result.code && dependencyFailure && !namedRepair) console.error(advice);
   if (result.signal) process.kill(process.pid, result.signal);
   else process.exitCode = result.code ?? 1;
 }
@@ -1177,7 +1178,6 @@ function assembleApk(app, env, profile, writeLocks, bundle, abis, dirs) {
   // The token names its hatches read (LLP 1121 D12), beside them in the build.
   if (existsSync(resolve(app.dir, 'modules/android'))) writeFormaNames(app, 'kotlin');
   const graph = mavenGraph(app, writeLocks, maven, env);
-  if (!graph) return null;
   let assembled;
   try {
     // Without file watching Gradle reads its inputs to decide what is up to date; a watcher that missed an edit
@@ -1259,7 +1259,7 @@ function mavenGraph(app, writeLocks, maven, env) {
   if (existsSync(checksums)) copyFileSync(checksums, placed);
   const home = writeLocks ? coldGradleHome(env) : null;
   return {
-    args: [`-Pmaven=${maven.join(',')}`, `-PmavenLock=${lock}`, ...(writeLocks ? ['--write-locks', '--write-verification-metadata', 'sha256'] : ['--dependency-verification=strict'])],
+    args: [`-Pmaven=${maven.join(',')}`, `-PmavenLock=${lock}`, `-PandroidLockCommand=${androidLockCommand(app)}`, ...(writeLocks ? ['--write-locks', '--write-verification-metadata', 'sha256'] : ['--dependency-verification=strict'])],
     env: home ? { GRADLE_USER_HOME: home } : {},
     kept() { if (writeLocks && existsSync(placed)) copyFileSync(placed, checksums); },
     done() { rmSync(placed, { force: true }); if (home) rmSync(home, { recursive: true, force: true }); },
