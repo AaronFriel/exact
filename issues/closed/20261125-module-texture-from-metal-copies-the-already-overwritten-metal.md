@@ -1,6 +1,7 @@
 # Module::texture_from_metal copies the already-overwritten Metal texture into previous, breaking Composite { previous: true } crossfades on iOS and tvOS
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Added Module::prepare_texture_metal (gpu_prepare_texture_metal) to snapshot previous children and wait for GPU reads before Shadow.renderTexture overwrites the shared MTLTexture, and removed the post-overwrite copy from texture_from_metal.
 **Systems:** gpu / Apple (iOS & tvOS Metal)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -1,6 +1,7 @@
 # FrameUniform::RING (4) is smaller than Android's 5-image Vulkan swapchain (and unsynchronized across Scratch retries), causing a CPU-GPU uniform data race
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Sized FrameUniform::RING to FRAME_LATENCY + 2, added COPY_DST to Vulkan mapped buffers, and gated in-place writes on per-slot on_submitted_work_done completion with non-blocking queue.write_buffer fallback.
 **Systems:** gpu / Vulkan (Android) & Metal
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

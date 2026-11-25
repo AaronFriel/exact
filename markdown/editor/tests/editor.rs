@@ -1265,3 +1265,60 @@ fn undo_steps_keep_the_hosts_words() {
         ("A\nB\nC".into(), Some(String::new()))
     );
 }
+
+#[test]
+fn toggling_format_off_at_sticky_caret_after_nested_same_kind_splits_outer_without_panicking() {
+    // All trigger sequences from C144: typing a closer inside an outer
+    // construct of the same kind leaves a sticky caret at inner.outer.end;
+    // toggling the outer format off and typing must not panic.
+    for (initial, caret, typed_closer, command) in [
+        ("**a **b c**", 7, "**", "bold"),
+        ("__a __b c__", 7, "__", "bold"),
+        ("*a *b c*", 5, "*", "italic"),
+        ("_a _b c_", 5, "_", "italic"),
+        ("~~a ~~b c~~", 7, "~~", "strike"),
+    ] {
+        let mut p = Page::open(initial);
+        p.caret(caret);
+        p.type_(typed_closer);
+        assert!(
+            p.e.facts().formats.split(' ').any(|f| f == command),
+            "{initial}: outer {command} should be active at sticky caret"
+        );
+        p.tool(command);
+        assert!(
+            !p.e.facts().formats.split(' ').any(|f| f == command),
+            "{initial}: {command} should be toggled off"
+        );
+        p.type_("x");
+        assert!(p.source().contains('x'), "{initial}: {}", p.source());
+        p.tool("undo");
+        assert_eq!(
+            p.source(),
+            initial,
+            "{initial}: undo restores initial source"
+        );
+    }
+
+    // Where CommonMark permits the split closer (separated from the typed word
+    // by whitespace), the outer construct splits cleanly and leaves the new
+    // text outside the format.
+    for (initial, caret, typed_closer, command, expected_source) in [
+        ("**a **b c**", 7, "**", "bold", "**a **b**** x **c**"),
+        ("__a __b c__", 7, "__", "bold", "__a __b____ x __c__"),
+        ("*a *b c*", 5, "*", "italic", "*a *b** x *c*"),
+        ("_a _b c_", 5, "_", "italic", "_a _b__ x _c_"),
+    ] {
+        let mut p = Page::open(initial);
+        p.caret(caret);
+        p.type_(typed_closer);
+        p.tool(command);
+        p.type_(" x");
+        assert_eq!(p.source(), expected_source, "{initial}");
+        assert_eq!(p.e.visible_text(), "a b x c", "{initial}");
+        assert!(
+            !p.e.facts().formats.split(' ').any(|f| f == command),
+            "{initial}: typed plain text should stay outside {command}"
+        );
+    }
+}

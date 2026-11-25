@@ -199,10 +199,21 @@ fn code_span(content: &str, ticks: usize, padded: bool) -> (String, String) {
 
 fn inline(source: &str, sel: B, kind: u8, marker: &str) -> Draft {
     let analysis = analyze(source, None);
+    // Match `selection()` for a collapsed caret so a caret on or after a nested
+    // construct's closing delimiter resolves to the enclosing construct rather
+    // than the finished inner one. Non-empty selections still match outer bounds
+    // so selecting a construct with its delimiters unwraps it.
     let inside = analysis
         .constructs
         .iter()
-        .filter(|c| c.kind == kind && c.outer.start <= sel.start && sel.end <= c.outer.end)
+        .filter(|c| {
+            c.kind == kind
+                && if sel.is_empty() {
+                    c.inner.start <= sel.start && sel.end <= c.inner.end
+                } else {
+                    c.outer.start <= sel.start && sel.end <= c.outer.end
+                }
+        })
         .min_by_key(|c| c.outer.len());
     if let Some(c) = inside {
         return Draft {

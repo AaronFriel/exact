@@ -1,6 +1,7 @@
 # Module::render omits CurrentSurfaceTexture::Outdated, turning recoverable Vulkan swapchain invalidation into a permanent surface error
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Handled CurrentSurfaceTexture::Outdated alongside Suboptimal in Module::render by draining acquisition, reconfiguring the surface, and requesting another frame.
 **Systems:** gpu / Vulkan (Android, Linux, Windows)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

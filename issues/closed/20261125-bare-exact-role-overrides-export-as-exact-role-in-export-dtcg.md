@@ -1,6 +1,7 @@
 # Bare Exact role overrides export as -exact-<role> in export::dtcg and unconditionally fail export::reimport (sibling export_dials::marks drops pin tracking)
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Indexed canonical role names and role spellings alongside declared names in export::reimport_within and export_dials::marks so bare Exact role overrides round-trip through DTCG export/reimport and retain pin tracking.
 **Systems:** forma / DTCG export & reimport (CLI and forma-server)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

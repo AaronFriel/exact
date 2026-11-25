@@ -1,6 +1,7 @@
 # Unconditional slice panic (markup-editor.wasm trap) in Editor::insert_pending when toggling a format off at a sticky caret after a nested construct of the same kind
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Aligned collapsed-selection construct lookup in md::edit::inline with md::selection's inner bounds and guarded Editor::insert_pending against out-of-range opener/closer slices.
 **Systems:** markdown / WYSIWYG Markdown editor (Web WASM & native)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

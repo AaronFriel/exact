@@ -531,10 +531,12 @@ final class CanvasesHost {
         }
         let t0 = CACurrentMediaTime()
         let w: UInt32, h: UInt32, len: Int, r: UInt32, t1: Double
-        // The texture about to be drawn into may be the one the module is
-        // reading (its last frame; its copy into the previous children):
-        // its work first.
-        if m.lossGeneration == 0, !Capture.cpu, m.textureMetal != nil, Shadow.shared != nil, let sync = m.sync { _ = sync() }
+        // Snapshot the current children texture into `previous` (if retained)
+        // and wait for GPU reads before overwriting the shared Metal texture.
+        if m.lossGeneration == 0, !Capture.cpu, m.textureMetal != nil, Shadow.shared != nil {
+            if let prepare = m.prepareTextureMetal { _ = prepare(e.id) }
+            else if let sync = m.sync { _ = sync() }
+        }
         if m.lossGeneration == 0, !Capture.cpu, let hand = m.textureMetal, let shadow = Shadow.shared, let texture = shadow.renderTexture(overlay, scale: scale) {
             // Zero-copy (LLP 1008 §9): the module samples the texture the
             // renderer drew, as it is.

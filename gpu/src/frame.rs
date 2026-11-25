@@ -254,10 +254,9 @@ impl Module {
             let current = target.get_current_texture();
             current
         };
-        let texture = match current {
-            Current::Success(t) => t,
-            Current::Suboptimal(t) => {
-                drop(t);
+        let texture = match classify_current(current) {
+            AcquireOutcome::Present(t) => t,
+            AcquireOutcome::Reconfigure => {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     inst.acquire.reconfigure();
@@ -265,14 +264,13 @@ impl Module {
                 crate::swapchains(|| target.configure(&gpu.device, config));
                 return Some(true);
             }
-            // Nothing to draw into this frame; the inputs stay dirty.
-            Current::Timeout | Current::Occluded => return Some(true),
-            Current::Lost => {
+            AcquireOutcome::Skip => return Some(true),
+            AcquireOutcome::Lost => {
                 self.lose_device();
                 return None;
             }
-            other => {
-                self.error = format!("surface: {other:?}");
+            AcquireOutcome::Error(error) => {
+                self.error = error;
                 return None;
             }
         };
@@ -649,6 +647,32 @@ impl Module {
     }
 }
 
+/// Outcome of acquiring a frame's drawable in [`Module::render`].
+#[derive(Debug, PartialEq, Eq)]
+enum AcquireOutcome<T> {
+    Present(T),
+    Reconfigure,
+    Skip,
+    Lost,
+    Error(String),
+}
+
+fn classify_current(current: wgpu::CurrentSurfaceTexture) -> AcquireOutcome<wgpu::SurfaceTexture> {
+    use wgpu::CurrentSurfaceTexture as Current;
+    match current {
+        Current::Success(t) => AcquireOutcome::Present(t),
+        Current::Suboptimal(t) => {
+            drop(t);
+            AcquireOutcome::Reconfigure
+        }
+        Current::Outdated => AcquireOutcome::Reconfigure,
+        // Nothing to draw into this frame; the inputs stay dirty.
+        Current::Timeout | Current::Occluded => AcquireOutcome::Skip,
+        Current::Lost => AcquireOutcome::Lost,
+        other => AcquireOutcome::Error(format!("surface: {other:?}")),
+    }
+}
+
 /// Renders after which a canvas that has stopped retrying gives back its
 /// [`Scratch`]: about a second of frames. A surface that holds every other
 /// frame never goes this long without a retry.
@@ -1012,5 +1036,79 @@ mod scene_tests {
             gpu.queue.submit([encoder.finish()]);
             assert_eq!(fixture::read(&gpu, &texture).unwrap().at(2, 2), expected);
         }
+    }
+
+    #[test]
+    fn classify_current_reconfigures_on_outdated() {
+        use wgpu::CurrentSurfaceTexture as Current;
+        assert_eq!(
+            classify_current(Current::Outdated),
+            AcquireOutcome::Reconfigure
+        );
+        assert_eq!(classify_current(Current::Timeout), AcquireOutcome::Skip);
+        assert_eq!(classify_current(Current::Occluded), AcquireOutcome::Skip);
+        assert_eq!(classify_current(Current::Lost), AcquireOutcome::Lost);
+        assert!(matches!(
+            classify_current(Current::Validation),
+            AcquireOutcome::Error(_)
+        ));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn outdated_surface_reconfigures_and_recovers_on_next_render() {
+        let Some(gpu) = fixture::device_or_skip(fixture::device()) else {
+            return;
+        };
+        static REGISTRY: crate::Registry = crate::Registry {
+            surfaces: &[("layer", 0, || Box::new(Layer(false)))],
+            shaders: &[],
+        };
+        let mut m = Module::new(&REGISTRY);
+        m.set_seekable(true);
+        m.set_gpu(gpu);
+        // SAFETY: a new CAMetalLayer retained past the module.
+        let layer: objc2::rc::Retained<objc2::runtime::AnyObject> =
+            unsafe { objc2::msg_send![objc2::class!(CAMetalLayer), new] };
+        let ptr = objc2::rc::Retained::as_ptr(&layer) as *mut std::ffi::c_void;
+        // SAFETY: `layer` outlives `m`.
+        let target = unsafe {
+            m.gpu()
+                .unwrap()
+                .instance
+                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(ptr))
+        }
+        .unwrap();
+        let id = m.create("layer", target, 8, 8).expect("create");
+        assert!(m.bind(id, &[], None));
+        m.instances
+            .get_mut(&id)
+            .unwrap()
+            .acquire
+            .inject(wgpu::CurrentSurfaceTexture::Outdated);
+        let frame = Frame {
+            width: 8.,
+            height: 8.,
+            scale: 1.,
+            now_ms: 0.,
+            seekable: true,
+            period_ms: 0.,
+            children_generation: 0,
+            shader_generation: 0,
+            headroom: 1.,
+        };
+        assert_eq!(
+            m.render(id, &frame),
+            Some(true),
+            "Outdated must reconfigure and ask for another frame"
+        );
+        assert_eq!(m.take_error(), "");
+        assert!(m.has_device(id));
+        assert_eq!(m.render(id, &frame), Some(false));
+        assert!(m.flush());
+        assert!(m.sync());
+        assert_eq!(m.take_error(), "");
+        drop(m);
+        drop(layer);
     }
 }

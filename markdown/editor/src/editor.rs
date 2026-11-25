@@ -1301,32 +1301,32 @@ impl Editor {
                 place = c.1;
                 stick = true;
             } else if let Some(edit) = self.edit(format.name(), "", (p, p)) {
-                if let [(oa, ob, _), (ca, cb, _)] = edit.reps.as_slice() {
-                    // Close before whitespace and reopen after it: a marker
-                    // beside the gap cannot close or open CommonMark emphasis.
-                    let left = if format == Format::Code {
-                        p
-                    } else {
-                        (trimmed(&self.source[..p as usize]) as u32).max(*ob)
-                    };
-                    let tail = &self.source[p as usize..*ca as usize];
-                    let right = if format == Format::Code {
-                        p
-                    } else {
-                        p + (tail.len() - utf16(utf8(tail).trim_start()).len()) as u32
-                    };
-                    let closer = &self.source[*ca as usize..*cb as usize];
-                    let opener = &self.source[*oa as usize..*ob as usize];
-                    if left == p {
-                        open.splice(0..0, closer.iter().copied());
-                    } else {
-                        before.push((left, left, closer.to_vec()));
+                match edit.reps.as_slice() {
+                    [(oa, ob, _), (ca, cb, _)] if (*ob..=*ca).contains(&p) => {
+                        // Close before whitespace and reopen after it (CommonMark).
+                        let tail = &self.source[p as usize..*ca as usize];
+                        let (left, right) = if format == Format::Code {
+                            (p, p)
+                        } else {
+                            (
+                                (trimmed(&self.source[..p as usize]) as u32).max(*ob),
+                                p + (tail.len() - utf16(utf8(tail).trim_start()).len()) as u32,
+                            )
+                        };
+                        let closer = &self.source[*ca as usize..*cb as usize];
+                        let opener = &self.source[*oa as usize..*ob as usize];
+                        if left == p {
+                            open.splice(0..0, closer.iter().copied());
+                        } else {
+                            before.push((left, left, closer.to_vec()));
+                        }
+                        if right == p {
+                            close.extend_from_slice(opener);
+                        } else {
+                            after.push((right, right, opener.to_vec()));
+                        }
                     }
-                    if right == p {
-                        close.extend_from_slice(opener);
-                    } else {
-                        after.push((right, right, opener.to_vec()));
-                    }
+                    _ => {}
                 }
             }
         }

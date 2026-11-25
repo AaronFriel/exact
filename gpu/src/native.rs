@@ -569,6 +569,16 @@ pub fn sync() -> u32 {
     }
 }
 
+/// Snapshot `id`'s retained Metal children texture into `previous` and wait
+/// for GPU reads to finish before the host overwrites it (LLP 1008 §9). 0 on success.
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "tvos"))]
+pub fn prepare_texture_metal(id: u32) -> u32 {
+    match with(|m| m.prepare_texture_metal(id)) {
+        Some(true) => 0,
+        _ => 1,
+    }
+}
+
 /// The canvas's children as a Metal texture the host rendered, imported as
 /// it is (LLP 1008 §9). 0 on success.
 ///
@@ -1137,6 +1147,14 @@ macro_rules! module {
         #[no_mangle]
         pub extern "C" fn gpu_sync() -> u32 {
             $crate::native::sync()
+        }
+
+        /// Snapshot `id`'s retained Metal children texture into `previous` and
+        /// wait for GPU reads to complete before overwriting it (LLP 1008 §9).
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "tvos"))]
+        #[no_mangle]
+        pub extern "C" fn gpu_prepare_texture_metal(id: u32) -> u32 {
+            $crate::native::prepare_texture_metal(id)
         }
 
         /// The canvas's children as a Metal texture the host rendered (LLP

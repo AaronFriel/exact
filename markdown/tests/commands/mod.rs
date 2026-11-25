@@ -227,6 +227,11 @@ fn inline_commands_toggle() {
     );
     assert_eq!(run("make **th|is** bold", Command::Bold), "make th|is bold");
     assert_eq!(
+        run("**a **b**| c**", Command::Bold),
+        "a **b**| c",
+        "collapsed caret after nested closer targets the enclosing construct"
+    );
+    assert_eq!(
         run("make **|this|** bold", Command::Bold),
         "make |this| bold"
     );

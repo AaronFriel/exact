@@ -298,6 +298,9 @@ final class GpuModule {
     /// The children as a Metal texture the presenter rendered, imported as it
     /// is (LLP 1008 §9) — when the module exports it (Apple targets).
     let textureMetal: TextureMetalFn?
+    /// Snapshot a canvas's Metal children texture into `previous` and wait for
+    /// GPU reads to complete before overwriting it in place (LLP 1008 §9).
+    var prepareTextureMetal: WantsFn?
     /// The module's GPU work complete — before a texture it read is drawn
     /// into again.
     let sync: SyncFn?
@@ -348,6 +351,7 @@ final class GpuModule {
         }
         let module = GpuModule(create: create, bind: bind, render: render, dirty: dirty, destroy: destroy, texture: texture, textureMetal: sym("gpu_texture_metal", TextureMetalFn.self), sync: sym("gpu_sync", SyncFn.self), childrenMode: childrenMode, readback: readback, child: child, childrenCount: childrenCount, placement: placement, shader: sym("gpu_shader", ShaderFn.self), validateShader: sym("gpu_shader_validate", ShaderFn.self), clearShaders: sym("gpu_shaders_clear", ClearShadersFn.self), errorLen: errorLen, errorPtr: errorPtr, wantsInput: sym("gpu_wants_input", WantsFn.self), input: sym("gpu_input", BindFn.self), messages: sym("gpu_messages", WantsFn.self), published: sym("gpu_published", WantsFn.self), agent: sym("gpu_agent", BindFn.self), outPtr: sym("gpu_out_ptr", ErrorPtrFn.self))
         module.performanceReporting = sym("gpu_performance_reporting", PerformanceReportingFn.self)
+        module.prepareTextureMetal = sym("gpu_prepare_texture_metal", WantsFn.self)
         module.storage = storage
         module.performance = sym("gpu_performance", PerformanceFn.self)
         module.flushFn = flush
