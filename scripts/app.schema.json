@@ -763,8 +763,7 @@
       "additionalProperties": false
     },
     "host": {
-      "description": "Per-platform host settings the build bakes into each native app; a platform's key may be empty.",
-      "type": "object",
+      "type": "object", "description": "Per-platform host settings the build bakes into each native app; a platform's key may be empty.",
       "properties": {
         "ios": {
           "description": "iOS: `minimumOS` (default 17.0), `deviceFamily` (iphone, ipad), and the keys below.",
@@ -813,11 +812,11 @@
             },
             "minimumOS": {"description": "The oldest iOS the app runs on, as \"17.0\"; never below 17.0.", "type": "string"},
             "launchImage": {
-              "description": "A picture the launch screen centres on `background_color` (UILaunchScreen's UIImageName), drawn `width` points wide: the app's first frame drawn ahead of it, so the launch shows what the first frame shows (Expo's splash `image` and `imageWidth`). A PNG in the app's directory; light and dark alike.",
+              "description": "A picture the launch screen centres on `background_color` (UILaunchScreen's UIImageName), drawn `width` points wide: the app's first frame drawn ahead of it, so the launch shows what the first frame shows (Expo's splash `image` and `imageWidth`). A PNG in the app's directory; the same picture in both appearances unless color_scheme_dark.src names another.",
               "type": "object",
               "required": ["src", "width"],
               "additionalProperties": false,
-              "properties": {"src": {"type": "string", "pattern": "\\.png$", "description": "The PNG, relative to the app's directory."}, "width": {"type": "number", "minimum": 1, "description": "Its width on the launch screen, in points; its height follows its aspect."}}
+              "properties": {"color_scheme_dark": {"$ref": "#/$defs/darkLaunchImage"}, "src": {"type": "string", "pattern": "\\.png$", "description": "The PNG, relative to the app's directory."}, "width": {"type": "number", "minimum": 1, "description": "Its width on the launch screen, in points; its height follows its aspect."}}
             },
             "optimize": {
               "enum": ["speed", "size", "balanced"],
@@ -997,12 +996,13 @@
               "enum": ["10", "11", "12", "13", "14", "15", "16"]
             },
             "launchImage": {
-              "description": "What Android 12's starting window shows on `background_color` (or the platform's surface without one) in place of the launcher icon, which it shows unsaid. A picture (iOS's `host.ios.launchImage`; Expo's splash `image` and `imageWidth`) is that icon, `width` dp wide, which the platform shows within a centred square 192 dp across and, on stock Android, cuts to the circle in it; before Android 12, whose launch window has no icon, it is centred on the window's background. `false` shows no icon. A PNG in the app's directory; light and dark alike. Changing it requires a new native build.",
+              "description": "What Android 12's starting window shows on `background_color` (or the platform's surface without one) in place of the launcher icon, which it shows unsaid. A picture (iOS's `host.ios.launchImage`; Expo's splash `image` and `imageWidth`) is that icon, `width` dp wide, which the platform shows within a centred square 192 dp across and, on stock Android, cuts to the circle in it; before Android 12, whose launch window has no icon, it is centred on the window's background. `false` shows no icon. A PNG in the app's directory; the same picture in both appearances unless color_scheme_dark.src names another. Changing it requires a new native build.",
               "type": ["object", "boolean"],
               "required": ["src", "width"],
               "additionalProperties": false,
               "properties": {
                 "src": { "type": "string", "pattern": "\\.png$", "description": "The PNG, relative to the app's directory." },
+                "color_scheme_dark": { "$ref": "#/$defs/darkLaunchImage" },
                 "width": { "type": "number", "minimum": 1, "maximum": 192, "description": "Its width in the launch window, in dp, up to the icon's 192; its height follows its aspect." }
               }
             },
@@ -1369,6 +1369,7 @@
   "additionalProperties": false,
   "$defs": {
     "plistValue": {"description": "A property-list value: a string, number, boolean, array or dictionary.", "type": ["string", "number", "boolean", "array", "object"], "items": {"$ref": "#/$defs/plistValue"}, "additionalProperties": {"$ref": "#/$defs/plistValue"}},
+    "darkLaunchImage": {"type": "object", "required": ["src"], "additionalProperties": false, "properties": {"src": {"type": "string", "description": "The dark PNG, relative to the app directory.", "pattern": "\\.png$"}}},
     "launchColour": {
       "type": "string",
       "pattern": "^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|color\\(\\s*display-p3(\\s+(0(\\.\\d+)?|\\.\\d+|1(\\.0+)?|(\\d{1,2}(\\.\\d+)?|100(\\.0+)?)%)){3}\\s*(/\\s*(0(\\.\\d+)?|\\.\\d+|1(\\.0+)?|(\\d{1,2}(\\.\\d+)?|100(\\.0+)?)%)\\s*)?\\))$",

@@ -961,8 +961,8 @@ test('a launch colour of a host\'s own or Expo\'s splash is refused for backgrou
 test('host.android.launchImage takes a PNG in the app up to the starting window\'s 192 dp icon, or false', async () => {
   const { readManifest, nativeManifestMetadata } = await import('./app.mjs');
   const dir = mkdtempSync(resolve(tmpdir(), 'manifest-launch-image-'));
-  const read = (launchImage) => {
-    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'Launch', app: { id: 'dev.exact.launch', name: 'Launch' }, background_color: '#B50000', host: { android: { launchImage } } }));
+  const read = (launchImage, platform = 'android') => {
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'Launch', app: { id: 'dev.exact.launch', name: 'Launch' }, background_color: '#B50000', host: { [platform]: { launchImage } } }));
     return readManifest(dir, 'launch');
   };
   try {
@@ -970,6 +970,20 @@ test('host.android.launchImage takes a PNG in the app up to the starting window\
     const manifest = read({ src: 'logo.png', width: 192 });
     // A native input: the Android binary's record names it, so an update cannot change it.
     assert.deepEqual(nativeManifestMetadata(manifest, 'android').host.launchImage, { src: 'logo.png', width: 192 });
+    for (const host of ['ios', 'android']) {
+      const launch = { src: 'logo.png', width: 128, color_scheme_dark: { src: 'night.png' } };
+      assert.throws(() => read(launch, host), /launchImage.color_scheme_dark: night.png.*does not exist/);
+      assert.throws(() => read({ ...launch, color_scheme_dark: { src: '../outside.png' } }, host), /inside the app directory/);
+      mkdirSync(resolve(dir, 'night.png'));
+      assert.throws(() => read(launch, host), /must be a PNG file/);
+      rmSync(resolve(dir, 'night.png'), { recursive: true });
+      writeFileSync(resolve(dir, 'night.png'), 'png');
+      const declared = read(launch, host);
+      assert.deepEqual(declared.host[host].launchImage, launch);
+      assert.deepEqual(nativeManifestMetadata(declared, host).host.launchImage, launch);
+      assert.throws(() => read({ ...launch, color_scheme_dark: { src: 'night.png', width: 20 } }, host), /color_scheme_dark.width/);
+      rmSync(resolve(dir, 'night.png'));
+    }
     assert.equal(read(false).host.android.launchImage, false);
     assert.throws(() => read(true), /host\.android\.launchImage: true is not a picture/);
     assert.throws(() => read({ src: 'logo.png', width: 200 }), /host\.android\.launchImage\.width: outside the allowed numeric range/);

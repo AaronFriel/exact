@@ -600,20 +600,25 @@ import { webManifestAtBase, webCspProblems, webHeadProblems } from './web-head.m
 import { appIconProblems, publishedIcons } from './app-icons.mjs';
 import { claimVariant, resolveVariant, selectedVariant, variantProblems } from './variants.mjs';
 import { REMOVED_DOMAINS, appleLinkDomains, androidLinkFilters, linkProblems, protocolHandlerProblems, isWebScheme, rawAppleDomains } from './links.mjs';
-export { DOCUMENT_UTIS, ownDocumentType };
-;
+export { DOCUMENT_UTIS, isWebScheme, ownDocumentType };
 
-// The launch screen's picture must be there; refused when any build reads the manifest, as the
-// icons (scripts/app-icons.mjs) and the file types are. Android's may also be `false`, never `true`.
+// Check both launch pictures wherever a build reads the manifest.
 function launchImageProblems(manifest, dir) {
   return ['ios', 'android'].flatMap((host) => {
     const launch = manifest.host?.[host]?.launchImage;
     if (launch === true) return [`host.${host}.launchImage: true is not a picture; false shows no icon, { "src", "width" } a picture`];
-    return launch?.src && !existsSync(resolve(dir, launch.src)) ? [`host.${host}.launchImage: ${launch.src}, the launch screen's picture, does not exist`] : [];
+    if (launch?.src && !existsSync(resolve(dir, launch.src))) return [`host.${host}.launchImage: ${launch.src}, the launch screen's picture, does not exist`];
+    const dark = launch?.color_scheme_dark?.src;
+    if (!dark) return [];
+    const path = resolve(dir, dark), key = `host.${host}.launchImage.color_scheme_dark`;
+    if (isAbsolute(dark) || !under(dir, path) || (existsSync(path) && !under(realpathSync(dir), realpathSync(path)))) {
+      return [`${key}: ${dark} must name a PNG inside the app directory`];
+    }
+    if (!existsSync(path)) return [`${key}: ${dark}, the launch screen's picture, does not exist`];
+    return statSync(path).isFile() ? [] : [`${key}.src: ${dark} must be a PNG file`];
   });
 }
 
-export { isWebScheme };
 /** The W3C keys of `app.json`, as the web builds write `manifest.json`
  * (LLP 1030 D2/D10; 1030.000 D7). A browser opens files only, so
  * `inode/directory` (the Apple bake's word for a folder) leaves each file handler, and one with nothing
@@ -1150,9 +1155,8 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
   for (const entry of appleAssetCatalogs) add(resolve(app.dir, entry.path));
   // The launch screen's picture: its bytes are the binary's, and packaging draws the ones recorded.
   const launchImage = platform === 'ios' ? launchImageInventory(app) : null;
-  if (launchImage) add(resolve(app.dir, launchImage.src));
-  const androidImage = platform === 'android' ? app.manifest.host?.android?.launchImage?.src : null; // a resource of the APK (`androidLaunch`)
-  if (androidImage) add(resolve(app.dir, androidImage));
+  const picture = platform === 'android' ? app.manifest.host?.android?.launchImage : launchImage;
+  for (const src of [picture?.src, picture?.color_scheme_dark?.src]) if (src) add(resolve(app.dir, src));
   const metadata={...(appleAssetCatalogs.length ? {appleAssetCatalogs} : {}),...(launchImage ? {launchImage} : {}),...(nativeResources.length ? {nativeResources} : {}),...(env.EXACT_APPLE_EXTENSIONS!==undefined?{appleExtensions:env.EXACT_APPLE_EXTENSIONS.split(',').filter(Boolean)}:{}),...nativeManifestMetadata(app.manifest, platform, target, env),delivery:compat.delivery,store:compat.inputs.store,keys:compat.inputs.keys};
   const configuration={target,units:orderedBuild([...new Map(units.map(u=>[canonicalBuild(u),u])).values()]),builders:orderedBuild([...new Map(builders.map(u=>[canonicalBuild(u),u])).values()]),rustc:buildCommand('rustc',['-vV'],app,env).stdout,flags:{...Object.fromEntries(['RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','MACOSX_DEPLOYMENT_TARGET','IPHONEOS_DEPLOYMENT_TARGET','TVOS_DEPLOYMENT_TARGET','WATCHOS_DEPLOYMENT_TARGET'].map((k)=>[k,env[k]??null])),...(env.EXACT_WEB_LINK?{EXACT_WEB_LINK:env.EXACT_WEB_LINK}:{}),...(env.EXACT_WEB_SIZE?{EXACT_WEB_SIZE:env.EXACT_WEB_SIZE}:{})}};
   for (const captured of privacyManifests) {

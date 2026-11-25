@@ -39,7 +39,7 @@ import { androidLinkFilters, androidLinkNotes } from './links.mjs';
 import { androidShareActivity } from './share-target.mjs';
 import { CHANNELS_RECEIVER, androidNotificationResources, googleServices } from './android-channels.mjs';
 import { pickIcon, placeRgba, readPng, resize } from './app-icons.mjs';
-import { encodePng } from './png.mjs';
+import { decodePng, encodePng } from './png.mjs';
 import { copyStaticTreeIfPresent } from '../host/web/serve.mjs';
 import { takeLock } from '../host/web/build-lock.mjs';
 
@@ -957,19 +957,9 @@ const lightColour = (css) => {
  * on an Android 16 emulator, an Android 14 phone (HyperOS, which does not cut it) and an Android 17 emulator. */
 const SPLASH_ICON_SCALE = 108 / 192;
 
-/** The launch window in the app's first-frame background (LLP 1115.001 D3.6): each scheme's launch colour the manifest
- * names (`schemeColours`, LLP 1163 D2), as the iOS launch screen and the web page's first paint take them, clipped to
- * sRGB, which a colour resource holds. Android follows the device's scheme whatever `userInterfaceStyle` says. Written
- * under `res` as `ExactAppLaunch`, the reader's `ExactLaunch` with that colour behind the window and on Android 12's
- * starting window, and the bars' icons dark over a light colour and light over a dark one, until the host says the
- * page's (`ExactActivity.chrome`). A scheme the manifest names none for keeps the reader's: `ExactAppLaunch` is
- * written for each scheme (`values`, `values-night`), with the colour only in the one that names it, since a colour
- * resource cannot name the theme's surface. Android 12's starting window shows the launcher icon unless
- * `host.android.launchImage` says otherwise: a picture (`{ src, width }`) is that icon, laid out at
- * [SPLASH_ICON_SCALE] of its `width`, and before Android 12 it is centred on the window's background, which has no
- * icon; `false` shows no icon. `dir` is the app's, which the picture's path is relative to. Returns the activity's
- * theme, null where the manifest says neither, which leaves the platform's own launch, and the picture's file and
- * digest for the APK's record of its sources. */
+/** Generate the system starting window's day and night resources (LLP 1115.001 D3.6).
+ * The starting window uses the device's night mode even when the app sets userInterfaceStyle.
+ * Before API 31 the picture is centred on the window. Android 12+ scales and masks its splash icon. */
 export function androidLaunch(manifest, res, dir = '.') {
   rmSync(res, { recursive: true, force: true });
   const named = schemeColours(manifest, 'background_color', null);
@@ -982,27 +972,31 @@ export function androidLaunch(manifest, res, dir = '.') {
   };
   const values = (body) => `<resources>\n${body}</resources>\n`;
   const scheme = (css) => `    <color name="exact_launch">${androidColour(css)}</color>\n    <bool name="exact_launch_light">${lightColour(css)}</bool>\n`;
-  const files = [], picture = image ? readPng(resolve(dir, image.src)) : null;
-  const qualifier = { light: '', dark: '-night' };
-  if (picture) {
-    const source = resolve(dir, image.src);
-    files.push({ file: source, sha256: createHash('sha256').update(readFileSync(source)).digest('hex') });
-    // At up to xxxhdpi's 4 px a dp, never enlarged, its height following its aspect.
-    const px = Math.min(picture.width, Math.round(image.width * 4));
-    write('drawable-nodpi/exact_launch_picture.png', encodePng(resize(picture, px, Math.max(1, Math.round(picture.height * px / picture.width)))));
-    const size = (scale) => `android:width="${+(image.width * scale).toFixed(2)}dp" android:height="${+(image.width * picture.height / picture.width * scale).toFixed(2)}dp"`;
+  const files = [], qualifier = { light: '', dark: '-night' };
+  if (image) {
     const layers = (items) => `<layer-list xmlns:android="http://schemas.android.com/apk/res/android">\n${items}</layer-list>\n`;
-    write('drawable/exact_launch_icon.xml', layers(`    <item ${size(SPLASH_ICON_SCALE)} android:gravity="center" android:drawable="@drawable/exact_launch_picture" />\n`));
+    let picture;
     for (const s of ['light', 'dark']) {
+      const asset = s === 'light' ? image : image.color_scheme_dark;
+      if (asset) {
+        const file = resolve(dir, asset.src), bytes = readFileSync(file);
+        picture = decodePng(bytes);
+        files.push({ file, sha256: createHash('sha256').update(bytes).digest('hex') });
+        // Up to xxxhdpi's four pixels per dp, without enlarging the PNG.
+        const px = Math.min(picture.width, Math.round(image.width * 4));
+        write(`drawable${qualifier[s]}-nodpi/exact_launch_picture.png`, encodePng(resize(picture, px, Math.max(1, Math.round(picture.height * px / picture.width)))));
+      }
+      const size = (scale) => `android:width="${+(image.width * scale).toFixed(2)}dp" android:height="${+(image.width * picture.height / picture.width * scale).toFixed(2)}dp"`;
+      if (asset) write(`drawable${qualifier[s]}/exact_launch_icon.xml`, layers(`    <item ${size(SPLASH_ICON_SCALE)} android:gravity="center" android:drawable="@drawable/exact_launch_picture" />\n`));
       write(`drawable${qualifier[s]}/exact_launch_window.xml`, layers(`    <item android:drawable="${colour(s) ? '@color/exact_launch' : '?android:attr/colorBackground'}" />\n` +
         `    <item ${size(1)} android:gravity="center" android:drawable="@drawable/exact_launch_picture" />\n`));
     }
   }
   const item = (name, value) => `        <item name="android:${name}">${value}</item>`;
   const theme = (splash, coloured) => ['    <style name="ExactAppLaunch" parent="ExactLaunch">',
-    ...(picture && !splash ? [item('windowBackground', '@drawable/exact_launch_window')] : coloured ? [item('windowBackground', '@color/exact_launch')] : []),
+    ...(image && !splash ? [item('windowBackground', '@drawable/exact_launch_window')] : coloured ? [item('windowBackground', '@color/exact_launch')] : []),
     ...(splash && coloured ? [item('windowSplashScreenBackground', '@color/exact_launch')] : []),
-    ...(splash && image !== undefined ? [item('windowSplashScreenAnimatedIcon', picture ? '@drawable/exact_launch_icon' : '@android:color/transparent')] : []),
+    ...(splash && image !== undefined ? [item('windowSplashScreenAnimatedIcon', image ? '@drawable/exact_launch_icon' : '@android:color/transparent')] : []),
     ...(coloured ? [item('windowLightStatusBar', '@bool/exact_launch_light'), item('windowLightNavigationBar', '@bool/exact_launch_light')] : []),
     '    </style>', ''].join('\n');
   // `values` declares the colour whichever scheme names it, since a resource only `values-night` has fails release lint

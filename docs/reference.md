@@ -1509,7 +1509,10 @@ in its middle, as every app's does. `host.android.launchImage` replaces it:
 platform shows within a centred square 192 dp across and, on stock Android, cuts
 to the circle in that square (a `width` above 192 is refused); before Android 12,
 whose launch window has no icon, the picture is centred on the window. `false`
-shows no icon. Changing a colour or a picture requires a new native build.
+shows no icon in either appearance. Both hosts accept a dark PNG inside `launchImage`:
+`{ "src": "mark-light.png", "width": 128, "color_scheme_dark": { "src": "mark-dark.png" } }`.
+Each picture uses the parent's width and its own aspect ratio. Without a dark PNG the
+same picture appears in both schemes. Changing a colour or picture requires a new native build.
 
 ### Store category, Game Mode and memory
 

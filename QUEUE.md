@@ -1,5 +1,8 @@
 # Queue
 
+- Run `bun test ./scripts/links.test.mjs -t 'JavaScript derives callback associations'` on a loaded Mac with a cold fixture. Its native bake can still be compiling dependencies at the test's 120-second timeout.
+- On an iOS 26.5 simulator, install a single-picture app, cold-launch it, then change only its launch PNG and install over the same bundle ID and build number. The next launch can show the colour alone even though the compiled image has a new name. A fresh bundle ID shows the mark (#1595).
+- Set either host's base `launchImage.src` to an existing `../outside.png`. The manifest accepts it despite documenting a PNG inside the app directory (#1595).
 - In a compact UIKit split, open the list’s detail, replace its bottom action row with a single spacer, then remove that row without popping. Check toolbar visibility on both nested navigation controllers. On iPadOS 26.5 the list controller’s toolbar stayed visible after removal (#1422).
 
 - Measure the cost of refusing a Forma proposal after an unchanged prefix under load. On the M5 Max, the parent of the bottom-toolbar change took 103 ms against the 80 ms budget in `a_refusal_after_an_unchanged_prefix_stays_within_the_budget`.
