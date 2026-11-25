@@ -616,8 +616,12 @@ final class NavigationMoreIOSTests: XCTestCase {
         more.popViewController(animated: true)
         if started { waitForAnimationsToStart(more) }
         tapTab(tabs, 0)
-        waitFor("the router follows Home") { navigation.routerTab == 0 && tabs.selectedViewController === home && home.transitionCoordinator == nil }
-        try tapNode(session, "open-detail")
+        var button: NodeView?
+        waitFor("Home shows its Detail button") {
+            button = session.presenter.views.values.first { $0.props["testId"] == "open-detail" && $0.isDescendant(of: home.view) }
+            return navigation.routerTab == 0 && tabs.selectedViewController === home && home.transitionCoordinator == nil && button?.window != nil
+        }
+        if let error = Agent(session: session).tap(["id": Int(try XCTUnwrap(button).id)])["error"] { return XCTFail("Home's Detail tap failed: \(error)") }
         waitFor("Detail pushed in Home", facts: { "Home holds \(home.viewControllers.count), changing \(navigation.changing)" }) {
             home.viewControllers.count == 2 && home.transitionCoordinator == nil && !navigation.changing
         }
