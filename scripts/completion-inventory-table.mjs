@@ -175,7 +175,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/pointer.rs", "Presenter::pointer_dispatch"],
     ["painted:host/painted/src/presenter/radio.rs", "Presenter::activate_radio"],
     ["painted:host/painted/src/presenter/replacement.rs", "Presenter::buttons_released Presenter::pointer_released Presenter::reader_touch Presenter::set_touching"],
-    ["painted:host/painted/src/presenter/scroll_drag.rs", "Presenter::agent_scroll_drag Presenter::reader_drag_began Presenter::reader_drag_ended Presenter::reader_fling_ended Presenter::reader_refresh Presenter::scroll_drag"],
+    ["painted:host/painted/src/presenter/scroll_drag.rs", "Presenter::reader_drag_began Presenter::reader_drag_ended Presenter::reader_fling_ended Presenter::reader_refresh Presenter::scroll_drag"],
     ["painted:host/painted/src/presenter/scroll_end.rs", "Presenter::deliver_scroll_ends"],
     ["painted:host/painted/src/presenter/scrollers.rs",
       "Presenter::pulls_to_refresh Presenter::reader_flags Presenter::reader_forgets Presenter::reader_scrolled Presenter::reader_scrollers Presenter::reader_under " +
@@ -185,7 +185,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/stage/touch.rs", "Presenter::dismiss_sheet Presenter::nested_sheet_bounds Presenter::reader_sheet_drag"],
     ["painted:host/painted/src/presenter/top.rs", "Presenter::choose Presenter::dispatch_toggles"],
     ["painted:host/painted/src/presenter/top/input.rs", "Presenter::surface_event"],
-    ["painted:host/painted/src/presenter/top/invoke.rs", "Presenter::long_press Presenter::open_context_menu Presenter::arrange_hold_at Presenter::recognize_arrange_hold"],
+    ["painted:host/painted/src/presenter/top/invoke.rs", "Presenter::long_press Presenter::open_context_menu Presenter::arrange_hold_at"],
     ["painted:host/painted/src/presenter/transform_geometry.rs", "Presenter::deliver_resizes"],
     ["painted:host/painted/src/presenter/typing.rs", "Presenter::clipboard Presenter::clipboard_event Presenter::commit_text Presenter::key Presenter::key_default Presenter::type_key Presenter::type_text"],
     ["painted:host/painted/src/presenter/unload.rs", "Presenter::before_unload"],
