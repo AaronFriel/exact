@@ -41,6 +41,7 @@ import { androidShareActivity } from './share-target.mjs';
 import { CHANNELS_RECEIVER, androidNotificationResources, googleServices } from './android-channels.mjs';
 import { pickIcon, placeRgba, readPng, resize } from './app-icons.mjs';
 import { decodePng, encodePng } from './png.mjs';
+import { LAYER, MASKABLE, writeIconBackground } from './android-icon-background.mjs';
 import { copyStaticTreeIfPresent } from '../host/web/serve.mjs';
 import { takeLock } from '../host/web/build-lock.mjs';
 
@@ -882,12 +883,7 @@ export function runGradle(args, options, platform = process.platform, { studio, 
   return gradle.status === 0;
 }
 
-// The adaptive icon's layer, 108 dp, and the maskable image on it, 82.5 dp, in pixels at xxxhdpi (4 px a dp). At
-// 82.5 dp the image's W3C safe zone (the centred circle of 80% diameter) is the layer's 66 dp one (developer.android.com,
-// "Adaptive icons").
-const LAYER = 432, MASKABLE = 330;
-// What the key of the made resources names besides their sources: a change to how they are made makes them again.
-const ANDROID_ICONS = ['icons-v1', LAYER, MASKABLE];
+const ANDROID_ICONS = ['icons-v2-filtered', LAYER, MASKABLE];
 /** A CSS hex colour (#RGB, #RRGGBB or #RRGGBBAA) as an Android colour resource's #AARRGGBB. */
 const androidColour = (css) => {
   const hex = css.length === 4 ? [...css.slice(1)].map((c) => c + c).join('') : css.slice(1);
@@ -896,11 +892,8 @@ const androidColour = (css) => {
 
 /** The launcher icon and TV banner from the manifest's `icons` (LLP 1163 D6), written as resources under `res`, and
  * the references to them: `icon` for `android:icon` and `android:roundIcon`, `banner` for `android:banner`, each null
- * when the manifest has none. A square `maskable` PNG of at least 432 px becomes an adaptive icon over the light
- * launch colour (`schemeColours`: the icon has no scheme), clipped to sRGB, else over the image's top-left pixel, and a square `monochrome` one of that size, its alpha drawn
- * white, its themed layer. Without one, a square `any` PNG of at least 192 px is the legacy icon, which the launcher
- * encloses itself. A 16:9 `any` PNG of at least 640×360 px is the banner, the size Android TV asks for at xxxhdpi.
- * Every refusal is thrown at once, before anything is written. */
+ * when the manifest has none. D6 specifies the adaptive foreground and its bleed, the themed layer, the
+ * legacy icon and the TV banner. Every refusal from the picker is thrown before anything is written. */
 export function androidIcons(manifest, dir, res) {
   const problems = [], slot = (fields) => ({ formats: ['png'], native: true, ...fields });
   const pick = (fields) => { try { return pickIcon(manifest, dir, slot(fields)); } catch (error) { problems.push(error.message); return null; } };
@@ -917,24 +910,31 @@ export function androidIcons(manifest, dir, res) {
   const refs = { icon: adaptive || legacy ? '@mipmap/exact_icon' : null, banner: banner ? '@drawable/exact_banner' : null,
     files: picked.flatMap((file, i) => file ? [{ file: file.path, sha256: digests[i] }] : []) };
   const backdrop = schemeColours(manifest, 'background_color', null).light;
-  // Made again only when a picked file or the background colour changes: the key of what was made is kept beside `res`.
-  const key = createHash('sha256').update(JSON.stringify([ANDROID_ICONS, picked.map((file, i) => file && [file.src, digests[i]]), backdrop])).digest('hex');
-  if (existsSync(res) && existsSync(`${res}.key`) && readFileSync(`${res}.key`, 'utf8') === key) return refs;
+  const launch = adaptive && backdrop ? androidColour(parseColour(backdrop, 'the light launch colour').hex) : null;
+  const sources = picked.map((file, i) => file && [file.src, digests[i]]);
+  const cacheKey = colour => createHash('sha256').update(JSON.stringify([ANDROID_ICONS, sources, colour])).digest('hex');
+  let key = cacheKey(launch);
+  const opaqueKey = cacheKey(true);
+  if (existsSync(res) && existsSync(`${res}.key`)) {
+    const cached = readFileSync(`${res}.key`, 'utf8');
+    if (cached === key || cached === opaqueKey) return refs;
+  }
   rmSync(res, { recursive: true, force: true });
   const write = (path, bytes) => { mkdirSync(dirname(resolve(res, path)), { recursive: true }); writeFileSync(resolve(res, path), bytes); };
-  const onLayer = (image) => placeRgba(LAYER, LAYER, resize(image, MASKABLE, MASKABLE), (LAYER - MASKABLE) / 2, (LAYER - MASKABLE) / 2);
+  const onLayer = (art) => placeRgba(LAYER, LAYER, art, (LAYER - MASKABLE) / 2, (LAYER - MASKABLE) / 2);
   if (adaptive) {
-    // The corner's colour without its alpha: the background layer is opaque.
-    const image = readPng(adaptive.path), corner = `#${[...image.data.subarray(0, 3)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-    write('values/exact_icon.xml', `<resources>\n    <color name="exact_icon_background">${androidColour(backdrop ? parseColour(backdrop, 'the light launch colour').hex : corner)}</color>\n</resources>\n`);
-    write('drawable-nodpi/exact_icon_foreground.png', encodePng(onLayer(image)));
+    const image = decodePng(readFileSync(adaptive.path), { checkOpacity: true });
+    const art = resize(image, MASKABLE, MASKABLE);
+    const background = writeIconBackground(image, art, launch, write);
+    if (image.opaque) key = opaqueKey;
+    write('drawable-nodpi/exact_icon_foreground.png', encodePng(onLayer(art)));
     if (glyph) {
-      const placed = onLayer(readPng(glyph.path)), white = new Uint8Array(LAYER * LAYER * 4).fill(255);
+      const placed = onLayer(resize(readPng(glyph.path), MASKABLE, MASKABLE)), white = new Uint8Array(LAYER * LAYER * 4).fill(255);
       for (let i = 3; i < white.length; i += 4) white[i] = placed.data[i];
       write('drawable-nodpi/exact_icon_monochrome.png', encodePng({ width: LAYER, height: LAYER, data: white }));
     }
     write('mipmap-anydpi/exact_icon.xml', ['<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">',
-      '    <background android:drawable="@color/exact_icon_background" />', '    <foreground android:drawable="@drawable/exact_icon_foreground" />',
+      `    <background android:drawable="${background}" />`, '    <foreground android:drawable="@drawable/exact_icon_foreground" />',
       ...(glyph ? ['    <monochrome android:drawable="@drawable/exact_icon_monochrome" />'] : []), '</adaptive-icon>', ''].join('\n'));
   }
   if (legacy) write('mipmap-xxxhdpi/exact_icon.png', encodePng(resize(readPng(legacy.path), 192, 192)));

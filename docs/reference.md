@@ -1408,10 +1408,12 @@ from `color_scheme_dark.icons`, and its tinted icon is a square `monochrome`
 PNG, whose alpha iOS draws white on black. The web links each scheme's favicons
 (the smallest square raster of at least 32 px, then an SVG when there is one)
 and an Apple touch icon (the smallest opaque square PNG of at least 180 px, else
-the largest). Android takes a square `maskable` of at least 432 px as its
-adaptive icon, a `monochrome` one as its themed layer, a square `any` of 192 px
-when there is no `maskable`, and a 16:9 `any` of at least 640×360 px as the TV
-banner. tvOS takes the brand assets in the app's catalogs, else a 5:3 `any` of
+the largest). Android centres a square `maskable` PNG of at least 432 px at 82.5 dp on
+a 108 dp layer. For fully opaque artwork, a low-resolution copy extends the local edge
+colours into the margin. If any pixel has transparency, the background uses the light
+launch colour, or the top-left pixel’s RGB when none is named. A square `monochrome` supplies the themed layer,
+a square `any` of at least 192 px the legacy fallback, and a 16:9 `any` of at least
+640×360 px the TV banner. tvOS takes the brand assets in the app's catalogs, else a 5:3 `any` of
 at least 1280×768 px (an 8:3 and a 29:9 one give the Top Shelf images); the
 watch app a square one of 1024 px, or `host.ios.icon` when its `icon.json` lists
 watchOS; Windows a square `any` of at least 256 px, linked into the executable.

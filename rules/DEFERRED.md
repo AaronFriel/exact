@@ -111,6 +111,10 @@ setting. Take: the discovery of alternates from catalogs, where every extra
 out: Android, until its own RFC (LLP 1163.000 D5); tvOS, until a consumer asks;
 the Mac's Dock tile; switching without the person's tap.
 
+**Android adaptive icon background (Charlie, 2026-11-24, "recs ok").** AA6 (panel 4–0),
+LLP 1163 D6. Fully opaque artwork supplies the bleed from a low-pass copy of its edge colours (#1614).
+Any transparency in the source keeps the light launch colour, or the top-left RGB if none is named.
+
 **Expanded (Charlie, 2026-10-11, events ruling):** `keycapture=` admits DOM
 capture-phase key dispatch for the coding-agent desktop app's early shortcuts;
 `focusin`/`focusout` admit bubbling subtree focus observation for the clipped
