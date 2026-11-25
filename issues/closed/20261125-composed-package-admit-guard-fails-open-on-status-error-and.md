@@ -1,6 +1,7 @@
 # Composed package `admit` guard fails open on status error and turns mid-flight `cancel` into executing the cancelled send
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Fail closed on non-2xx, failed, error-bearing, missing, or prompting/unknown status responses and track pending admitted requests so cancel aborts queued or in-flight admissions without invoking the send in host/painted/src/presenter/requests/packages.rs.
 **Systems:** host/painted (Linux and Windows composed native packages)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

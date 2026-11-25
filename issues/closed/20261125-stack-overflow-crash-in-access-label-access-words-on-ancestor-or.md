@@ -1,6 +1,7 @@
 # Stack overflow crash in `access_label`/`access_words` on ancestor or cyclic `aria-labelledby`
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Stop following aria-labelledby recursively while computing referenced label words and guard label/word traversal with an active visited set in host/painted/src/presenter/access/walk.rs.
 **Systems:** host/painted (Android TalkBack, Windows UIA, Linux AT-SPI, top-layer menu projection)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

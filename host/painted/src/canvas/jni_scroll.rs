@@ -34,7 +34,7 @@ macro_rules! canvas_jni_scroll {
             if moved {
                 // As after a move's stream: the next paint is drawn,
                 // however like the last.
-                DRAWN.with(|d| *d.borrow_mut() = None);
+                STREAM.with(|s| s.borrow_mut().reset_moved());
                 $crate::presenter::preferences::scrub_frame_drawn();
             }
             flag(moved)

@@ -500,4 +500,202 @@ impl<D: DataSource> Presenter<D> {
                 .for_each(|(i, c)| visit(i, c)),
         }
     }
+
+    /// `aria-labelledby`'s words, else `aria-label`, unless empty.
+    pub(in crate::presenter) fn access_label(&self, node: &NodeRef<'_>) -> Option<String> {
+        self.access_label_in(node, &mut BTreeSet::new())
+    }
+
+    /// Resolve `aria-labelledby` without recursing into `aria-labelledby` on
+    /// referenced targets or their descendants (W3C AccName 1.2 §4.3.1 step 2B),
+    /// guarding against cycles via `seen`.
+    fn access_label_in(&self, node: &NodeRef<'_>, seen: &mut BTreeSet<ViewId>) -> Option<String> {
+        let kernel = self.host.kernel();
+        let named = node.props.str(PropId::AccessibilityLabelledBy).map(|refs| {
+            (refs.split_ascii_whitespace())
+                .filter_map(|name| kernel.find_by_id(name).into_iter().next())
+                .filter_map(|key| kernel.node_by_key(key))
+                .filter_map(|n| {
+                    (!seen.contains(&n.id)).then(|| {
+                        own_access_label(&n)
+                            .unwrap_or_else(|| self.access_words_in(&n, true, false, seen))
+                    })
+                })
+                .filter(|words| !words.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ")
+        });
+        named
+            .filter(|words| !words.is_empty())
+            .or_else(|| own_access_label(node))
+    }
+
+    /// A node's description: the words of what `aria-describedby` names,
+    /// else its `aria-description`, else its `title` where that is not its
+    /// name (HTML-AAM's accessible description).
+    pub(super) fn access_hint(&self, node: &NodeRef<'_>) -> String {
+        let kernel = self.host.kernel();
+        let described = node
+            .props
+            .str(PropId::AccessibilityDescribedBy)
+            .map(|refs| {
+                (refs.split_ascii_whitespace())
+                    .filter_map(|name| kernel.find_by_id(name).into_iter().next())
+                    .filter_map(|key| kernel.node_by_key(key))
+                    .map(|n| self.access_name(&n))
+                    .filter(|words| !words.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            });
+        (described.filter(|words| !words.is_empty()))
+            .or_else(|| (node.props.str(PropId::AccessibilityHint)).map(str::to_string))
+            .or_else(|| {
+                let title = node.props.str(PropId::Title).filter(|t| !t.is_empty())?;
+                (self.access_name(node) != title).then(|| title.to_string())
+            })
+            .unwrap_or_default()
+    }
+
+    /// Whether a press on `node` is its own: a button, a link, a node with
+    /// a `press` handler.
+    fn access_pressable(&self, node: &NodeRef<'_>) -> bool {
+        node.node_type == NodeType::Pressable
+            || ControlKind::of(node.node_type, node.props) == Some(ControlKind::Button)
+            || node.props.link().is_some()
+            || (self.host.runner().handlers_of(node.id)).contains(&EventKind::Press)
+    }
+
+    /// A node's words: a text's own, an image's label, and for anything
+    /// else its children's, a space between them, less what is hidden from
+    /// assistive technology and, unless `all`, less the controls inside it,
+    /// which are named apart.
+    pub(in crate::presenter) fn access_words(&self, node: &NodeRef<'_>, all: bool) -> String {
+        self.access_words_in(node, all, true, &mut BTreeSet::new())
+    }
+
+    fn access_words_in(
+        &self,
+        node: &NodeRef<'_>,
+        all: bool,
+        follow_labelledby: bool,
+        seen: &mut BTreeSet<ViewId>,
+    ) -> String {
+        if !seen.insert(node.id) {
+            return String::new();
+        }
+        let kernel = self.host.kernel();
+        let words = match node.node_type {
+            NodeType::Text => self.access_inline_words(node),
+            NodeType::Image | NodeType::Svg => node
+                .props
+                .str(PropId::AccessibilityLabel)
+                .unwrap_or_default()
+                .to_string(),
+            NodeType::TextInput | NodeType::Control
+                if ControlKind::of(node.node_type, node.props) != Some(ControlKind::Button) =>
+            {
+                String::new()
+            }
+            _ => (node.children().into_iter())
+                .filter_map(|id| kernel.node(id))
+                .filter(|n| {
+                    n.props.bool(PropId::AccessibilityElementsHidden) != Some(true)
+                        && n.style.display != Display::None
+                        && (all || !self.access_pressable(n))
+                })
+                .map(|n| {
+                    let label = match follow_labelledby {
+                        true => self.access_label_in(&n, seen),
+                        false => own_access_label(&n),
+                    };
+                    label.unwrap_or_else(|| self.access_words_in(&n, all, follow_labelledby, seen))
+                })
+                .filter(|words| !words.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join(" "),
+        };
+        seen.remove(&node.id);
+        words
+    }
+
+    fn access_inline_words(&self, node: &NodeRef<'_>) -> String {
+        if let Some(text) = node.props.str(PropId::Text) {
+            // A Markdown text reads as the pieces `markup::expand` draws,
+            // which has no atoms: one is drawn and read as its source
+            // (LLP 1045.000's host table).
+            return match node.props.str(PropId::Markup) {
+                Some("markdown") => exact_markdown::spoken(&exact_markdown::pieces(text)),
+                _ => self.host.kernel().bar_text(node.id).unwrap_or_default(),
+            };
+        }
+        type RunLabel<'a> = (bool, Option<(ViewId, &'a str)>);
+        fn collect<'a>(
+            node: &NodeRef<'a>,
+            hidden: bool,
+            label: Option<(ViewId, &'a str)>,
+            out: &mut Vec<RunLabel<'a>>,
+        ) {
+            let hidden = hidden
+                || node.style.display == Display::None
+                || node.props.bool(PropId::AccessibilityElementsHidden) == Some(true);
+            let label = label.or_else(|| {
+                node.props
+                    .str(PropId::AccessibilityLabel)
+                    .filter(|s| !s.is_empty())
+                    .map(|s| (node.id, s))
+            });
+            if node.props.str(PropId::Text).is_some() {
+                out.push((hidden, label));
+            } else {
+                for child in node.child_nodes().filter(|n| n.node_type == NodeType::Text) {
+                    collect(&child, hidden, label, out);
+                }
+            }
+        }
+        let mut semantics = Vec::new();
+        collect(node, false, None, &mut semantics);
+        let runs = node.text_runs();
+        let mut said = BTreeSet::new();
+        let words: Vec<&str> = runs
+            .iter()
+            .zip(semantics)
+            .map(|(run, (hidden, label))| {
+                if hidden {
+                    return "";
+                }
+                match label {
+                    Some((id, label)) if said.insert(id) => label,
+                    Some(_) => "",
+                    None => &run.text,
+                }
+            })
+            .collect();
+        match exact_textflow::collapse(&words, node.paragraph().white_space.model()) {
+            Some(collapsed) => collapsed.runs.concat(),
+            None => words.concat(),
+        }
+    }
+
+    /// A node's accessible name: its label, else a button's face, else its
+    /// words, else its `title` (accname's tooltip attribute, step 2I).
+    pub(super) fn access_name(&self, node: &NodeRef<'_>) -> String {
+        if let Some(label) = self.access_label(node) {
+            return label;
+        }
+        if node.node_type == NodeType::Text {
+            return self.access_inline_words(node);
+        }
+        let words = self.access_words(node, false);
+        match node.props.str(PropId::Title) {
+            Some(title) if words.trim().is_empty() && !title.is_empty() => title.to_string(),
+            _ => words,
+        }
+    }
+}
+
+fn own_access_label(node: &NodeRef<'_>) -> Option<String> {
+    node.props
+        .str(PropId::AccessibilityLabel)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
 }

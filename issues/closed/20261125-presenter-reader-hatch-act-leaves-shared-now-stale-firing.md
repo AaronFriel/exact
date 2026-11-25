@@ -1,6 +1,7 @@
 # `Presenter::reader_hatch_act` leaves `Shared::now` stale, firing Android `ExtensionContext.after` timers immediately (aborting `@exact/recording` at 0 ms) and breaking Kotlin hatch `frames()` and `diagnostics().log()`
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Pass the live session clock from CanvasHost::hatch_act into Presenter::reader_hatch_act and refresh Shared::now before dispatching hatches::reader::act.
 **Systems:** host/painted (Android `ExtensionContext.after` / `@exact/recording` and Android Kotlin hatches)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

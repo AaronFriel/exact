@@ -1,6 +1,7 @@
 # Permanent D3D11 presentation deadlock when `swap.Present` returns `DXGI_STATUS_OCCLUDED`
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Consume the DXGI waitable latency grant, clear acquired, and update Pace only after accepted_present succeeds on the initial or activation-retry Present in host/ink/src/device/d3d11/composition.rs.
 **Systems:** host/ink (Windows D3D11 DirectComposition presentation)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

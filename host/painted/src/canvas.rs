@@ -212,6 +212,8 @@ pub mod presence;
 #[path = "canvas/present.rs"]
 mod present;
 #[cfg(target_os = "android")]
+pub use present::StreamDedup;
+#[cfg(target_os = "android")]
 #[path = "canvas/secrets.rs"]
 pub mod secrets;
 #[cfg(target_os = "android")]

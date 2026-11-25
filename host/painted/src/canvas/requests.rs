@@ -77,7 +77,8 @@ impl<D: DataSource + Default> CanvasHost<D> {
     /// between turns: its answer, -1 when refused. A view hosted or let go
     /// paints again.
     pub fn hatch_act(&mut self, node: u32, kind: i32, text: Option<&str>) -> i64 {
-        self.p.reader_hatch_act(node, kind, text)
+        let now = self.now();
+        self.p.reader_hatch_act(node, kind, text, now)
     }
 
     /// Preferred content sizes the reader collected during a display frame (LLP 1024).

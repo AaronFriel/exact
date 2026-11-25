@@ -1,6 +1,7 @@
 # Android Canvas JNI stream dedup forgets to clear `LAST` on move-only frames and `Native_moved`, stranding `RenderNode` groups at stale scroll offsets
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Extract StreamDedup and clear both last and drawn on SHIFT (op 22) frames and Native_moved so the next full paint always delivers and resets translated RenderNode groups.
 **Systems:** host/painted (Android Canvas JNI rendering pipeline)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -659,6 +659,7 @@ impl<D: DataSource> Presenter<D> {
         for source in self.requests.packages.take_pictures() {
             self.picture_changed(&source, false);
         }
+        let ready = self.requests.packages.take_ready();
         let calls = std::mem::take(
             &mut *self
                 .requests
@@ -666,7 +667,7 @@ impl<D: DataSource> Presenter<D> {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner()),
         );
-        if calls.is_empty() {
+        if calls.is_empty() && ready.is_empty() {
             return;
         }
         let mut queued = false;
@@ -676,8 +677,7 @@ impl<D: DataSource> Presenter<D> {
             if self.requests.packages.serves(&extension) {
                 crate::desktop::surface(self.viewport, self.brush.scale, self.pointer);
                 let now = self.host.now();
-                let inbox = self.requests.inbox.clone();
-                (self.requests.packages).dispatch(&body, reply, now, &inbox, &wake);
+                (self.requests.packages).dispatch(&body, reply, now, &wake);
             } else if self.requests.shell {
                 let id = self.queue(Request::Module(String::from_utf8_lossy(&body).into_owned()));
                 self.requests.modules.insert(id, reply);
@@ -688,6 +688,11 @@ impl<D: DataSource> Presenter<D> {
             } else {
                 crate::package::Reply::new(reply).error("NotSupportedError", None);
             }
+        }
+        if !ready.is_empty() {
+            crate::desktop::surface(self.viewport, self.brush.scale, self.pointer);
+            let now = self.host.now();
+            self.requests.packages.dispatch_admitted(ready, now, &wake);
         }
         self.package_lines();
         if queued {

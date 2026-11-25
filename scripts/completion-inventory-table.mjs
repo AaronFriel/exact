@@ -832,7 +832,7 @@ export const classifications = [
     ["runner:runner/src/runner/snapshot.rs", "Runner::snapshot_timeline"],
     ["runner:runner/src/runner/waits.rs", "Runner::fire_timer#next_ms:1 Runner::fire_timer#next_ms:2 Runner::hold_waits Runner::release_waits Runner::task_timing Runner::waits"],
     ["web:host/web/src/abi.rs", "exact_advance exact_frame"],
-    ["painted:host/painted/src/canvas/present.rs", "CanvasHost::picture CanvasHost::picture_presented"],
+    ["painted:host/painted/src/canvas/present.rs", "CanvasHost::picture CanvasHost::picture_presented StreamDedup::clear StreamDedup::emit StreamDedup::new StreamDedup::reset_moved"],
     ["painted:host/painted/src/first_frame.rs", "Host::hold_from_boot Host::motion_due_ms Host::page_presented Host::prefer_presented"],
     ["painted:host/painted/src/presenter/present.rs", "Presenter::driven_presented Presenter::picture_carried Presenter::picture_presented Presenter::prefer_presented Presenter::present_wanted Presenter::presents_pictures Presenter::refresh_presentable"],
     ["runner:runner/src/page.rs", "Presented::value set_awaits_present"],
@@ -1224,7 +1224,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/access/menu.rs", "Presenter::access_choose Presenter::access_menu Presenter::access_menu_focus"],
     ["painted:host/painted/src/presenter/access/surface.rs", "Presenter::surface_menu_flags Presenter::surface_scroll_label"],
     ["painted:host/painted/src/presenter/access/actions.rs", "Presenter::action_available Presenter::action_targets"],
-    ["painted:host/painted/src/presenter/access/walk.rs", "Presenter::access_walk Presenter::access_walk_contents"],
+    ["painted:host/painted/src/presenter/access/walk.rs", "Presenter::access_hint Presenter::access_inline_words Presenter::access_label_in Presenter::access_pressable Presenter::access_walk Presenter::access_walk_contents Presenter::access_words_in"],
     ["painted:host/painted/src/presenter/addressed_tap.rs",
       "Presenter::is_inside Presenter::lands_in Presenter::lands_in_press Presenter::press_reach Presenter::takes_press Presenter::touch_activation_contains " +
       "Presenter::touch_activation_live Presenter::touch_control Presenter::touch_target"],
