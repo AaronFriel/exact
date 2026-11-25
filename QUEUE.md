@@ -1,5 +1,6 @@
 # Queue
 
+- The sign-in refusal fixture waits indefinitely if it opens a credential ticket. On macOS, replace the ungranted Google client in `sign_in::admission_refuses_by_fedcm_s_rules_and_the_grants` with the granted web client and run that test. Have the fixture report the unexpected ticket before waiting for its reply.
 - Expose a projected tab bar’s visible bounds to Android layout assertions. At `/links` in `scripts/fixtures/hidden-tabs`, `expect layout "tabs" height >= 1` passes on Chromium. Android can select either visible tab but reports no box for the bar.
 - Report Android’s screenshot scale in the painted layout reader. On a 420-dpi emulator, `layout` reports `space.capture.scale=1` for a visible label and a hidden tablist. The screenshot is 1080 pixels across a 411.43 dp viewport (2.625 pixels per dp).
 - Recheck the reader binding when an ordinary Android module event reaches the owner. Queue a `message` on the owner, retire the reader element, bind a new view to the same session and allocation, then drain the owner queue. The callback from the old binding reaches the new view’s node.
