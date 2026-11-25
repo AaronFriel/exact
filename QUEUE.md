@@ -1,5 +1,6 @@
 # Queue
 
+- Apply each Linux portal binding change before submitting pending shortcuts (#1413). Bind F and K, hold F, request J, then reassign F and remove K in one `ShortcutsChanged`. The next `BindShortcuts` must contain F and J. The candidate also requests K again.
 - Reproduce the macOS split-transition XCTest failure and record the failing test method and assertion.
 - Reproduce the keyboard navigation-scroller failure on iPad and record the test method, iPad model and OS version.
 - Run `bun test ./scripts/links.test.mjs -t 'JavaScript derives callback associations'` on a loaded Mac with a cold fixture. Its native bake can still be compiling dependencies at the test's 120-second timeout.
