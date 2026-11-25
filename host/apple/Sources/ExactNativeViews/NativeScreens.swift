@@ -1,87 +1,123 @@
-// A native screen's controller in the controller its node shows in (LLP
-// 1075.003 §3.6): contained, moved and released with its node.
+// Containment for app and package screens (LLP 1075.003 §3.6).
 #if os(iOS) || os(tvOS)
 import ExactKit
 import UIKit
 
 extension NativeViews {
-    /// A native screen (LLP 1075.003 §3.6): its controller becomes a child
-    /// of the controller its node shows in (a route's), so UIKit gives it
-    /// appearance calls, the safe area and traits, in UIKit's order: added
-    /// as a child, its view `insert`ed, then moved in. A node created in the
-    /// batch that mounts its route is in no controller yet: it is contained
-    /// once that batch is applied. A contained screen whose node comes to
-    /// show in another controller moves to it (`moved`).
-    func contain(_ entry: NativeEntry, table: NativeTable, retry: Bool = true, insert: () -> Void = {}) {
-        guard let handle = entry.handle, let made = table.platformController?(handle), let owner = entry.owner else { return insert() }
-        let screen = Unmanaged<UIViewController>.fromOpaque(made).takeUnretainedValue()
-        // A node in a route is its route controller's, which the route may
-        // not have yet: one built with its tab or pushed with this node
-        // (LLP 1075.003 §9.14). Until it has, no controller above holds it.
-        var responder: UIResponder? = owner, route: NodeView?
-        while let next = responder, !(next is UIViewController) {
-            if route == nil, let node = next as? NodeView, node.props["navigationKey"] != nil, node.props["navigationBack"] == nil { route = node }
-            responder = next.next
+    var hasScreens: Bool { screens.count > 0 }
+
+    func mountView(_ entry: NativeEntry, table: NativeTable) {
+        guard let owner = entry.owner, let view = entry.view else { return }
+        guard let handle = entry.handle, let raw = table.platformController?(handle) else {
+            return owner.addSubview(view)
         }
-        let found = responder as? UIViewController
-        guard let parent = route.map({ $0.routeController(in: found) }) ?? found else {
-            if screen.parent != nil { detach(entry, screen) }
-            insert()
-            guard retry, let presenter = owner.presenter else { return log("\(entry.name) #\(entry.id): a screen with no controller to hold it") }
-            presenter.afterBatch { [weak self, weak entry] in
-                guard let self, let entry, self.entries[entry.id] === entry, entry.screen == nil,
-                      case .success(let table)? = NativeProcess.table else { return }
-                self.contain(entry, table: table, retry: false)
+        entry.screen = Unmanaged<UIViewController>.fromOpaque(raw).takeUnretainedValue()
+        screens.setObject(entry, forKey: owner)
+        contain(entry)
+        if entry.screen?.parent == nil {
+            owner.presenter?.afterBatch { [weak self, weak entry] in
+                guard let self, let entry, entries[entry.id] === entry, entry.screen?.parent == nil else { return }
+                contain(entry)
             }
+        }
+    }
+
+    private func contain(_ entry: NativeEntry) {
+        guard let screen = entry.screen, let owner = entry.owner, let view = entry.view else { return }
+        guard let parent = owner.screenParent() else {
+            waitingScreens.insert(entry.id)
+            if screen.parent != nil { detach(entry) }
             return
         }
-        if screen.parent != nil, screen.parent !== parent {
-            screen.willMove(toParent: nil)
-            screen.removeFromParent()
+        waitingScreens.remove(entry.id)
+        let adopting = screen.parent !== parent
+        if adopting {
+            if screen.parent != nil { detach(entry) }
+            parent.addChild(screen)
         }
-        let adds = screen.parent !== parent
-        if adds { parent.addChild(screen) }
-        insert()
-        if adds { screen.didMove(toParent: parent) }
-        entry.screen = screen
-        if adds { log("\(entry.name) #\(entry.id): a screen in \(type(of: parent))") }
-    }
-
-    /// `subtree` shows in another controller: a route's controller has
-    /// loaded its view, or a dialog has gone into its sheet or come back.
-    /// Each screen under it, contained or still waiting, goes to the
-    /// controller it shows in now.
-    func moved(_ subtree: NodeView) {
-        guard case .success(let table)? = NativeProcess.table else { return }
-        for entry in entries.values where entry.owner?.isDescendant(of: subtree) == true {
-            contain(entry, table: table, retry: false)
+        if view.superview !== owner {
+            if !entry.sizing { view.frame = owner.contentBox() }
+            owner.addSubview(view)
+        }
+        if adopting {
+            screen.didMove(toParent: parent)
+            log("\(entry.name) #\(entry.id): a screen in \(type(of: parent))")
         }
     }
 
-    /// `subtree` is about to show in another controller: each screen under
-    /// it leaves its parent first, so that UIKit never finds its view in a
-    /// window under a controller that is not its parent. `moved` contains
-    /// it again.
+    /// UIKit may move an ordinary ancestor after the batch that created the screen.
+    func retryWaitingScreens(in subtree: NodeView) {
+        for id in waitingScreens {
+            if let entry = entries[id], entry.owner?.isDescendant(of: subtree) == true { contain(entry) }
+        }
+    }
+
+    /// Search a small moving subtree directly. After one visit per screen,
+    /// check the screen owners' ancestry instead.
+    private func screens(in subtree: UIView) -> [NativeEntry] {
+        guard screens.count > 0 else { return [] }
+        if screens.count > 1 {
+            var remaining = screens.count, found: [NativeEntry] = []
+            func visit(_ view: UIView) -> Bool {
+                guard remaining > 0 else { return false }
+                remaining -= 1
+                if let entry = screens.object(forKey: view) { found.append(entry) }
+                return view.heldSubviews.allSatisfy(visit)
+            }
+            if visit(subtree) { return found }
+        }
+        var found: [NativeEntry] = []
+        for case let entry as NativeEntry in screens.objectEnumerator()! where entry.owner?.isDescendant(of: subtree) == true {
+            found.append(entry)
+        }
+        return found
+    }
+
+    func setScreensMounted(_ mounted: Bool, in subtree: UIView) {
+        for entry in screens(in: subtree) where entries[entry.id] === entry {
+            if mounted { contain(entry) } else { detach(entry) }
+        }
+    }
+
+    func prepareScreenMove(_ subtree: UIView, into container: UIView) -> (() -> Void)? {
+        // A dialog explicitly releases its controller while keeping the root view
+        // in its box. Its sheet calls moved after the entire dialog is in place.
+        let moving = screens(in: subtree).filter { $0.screen?.parent != nil || $0.view?.superview == nil }
+        guard !moving.isEmpty else { return nil }
+        for entry in moving where entries[entry.id] === entry && entry.screen?.parent !== entry.owner?.screenParent(moving: subtree, into: container) {
+            detach(entry)
+        }
+        return { [self] in
+            for entry in moving where entries[entry.id] === entry { contain(entry) }
+        }
+    }
+
+    /// A dialog's content stays in its node as the node moves into its sheet or back.
     func leaving(_ subtree: NodeView) {
-        for entry in entries.values where entry.owner?.isDescendant(of: subtree) == true {
-            if let screen = entry.screen { detach(entry, screen) }
+        for entry in screens(in: subtree) where entries[entry.id] === entry {
+            if let screen = entry.screen { leaveParent(screen) }
         }
     }
 
-    private func detach(_ entry: NativeEntry, _ screen: UIViewController) {
-        screen.willMove(toParent: nil)
-        screen.removeFromParent()
-        entry.screen = nil
+    func moved(_ subtree: NodeView) {
+        for entry in screens(in: subtree) where entries[entry.id] === entry {
+            contain(entry)
+        }
     }
 
-    /// A screen's view leaves with its controller, in UIKit's order; a plain
-    /// module view just leaves.
-    func release(_ entry: NativeEntry) {
-        guard let screen = entry.screen else { return }
+    private func leaveParent(_ screen: UIViewController) {
+        guard screen.parent != nil else { return }
         screen.willMove(toParent: nil)
-        entry.view?.removeFromSuperview()
         screen.removeFromParent()
-        entry.screen = nil
+    }
+
+    func detach(_ entry: NativeEntry, moving: Bool = true) {
+        // Without the bracket UIKit can defer didDisappear until after reattachment.
+        let visible = moving && entry.view?.window != nil && entry.screen?.parent != nil ? entry.screen : nil
+        visible?.beginAppearanceTransition(false, animated: false)
+        if let screen = entry.screen { leaveParent(screen) }
+        entry.view?.removeFromSuperview()
+        visible?.endAppearanceTransition()
     }
 }
 #endif

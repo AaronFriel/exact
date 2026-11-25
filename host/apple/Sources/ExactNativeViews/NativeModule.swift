@@ -454,6 +454,8 @@ final class NativeViews: NativeModuleHosting {
     /// ones destroyed.
     private(set) var made = 0, reused = 0, returned = 0, parks = 0, dropped = 0, hidden = 0, released = 0
     #if os(iOS) || os(tvOS)
+    var waitingScreens = Set<UInt32>()
+    let screens = NSMapTable<UIView, NativeEntry>.weakToWeakObjects()
     /// Parked instances by tag, oldest first.
     fileprivate var parked: [String: [NativeEntry]] = [:]
     fileprivate var observers: [NSObjectProtocol] = []
@@ -900,7 +902,7 @@ final class NativeViews: NativeModuleHosting {
         entry.handle = handle
         entry.view = view
         #if os(iOS) || os(tvOS)
-        contain(entry, table: table) { owner.addSubview(view) }
+        mountView(entry, table: table)
         #else
         owner.addSubview(view)
         #endif
@@ -1119,17 +1121,19 @@ final class NativeViews: NativeModuleHosting {
             NativeProcess.retired[entry.nonce] = WeakNatives(self)
         }
         #if os(iOS) || os(tvOS)
+        waitingScreens.remove(id)
+        if let owner = entry.owner { screens.removeObject(forKey: owner) }
         if park(entry) { return }
         #endif
         if entry.instance != 0 { NativeProcess.set(entry.instance, nil) }
         #if os(iOS) || os(tvOS)
-        release(entry)
+        detach(entry, moving: false)
         #else
         // Retire a descendant/field editor before destroying its module instance.
         entry.owner?.presenter?.keyViewLoopStale = true
         if ownsFocus(entry) { entry.view?.window?.makeFirstResponder(nil) }
-        #endif
         entry.view?.removeFromSuperview()
+        #endif
         if let handle = entry.handle, case .success(let table)? = NativeProcess.table {
             table.destroy(handle)
             log("\(entry.name) #\(id): destroyed")
@@ -1356,8 +1360,7 @@ extension NativeViews {
         if list.count >= Self.reuseCap { discard(list.removeFirst()) }
         view.alpha = 1
         view.isHidden = false
-        release(entry)
-        view.removeFromSuperview()
+        detach(entry)
         entry.nonce = 0; entry.revealing = false; entry.sizing = false; entry.owner = nil
         view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         list.append(entry)
@@ -1398,7 +1401,7 @@ extension NativeViews {
         // often the next row's, until the node is laid out (`laidOut`) — a
         // map's resize to nothing and back costs as much as its reset.
         if owner.bounds.isEmpty { view.autoresizingMask = []; entry.sizing = true } else { view.frame = owner.contentBox() }
-        contain(entry, table: table) { owner.addSubview(view) }
+        mountView(entry, table: table)
         let status = json.withUnsafeBytes { p in table.setProps(handle, p.bindMemory(to: UInt8.self).baseAddress, UInt32(json.count), &error, UInt32(error.count)) }
         entry.props = props
         entry.state = "ready"
