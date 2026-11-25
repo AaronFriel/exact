@@ -103,10 +103,10 @@ import AppKit
 import UIKit
 #endif
 
-private typealias NativeEventFn = @convention(c) (UnsafeMutableRawPointer?, UInt32, UInt32, UnsafePointer<UInt8>?, UInt32) -> Void
-private typealias NativeReplyFn = @convention(c) (UnsafeMutableRawPointer?, UInt32, UInt32, UInt32, UnsafePointer<UInt8>?, UInt32) -> Void
+typealias NativeEventFn = @convention(c) (UnsafeMutableRawPointer?, UInt32, UInt32, UnsafePointer<UInt8>?, UInt32) -> Void
+typealias NativeReplyFn = @convention(c) (UnsafeMutableRawPointer?, UInt32, UInt32, UInt32, UnsafePointer<UInt8>?, UInt32) -> Void
 
-private struct NativeFailure: Error {
+struct NativeFailure: Error {
     let state: String, message: String
     /// The loader refused a file that is there: the build is broken (a
     /// library it links is not in the bundle), not skewed (LLP 1024 D8.3).
@@ -114,7 +114,7 @@ private struct NativeFailure: Error {
 }
 
 /// The loaded table: the roster and the entries, read once.
-private final class NativeTable {
+final class NativeTable {
     static let major: UInt32 = 5
     /// The hatch words the module handles, or nil for one that does not say.
     var hatchWords: Set<String>?
@@ -277,7 +277,7 @@ private final class QuitWork: @unchecked Sendable {
     func finish() { lock.withLock { done = true } }
 }
 
-private final class NativeEntry {
+final class NativeEntry {
     weak var owner: NodeView?
     let id: UInt32
     var name = ""
@@ -339,7 +339,7 @@ struct NativeWorldLayout {
 private final class NativeWait { var data: Data?; var error: String?; var done = false }
 
 /// Process-wide: the one artifact, and every live nonce → its manager.
-private enum NativeProcess {
+enum NativeProcess {
     nonisolated(unsafe) static var table: Result<NativeTable, NativeFailure>?
     nonisolated(unsafe) static var owners: [UInt32: WeakNatives] = [:]
     nonisolated(unsafe) static var retired: [UInt32: WeakNatives] = [:]
@@ -351,7 +351,7 @@ private enum NativeProcess {
     static func incarnation(_ nonce: UInt32) -> UInt32 { lock.lock(); defer { lock.unlock() }; return live[nonce] ?? 0 }
     static func set(_ nonce: UInt32, _ token: UInt32?) { lock.lock(); live[nonce] = token; lock.unlock() }
 }
-private final class WeakNatives { weak var natives: NativeViews?; init(_ n: NativeViews) { natives = n } }
+final class WeakNatives { weak var natives: NativeViews?; init(_ n: NativeViews) { natives = n } }
 
 private let nativeEventCallback: NativeEventFn = { _, instance, kind, bytes, length in
     let data = bytes.map { Data(bytes: $0, count: Int(length)) } ?? Data()
@@ -444,7 +444,7 @@ final class NativeViews: NativeModuleHosting {
     /// `EXACT_HATCHES=off` (a development build only, §2.6): the module loads
     /// and its views and calls work; no hatch is connected or called.
     static let hatchesOff = !ExactEnv.productionBake && ExactEnv.environment["EXACT_HATCHES"] == "off"
-    private var entries: [UInt32: NativeEntry] = [:]
+    var entries: [UInt32: NativeEntry] = [:]
     var isEmpty: Bool { entries.isEmpty }
     private var gateOpen = false
     private var waits: [UInt32: NativeWait] = [:]
@@ -463,7 +463,7 @@ final class NativeViews: NativeModuleHosting {
     #endif
     private static let kinds = ["press", "change", "hover", "focus", "blur", "key", "submit", "load", "message"]
 
-    private func log(_ line: String) {
+    func log(_ line: String) {
         session?.log("native \(line)")
         if ExactEnv.environment["EXACT_NATIVE_TRACE"] == "1" { fputs("exact native: \(line)\n", stderr) }
     }
@@ -1326,65 +1326,6 @@ final class NativeViews: NativeModuleHosting {
 
 #if os(iOS) || os(tvOS)
 extension NativeViews {
-    /// A native screen (LLP 1075.003 §3.6): its controller becomes a child
-    /// of the controller its node shows in (a route's), so UIKit gives it
-    /// appearance calls, the safe area and traits, in UIKit's order: added
-    /// as a child, its view `insert`ed, then moved in. A node created in the
-    /// batch that mounts its route is in no controller yet: it is contained
-    /// once that batch is applied.
-    fileprivate func contain(_ entry: NativeEntry, table: NativeTable, retry: Bool = true, insert: () -> Void = {}) {
-        guard let handle = entry.handle, let made = table.platformController?(handle), let owner = entry.owner else { return insert() }
-        let screen = Unmanaged<UIViewController>.fromOpaque(made).takeUnretainedValue()
-        // A node in a route is its route controller's, which the route may
-        // not have yet: one built with its tab or pushed with this node
-        // (LLP 1075.003 §9.14). Until it has, no controller above holds it.
-        var responder: UIResponder? = owner, route: NodeView?
-        while let next = responder, !(next is UIViewController) {
-            if route == nil, let node = next as? NodeView, node.props["navigationKey"] != nil, node.props["navigationBack"] == nil { route = node }
-            responder = next.next
-        }
-        let found = responder as? UIViewController
-        guard let parent = route.map({ $0.routeController(in: found) }) ?? found else {
-            insert()
-            guard retry, let presenter = owner.presenter else { return log("\(entry.name) #\(entry.id): a screen with no controller to hold it") }
-            presenter.afterBatch { [weak self, weak entry] in
-                guard let self, let entry, self.entries[entry.id] === entry, entry.screen == nil,
-                      case .success(let table)? = NativeProcess.table else { return }
-                self.contain(entry, table: table, retry: false)
-            }
-            return
-        }
-        if screen.parent != nil, screen.parent !== parent {
-            screen.willMove(toParent: nil)
-            screen.removeFromParent()
-        }
-        let adds = screen.parent !== parent
-        if adds { parent.addChild(screen) }
-        insert()
-        if adds { screen.didMove(toParent: parent) }
-        entry.screen = screen
-        if adds { log("\(entry.name) #\(entry.id): a screen in \(type(of: parent))") }
-    }
-
-    /// A route's controller has loaded its view: each screen made in the
-    /// route before then, waiting for a controller, is contained now.
-    func routeLoaded(_ route: NodeView) {
-        guard case .success(let table)? = NativeProcess.table else { return }
-        for entry in entries.values where entry.screen == nil && entry.owner?.isDescendant(of: route) == true {
-            contain(entry, table: table, retry: false)
-        }
-    }
-
-    /// A screen's view leaves with its controller, in UIKit's order; a plain
-    /// module view just leaves.
-    fileprivate func release(_ entry: NativeEntry) {
-        guard let screen = entry.screen else { return }
-        screen.willMove(toParent: nil)
-        entry.view?.removeFromSuperview()
-        screen.removeFromParent()
-        entry.screen = nil
-    }
-
     /// Parked instances per tag, and the rows one instance serves before it
     /// is destroyed (LLP 1068 §6, measured on the iPad, §0.3): an instance
     /// keeps what it drew for every region it showed — a map served without

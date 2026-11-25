@@ -67,6 +67,14 @@ public final class ExactPackageEvents {
 public protocol ExactPackageView: AnyObject {
     /// The view the host puts in the node's box; it fills the box.
     var view: ExactPackagePlatformView { get }
+    #if os(iOS) || os(tvOS)
+    /// The controller whose view is `view`, or nil for a plain view. The
+    /// host makes it a child of the controller its node shows in (a
+    /// route's) once that controller exists, and moves it when the node
+    /// shows in another (a dialog's sheet), as for an app's
+    /// `ExactNativeScreen`. The package never adds it to a parent itself.
+    var controller: UIViewController? { get }
+    #endif
     /// Every prop, as strings, replaced on each change; throw to refuse them.
     func setProps(_ props: [String: String]) throws
     /// Last call: the node is gone.
@@ -74,6 +82,9 @@ public protocol ExactPackageView: AnyObject {
 }
 
 public extension ExactPackageView {
+    #if os(iOS) || os(tvOS)
+    var controller: UIViewController? { nil }
+    #endif
     func destroy() {}
 }
 
@@ -499,7 +510,9 @@ public struct ExactPresentation {
     /// The session's window and its scene.
     public let window: UIWindow
     public let scene: UIWindowScene
-    /// The window's root view controller, which a child view controller is added to.
+    /// The window's root view controller, to present over the app from. A
+    /// view's own controller is `ExactPackageView.controller`, never a child
+    /// of this one.
     public let rootViewController: UIViewController
     init?(_ view: UIView) {
         guard let window = view.window, let scene = window.windowScene, let root = window.rootViewController else { return nil }

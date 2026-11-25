@@ -3968,9 +3968,13 @@ A package serves a tag by declaring it in its `exact.json` `views` (LLP 1133.001
 app that depends on the package places it with no `app.json` entry. Its implementation
 makes it in each session, the same instance that answers its names: Swift
 `view(_:id:props:events:)` on the `ExactPackage` class, a `roster` of view classes from the
-web implementation, Kotlin `ExactExtension.view`; `id` is the node's. A view declared
-`"displayed": true` is told `displayed(id, shown, origin)` when it shows or hides, and a
-prop marked `"binds": true` `bound(id, prop, origin)` when it changes. Each report carries
+web implementation, Kotlin `ExactExtension.view`; `id` is the node's. On iOS and tvOS a
+Swift view that is a view controller's view returns that controller as `controller`: the
+host makes it a child of the controller its node shows in (a route's) once that
+controller exists, and moves it when the node shows in another (a dialog's sheet), as
+for an app's `ExactNativeScreen`. The package adds it to no parent itself. A view
+declared `"displayed": true` is told `displayed(id, shown, origin)` when it shows or
+hides, and a prop marked `"binds": true` `bound(id, prop, origin)` when it changes. Each report carries
 the origin of the commit that changed it. On Apple, a track view attaches its presentation through
 `context.tracks.present`. The first matching prop and committed binding subscribe under
 the less privileged of the display and binding origins. A replacement native view reads

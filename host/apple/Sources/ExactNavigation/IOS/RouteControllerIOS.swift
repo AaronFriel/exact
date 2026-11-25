@@ -181,7 +181,7 @@ final class RouteController: UIViewController, UIScrollViewDelegate {
         view = PresentationMount()
         paintBackdrop()
         view.addSubview(node)
-        host?.presenter.session?.natives.routeLoaded(node)
+        host?.presenter.session?.natives.moved(node)
     }
 
     /// The backdrop's colours last written, light and dark.

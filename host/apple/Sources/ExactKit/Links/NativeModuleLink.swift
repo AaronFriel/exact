@@ -113,7 +113,8 @@ package protocol NativeModuleHosting: AnyObject {
     func speaksForItself(_ owner: NodeView) -> Bool
     func declined(_ owner: NodeView, at point: CGPoint, with event: UIEvent?) -> Bool
     func refreshWorldGeometry()
-    func routeLoaded(_ route: NodeView)
+    func moved(_ subtree: NodeView)
+    func leaving(_ subtree: NodeView)
     #else
     func ownsFocus(_ owner: NodeView) -> Bool
     @discardableResult func focus(_ owner: NodeView) -> Bool
@@ -189,7 +190,8 @@ final class NoNativeModule: NativeModuleHosting {
     func speaksForItself(_ owner: NodeView) -> Bool { false }
     func declined(_ owner: NodeView, at point: CGPoint, with event: UIEvent?) -> Bool { false }
     func refreshWorldGeometry() {}
-    func routeLoaded(_ route: NodeView) {}
+    func moved(_ subtree: NodeView) {}
+    func leaving(_ subtree: NodeView) {}
     #else
     func ownsFocus(_ owner: NodeView) -> Bool { false }
     func focus(_ owner: NodeView) -> Bool { false }
