@@ -5466,6 +5466,9 @@ and takes a file drag over a field inside its node; an app can show a drop
 overlay at `dragenter`, which the `drop` action clears when the drop lands
 and `dragleave` clears otherwise; a `paste`'s `ClipboardEvent` carries `files` too. See
 [Pointer](contract-grammar.md#pointer) and [Clipboard](contract-grammar.md#clipboard).
+A Paste button can send a mutation that calls `@exact/clipboard`'s `readText()` with the
+`clipboard.read` grant. To insert the result at the caret, call `setRangeText(id, text)`
+when the mutation answers. On Android the window needs input focus and `read()` lists only plain text.
 
 Use `keycapture=shortcut` on a container when its shortcut must run before
 the focused field's `key=` handler. Capture runs outermost first, then the

@@ -2691,7 +2691,8 @@ column key=move paste=pasteAt(selected) copy=copyCells cut=cutCells
 ```
 
 A Paste button or menu command can send a mutation whose data code calls
-`readText()` or `read()` from `@exact/clipboard` on macOS, iOS and the web.
+`readText()` or `read()` from `@exact/clipboard` on macOS, iOS, Android and the web.
+Android requires window focus and supplies only `text/plain`.
 Declare `clipboard.read` in the data source's grants. A mount, tool, wake or
 headless session rejects with `NotAllowedError` and `person-required`.
 iOS decides whether to show its system paste prompt before reading another app's copy. The agent reads its session pasteboard.

@@ -30,6 +30,7 @@ android {
             "../../../packages/calls/android", "../../../packages/calls/test",
             "../../../packages/camera/android", "../../../packages/camera/test",
             "../../../packages/fixtures/camera-calibration/android", "../../../packages/fixtures/camera-calibration/test",
+            "../../../packages/clipboard/android", "../../../packages/clipboard/test",
             "../../../packages/contacts/android", "../../../packages/contacts/test",
             "../../../packages/gamepad/android", "../../../packages/gamepad/test",
             "../../../packages/geofencing/android", "../../../packages/geofencing/test",

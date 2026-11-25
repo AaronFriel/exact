@@ -5,7 +5,6 @@ import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipDescription
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -238,7 +237,7 @@ internal class Requests(private val activity: ExactActivity) {
 
     /** The clipboard. From Android 13 the system shows what was copied itself. */
     private fun copy(text: String) {
-        activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(appTitle, text))
+        AgentClipboard.copy(activity, appTitle, text)
         if (log) Log.i(TAG, "copied ${text.length} characters")
     }
 

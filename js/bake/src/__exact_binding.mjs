@@ -291,7 +291,9 @@ function binding(name, declaration, implementations, dom=()=>[], members={}, tar
   for (const [shape,fields] of Object.entries(shapes)) {
     // On a target none of the interface's implementations names, `supports` answers false (LLP 1133.006 D7).
     if (keyed(shape)) {
-      const here = !target || implementations.some(i => i.targets?.includes(target));
+      const writers = entries.filter(e => e.send && Object.values(e.options ?? {}).some(t => unwrapped(t) === shape));
+      const writable = !writers.length || writers.some(e => !e.substitute?.unsupported?.includes(target));
+      const here = !target || (writable && implementations.some(i => i.targets?.includes(target)));
       const supported = here ? Object.keys(fields.record).filter(k => !fields.record[k]?.targets || fields.record[k].targets.includes(target)) : [];
       lines.push(...keyedClass(shape,fields.record,outputs.has(shape),supported));
       continue;
