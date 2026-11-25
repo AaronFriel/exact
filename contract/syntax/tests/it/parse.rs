@@ -1045,3 +1045,36 @@ fn test_preference_error_names_supported_facts_and_drive_only_forms() {
         assert!(e.message.contains(form), "{} lacks {form}", e.message);
     }
 }
+
+#[test]
+fn extension_preferences_name_the_drive_at_the_preference_name() {
+    for (line, name, position) in [
+        (
+            r#"test "low power mode"
+  prefer extension device.powerState={"lowPowerMode":true}"#,
+            "extension",
+            (2, 10, 19),
+        ),
+        (
+            "prefer extension device.powerState=clear",
+            "extension",
+            (1, 8, 17),
+        ),
+        (
+            "prefer Extension store.outcome=clear",
+            "Extension",
+            (1, 8, 17),
+        ),
+    ] {
+        let e = parse(line).unwrap_err();
+        assert_eq!(e.id, "syntax-drive-only-preference");
+        assert_eq!((e.span.line, e.span.col, e.span.end_col), position);
+        assert!(e.message.contains(&format!("`prefer {name}`")));
+        assert!(e
+            .message
+            .contains("cannot set extension substitutes or a package's agent values"));
+        assert!(e
+            .message
+            .contains("prefer extension <extension>.<name>=<JSON>|clear"));
+    }
+}

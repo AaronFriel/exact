@@ -904,7 +904,8 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
     }
     const prefer = async (st) => {
       const name = st.name.toLowerCase().replace(/[^a-z]/g, '').replace(/^prefers?/, '');
-      if (['posture', 'segments', 'gap', 'mode', 'extension'].includes(name)) throw new Error(`test prefer: ${st.name} is drive-only for now; authored tests cannot set folds (posture, segments, gap), mode pins or extension substitutes`);
+      if (name === 'extension') throw new Error(`test prefer: ${st.name} is drive-only for now. A test file cannot set extension substitutes or a package's agent values. In an agent drive, use \`prefer extension <extension>.<name>=<JSON>|clear\``);
+      if (['posture', 'segments', 'gap', 'mode'].includes(name)) throw new Error(`test prefer: ${st.name} is drive-only for now; authored tests cannot set folds (posture, segments, gap) or mode pins`);
       const parsed = preferGroups({ [st.name]: st.value });
       if (Object.keys(parsed.midi).length) throw new Error('test prefer: use prefer midi inside a test for MIDI facts');
       const facts = { ...parsed.media, ...parsed.page, ...Object.fromEntries(Object.entries(parsed.extension.permission ?? {}).map(([name, value]) => [`permission.${name}`, value])) };

@@ -555,10 +555,21 @@ impl Parser {
             "prefer" if self.at_ident("midi") => return self.prefer_midi(span),
             "prefer" => {
                 // A module's permission is dotted (`permission.notifications`).
-                let (mut name, _) = self.ident()?;
+                let (mut name, name_span) = self.ident()?;
                 while self.eat_punct(".") {
                     name.push('.');
                     name.push_str(&self.ident()?.0);
+                }
+                // A whole word or quoted value already parses. The driver refuses those
+                // per test so the other tests in the file still run.
+                if !matches!((self.peek_kind(), self.peek2()),
+                    (TokenKind::Ident(_) | TokenKind::Str(_), TokenKind::Newline | TokenKind::Eof))
+                    && prefer_key(&name) == "extension" {
+                    return Err(SyntaxError {
+                        id: "syntax-drive-only-preference",
+                        message: format!("`prefer {name}` sets an extension substitute in a drive. A test file can set media preferences, page facts and module permissions. It cannot set extension substitutes or a package's agent values. In an agent drive, use `prefer extension <extension>.<name>=<JSON>|clear`"),
+                        span: name_span,
+                    });
                 }
                 let value = match self.next() {
                     Token { kind: TokenKind::Ident(value) | TokenKind::Str(value), .. } => value,
@@ -1421,6 +1432,7 @@ fn prefer_key(name: &str) -> &str {
         "segments",
         "gap",
         "mode",
+        "extension",
         "midi.state",
         "midi.inputs",
         "midi.outputs",
