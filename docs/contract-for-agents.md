@@ -4753,6 +4753,16 @@ journal entry naming the route.
 
 ## Tabs and stacks
 
+On iPad a tab keeps a pushed stack by default. Write `navigationSplit="split"`
+on the first keyed route in the tabpanel to keep that route beside its detail.
+On a tab’s keyed route the value must be the literal `"split"` or `"none"`, or absent.
+To offer both presentations, declare two tabs or two routes. An untabbed route
+can still bind the value or specify a positive column width.
+UIKit keeps the tab bar and collapses the columns in a compact window.
+On iPad this also works on an untabbed first route. UIKit chooses the column
+width, including for a custom primary without a list.
+Use `navigationSplit="none"` to keep a stack at every width. [Navigation stack](recipes/navigation-stack.md)
+
 On iOS, `overflow="auto"` or `"scroll"` on the navigation root keeps the native
 container inside that scroller, sized to the root's box. Otherwise the native
 container fills the session view.

@@ -66,6 +66,24 @@ impl<D: DataSource> Runner<D> {
             .collect()
     }
 
+    /// Panels whose first route may request an iPad split, including panels
+    /// whose contents wait for selection (LLP 1127 D19).
+    pub fn possible_split_panels(&self, panels: &[ViewId]) -> Vec<ViewId> {
+        let sites = self
+            .split_panel_sites
+            .get_or_init(|| crate::instance::tabs::split_panel_sites(&self.plan));
+        panels
+            .iter()
+            .copied()
+            .filter(|&panel| {
+                !sites.is_empty()
+                    && self
+                        .plan_site_of(panel)
+                        .is_some_and(|s| sites.binary_search(&s).is_ok())
+            })
+            .collect()
+    }
+
     /// The tab panels' state a reload carries: each built panel's, and what
     /// the last reload carried for one not built since.
     pub(super) fn carry_panels(&self) -> CarriedPanels {

@@ -30,6 +30,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     /// A list beside its detail: the primary stack as UIKit's split
     /// (SplitIOS.swift), its list's column `primaryNavigation`.
     var split: SplitIOS?
+    var tabSplits: [UInt32: SplitIOS] = [:]
     /// The runner could not say whether the stack splits (`reshape`), and
     /// asks again on the main queue's next turn.
     var splitAskOwed = false
@@ -628,10 +629,26 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         let parts = Array(segments.enumerated().prefix { $0.offset == 0 || !logicallyHidden(wanted[$0.element.lowerBound].node) }.map(\.element))
         reshape(p)
         installPrimary(p, first: Array(wanted[parts[0]]))
-        // Before any hold: what the batch did to the split's base is the pressed row's whose press made it (LLP 1127 D3)
+        if let tabs = p.tabs {
+            for (index, panel) in tabs.panels.enumerated() {
+                if let tab = tabStacks[panel.id] as? PendingTab, tab.children.isEmpty, !p.wanted[index].isEmpty {
+                    tab.install(makeTabStack(panel.id, base(p.wanted[index]), navigation: tab.navigation))
+                }
+            }
+            split = tabSplits[tabs.panels[p.at].id]
+            if let split {
+                if let answer = splitRule(p.chosen.first) {
+                    split.rule = answer
+                    split.listNode = answer?.list
+                } else {
+                    askSplitNextTurn()
+                }
+            }
+        }
+        // Before any hold: the press whose batch opened the detail selects its row.
         if let split { creditPresses(split, batch: batch.sequence, stack: Array(wanted[parts[0]])) }
         // The other tabs' stacks, the selected tab and its items (LLP 1075.003 §3.7).
-        if p.tabs != nil { syncTabs(p) }
+        if p.tabs != nil { syncTabs(p, sequence: batch.sequence) }
         // Initial content draws before a presentation covers it.
         if parts.count > 1, let session = presenter.session, session.firstDrawMs == nil { return }
         guard !changing, !presenter.modalHost.inTransition else {

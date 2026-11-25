@@ -84,7 +84,34 @@ final class PlainTab: UIViewController {
     }
 }
 
+/// A panel template may choose its route in an `if` inside a repeated tab.
+/// UIKit needs a permanent tab before the runner builds that panel's first route.
+final class PendingTab: UIViewController {
+    let navigation: Bool
+
+    init(navigation: Bool) {
+        self.navigation = navigation
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:)") }
+
+    func install(_ child: UIViewController) {
+        addChild(child)
+        child.view.frame = view.bounds
+        child.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(child.view)
+        child.didMove(toParent: self)
+    }
+}
+
 extension NavigationHost {
+    func tabWantsSplit(_ route: RouteController?) -> Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && !ExactEnv.authoredChrome &&
+            route?.node.props["navigationSplit"] == "split" &&
+            !["modal", "fullscreen"].contains(route?.node.props["navigationPresentation"] ?? "")
+    }
+
     /// Tab `index`'s controller.
     func tabStack(_ index: Int) -> UIViewController? { tabPanels.indices.contains(index) ? tabStacks[tabPanels[index]] : nil }
 
@@ -94,11 +121,14 @@ extension NavigationHost {
         if let bootOwner { return [bootOwner] }
         guard !tabPanels.isEmpty else { return [primaryNavigation, split?.detail].compactMap { $0 } }
         let held = moreTab
-        return tabPanels.indices.compactMap { $0 == held ? more : tabStack($0) }
+        return tabPanels.indices.flatMap { index -> [UIViewController] in
+            if let columns = tabSplits[tabPanels[index]] { return [columns.list, columns.detail] }
+            return [index == held ? more : routesStack(index)].compactMap { $0 }
+        }
     }
 
     /// The router's tab, when it is a plain tab.
-    var primaryPlain: PlainTab? { tabStack(routerTab) as? PlainTab }
+    var primaryPlain: PlainTab? { routesStack(routerTab) as? PlainTab }
 
     /// The routes of each navigation controller whose hatch left its bar
     /// shown (`showsBar`): the primary stacks first, then the sheets'.
@@ -107,13 +137,33 @@ extension NavigationHost {
             .filter { stacks[ObjectIdentifier($0)]?.showsBar == true }.map(\.stackRoutes)
     }
 
-    /// A tab's controller, made once: a navigation controller for a tab that
-    /// needs one (`navigation`), else a plain tab.
+    /// Make the controller the tab's root asks for, even before UIKit shows it.
     func makeTabStack(_ panel: UInt32, _ routes: [RouteController], navigation: Bool) -> UIViewController {
+        if tabWantsSplit(routes.first) {
+            let requested = StackSplit(list: nil, width: nil, rows: [:])
+            let rule = splitRule(routes.first) ?? nil
+            let columns = makeSplit(first: routes, rule: rule ?? requested)
+            tabSplits[panel] = columns
+            // More pushes a tab's controller. UIKit forbids pushing a split view controller.
+            // A tab that can move under More contains its split as a child.
+            let owner: UIViewController
+            if tabPanels.count > 5 && !(tabStacks[panel] is PendingTab) {
+                let tab = PendingTab(navigation: navigation)
+                tab.install(columns.controller)
+                owner = tab
+            } else {
+                owner = columns.controller
+            }
+            if tabPanels.indices.contains(routerTab), tabPanels[routerTab] == panel {
+                split = columns
+                primaryNavigation = columns.list
+            }
+            startSplit(columns, first: routes)
+            return owner
+        }
         guard navigation else {
             let plain = PlainTab()
             plain.host = self
-            tabStacks[panel] = plain
             setRoutes(routes, in: plain)
             return plain
         }
@@ -121,7 +171,6 @@ extension NavigationHost {
         prepareRoutes(routes, in: nav)
         nav.setViewControllers(routes, animated: false)
         watchPops(nav)
-        tabStacks[panel] = nav
         return nav
     }
 

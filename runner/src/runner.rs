@@ -375,7 +375,9 @@ pub struct Runner<D: DataSource> {
     strings: vm::Strings,
     sites: crate::instance::SiteIndex,
     inspection_digest: std::cell::OnceCell<String>,
-    /// The plan's tab panel sites and whether each needs a navigation controller (`Runner::panels_need_navigation`).
+    /// Panel templates with a route that can request a split.
+    split_panel_sites: std::cell::OnceCell<Vec<NodesId>>,
+    /// The plan's tab panel sites and whether each needs a navigation controller.
     panel_navigation: std::cell::OnceCell<(Vec<NodesId>, Vec<bool>)>,
     /// [`Runner::keeps_midi`], made at the first agent read.
     keeps_midi: std::cell::OnceCell<bool>,
@@ -874,6 +876,7 @@ impl<D: DataSource> Runner<D> {
             page: crate::time::launch_page(&plan),
             plan,
             inspection_digest: std::cell::OnceCell::new(),
+            split_panel_sites: std::cell::OnceCell::new(),
             panel_navigation: std::cell::OnceCell::new(),
             keeps_midi: std::cell::OnceCell::new(),
             action_binding_origin: std::rc::Rc::new(()),

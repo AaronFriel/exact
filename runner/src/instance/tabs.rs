@@ -111,6 +111,22 @@ pub fn sites_need_navigation(
     navigation
 }
 
+/// Panel templates with a keyed child route that can request an iPad split.
+/// An unopened panel's contents will choose the route at first selection.
+pub(crate) fn split_panel_sites(plan: &Plan) -> Vec<NodesId> {
+    let mut sites: Vec<_> = (0..plan.nodes.len() as u32)
+        .map(NodesId)
+        .filter(|&n| {
+            literal_str(plan, n, PropId::NavigationSplit) == Some("split")
+                && binds(plan, n, PropId::NavigationKey)
+        })
+        .filter_map(|route| enclosing(plan, route).map(|(parent, _)| parent))
+        .collect();
+    sites.sort_unstable();
+    sites.dedup();
+    sites
+}
+
 /// Whether node `n` binds `prop`.
 fn binds(plan: &Plan, n: NodesId, prop: PropId) -> bool {
     plan.node(n)

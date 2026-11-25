@@ -472,6 +472,14 @@ impl NavPlace {
                 }
             }
         }
+        if matches!(self, NavPlace::PanelChild(..)) && self.is_route(attrs) {
+            if let Some(a) = attrs.iter().find(|a| {
+                a.name == "navigationSplit"
+                    && !matches!(&a.value, Expr::Str(s, _) if s == "split" || s == "none")
+            }) {
+                return err("lower-tab-split", "a tab is a split or a stack by construction: write the literal \"split\" or \"none\" for `navigationSplit`, or leave it out. To offer both, declare two tabs or two routes", a.span);
+            }
+        }
         // @ref LLP 1116.006 D2 — the split's placeholder is a box in the root route; a route
         // marked so would never show.
         if let Some(a) = split_placeholder(attrs).filter(|_| has("navigationKey")) {

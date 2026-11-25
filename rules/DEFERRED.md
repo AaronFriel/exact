@@ -31,6 +31,8 @@ for synchronous OPFS selects IndexedDB. On either store, opening a path held by
 another connection follows D10's ten-second Web Lock wait. A timeout returns
 `Unavailable`/`EBUSY` and never switches stores.
 
+**iPad split views (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"; panel 4–0).** LLP 1127 D19. An iPad tab splits only when its first route says `navigationSplit="split"`. The untabbed directory default stays automatic. Column counts, display mode, split behaviour, compact column, column width controls and a split event wait for an app that needs them. A presented route as the root of a split is deferred.
+
 **Expanded (James, 2026-11-24: "We can make the ruling"):** `swipe=action`
 with `swipe-direction` (LLP 1057.001 §8), the platform's discrete swipe in one
 direction, built on iOS. Exact Chat is the consumer: its composer bar puts the

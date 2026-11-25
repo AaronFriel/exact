@@ -464,7 +464,7 @@ extension NavigationHost {
                     return reselect ? ["error": "tab #\(id): \(backRefusal)"] : reply
                 }
                 if reselect { (controller as? UINavigationController)?.popToRootViewController(animated: !ExactEnv.agentFreezes) }
-                else { tabsController.selectedViewController = controller }
+                else { selectInUIKit(index, in: tabsController) }
                 // A container built from `UITab`s sends `didSelectTab` for the selection itself, not for a reselect
                 if reselect { sendReselect(tabsController, controller) } else if builtTabs.isEmpty { tabProxy?.tabBarController(tabsController, didSelect: controller) }
                 return reply
