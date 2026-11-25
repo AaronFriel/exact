@@ -1,6 +1,7 @@
 # Unsynchronized self.input data race and stale capture break iOS camera switching and fast teardown (and Web applyConstraints camera move lacks a lease check)
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Serialized Apple VideoCapture self.input mutations on the camera queue (and synchronized self.device), and guarded Web applyConstraints camera moves with a captured lease across await and error handling.
 **Systems:** @exact/media-capture (Apple, Web)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

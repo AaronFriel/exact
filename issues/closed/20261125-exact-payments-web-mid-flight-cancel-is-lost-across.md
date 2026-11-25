@@ -1,6 +1,7 @@
 # @exact/payments (Web): mid-flight cancel() is lost across onpaymentauthorized retry and PaymentResponse.retry(), re-invoking onpaymentauthorized on a cancelled checkout
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Latched letGo on web payment requests across onpaymentauthorized retries and PaymentResponse.retry() so cancelled checkouts complete with fail without calling retry() or re-invoking onpaymentauthorized.
 **Systems:** packages/payments (Web Payment Request API)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

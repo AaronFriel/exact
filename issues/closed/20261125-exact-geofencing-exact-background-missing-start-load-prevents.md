@@ -1,6 +1,7 @@
 # @exact/geofencing & @exact/background: missing "start": "load" prevents launch initialization, silently dropping Android geofence/periodic-sync wakes and offline sync drains
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Declared "start": "load" in packages/geofencing/exact.json and packages/background/exact.json so both extensions initialize at launch on Android and Apple.
 **Systems:** packages/geofencing (manifest + Android), packages/background (manifest + Android & Apple)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

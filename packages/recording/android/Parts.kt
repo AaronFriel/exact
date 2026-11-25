@@ -90,8 +90,9 @@ internal class PartWriter(app: Context, val file: File, admit: (() -> Unit)? = n
     /** The take ended: its frames made an MP4 at `<path>`, the part deleted. */
     fun finish() {
         out.close()
-        mux(part, file)
-        ledger.edit().remove(file.path).commit()
+        val ok = mux(part, file)
+        if (ok || !part.exists()) ledger.edit().remove(file.path).commit()
+        if (!ok) throw java.io.IOException("the take could not be muxed to ${file.path}")
     }
 
     /** The take failed before [finish]: the part stays in the ledger for a later process to recover. */
@@ -125,6 +126,7 @@ internal fun mux(part: File, file: File): Boolean {
     val tmp = File(file.path + ".mp4.tmp")
     tmp.delete()
     val muxer = MediaMuxer(tmp.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+    var muxed = false
     try {
         val track = muxer.addTrack(format)
         muxer.start()
@@ -138,10 +140,15 @@ internal fun mux(part: File, file: File): Boolean {
             muxer.writeSampleData(track, all, info)
         }
         muxer.stop()
+        muxed = true
     } finally {
         muxer.release()
+        if (!muxed) tmp.delete()
     }
-    if (!tmp.renameTo(file)) return false
+    if (!tmp.renameTo(file)) {
+        tmp.delete()
+        return false
+    }
     part.delete()
     return true
 }

@@ -1,6 +1,7 @@
 # Apple audio Recorder.completed() swallows open, backpressure, write, and recovery failures as stopMediaRecorder success (and Android PartWriter.finish() ignores failed mux())
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Propagated Apple Recorder open, write, backpressure, recovery, and agent-write failures as stopMediaRecorder errors (with .recovered.mp4 for Opus), and made Android PartWriter.finish() fail and retain the ledger entry when mux() fails while the part survives.
 **Systems:** @exact/recording (Apple, Android)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -1,6 +1,7 @@
 # @exact/background (Apple & Android): frozen epochAtZero over sleep-pausing monotonic clocks permanently drops Android WorkManager sync retries and repeatedly defers iOS BGTask retries across device sleep
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Used live wall time outside agent mode in Apple and Android BackgroundModule (converting Apple wake targets via the live offset and re-enqueuing early Android sync wakes) so device sleep does not drop or drift sync retries.
 **Systems:** packages/background (Apple BGTaskScheduler/WakeStore, Android WorkManager)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

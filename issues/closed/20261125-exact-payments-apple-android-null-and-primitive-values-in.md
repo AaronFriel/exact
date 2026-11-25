@@ -1,6 +1,7 @@
 # @exact/payments (Apple & Android): null and primitive values in payment handler replies crash Apple Pay after authorization, silently reset Google Pay totals to $0.00 USD, and reject valid shipping updates
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Ignored explicit JSON null fields in Apple and Android payment updates/retries and JSON-encoded primitive PaymentResult.data values safely with .fragmentsAllowed and JSONObject.quote.
 **Systems:** packages/payments (Apple PassKit, Android Google Pay)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

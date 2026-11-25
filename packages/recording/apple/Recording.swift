@@ -210,6 +210,8 @@ final class Recorder: ExactTrackConsumer, MediaTake {
     private let track: String
     private(set) var state = "recording", reason: String?, error: String?
     private var result: [String: Any]?
+    /// What every stop is answered once finished: `result`, or the error that prevented a valid file.
+    private var answer: [String: Any]?
     private var limit: (() -> Void)?
     private let maxDuration: Double
     func arm() {
@@ -335,7 +337,7 @@ final class Recorder: ExactTrackConsumer, MediaTake {
 
     /// Stop for `why`, finish the file, answer the result; sticky once inactive (D1).
     func finish(_ why: String, error: String? = nil, _ done: @escaping ([String: Any]) -> Void) {
-        if let result { return done(result) }
+        if let answer { return done(answer) }
         finishing.append(done)
         guard state != "inactive" else { return }
         recorded = duration; since = nil
@@ -347,25 +349,45 @@ final class Recorder: ExactTrackConsumer, MediaTake {
         changed()
         let spans = spans, agent = context.agent, url = url, duration = recorded, writer = writer
         queue.async { [self] in
+            var agentFailure: String?
             if agent {
-                try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try? Writer.tone(spans).write(to: url)
+                do {
+                    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try Writer.tone(spans).write(to: url)
+                } catch {
+                    agentFailure = "the file was not written: \(error)"
+                }
             }
-            let complete = { let failure = writer?.failure; DispatchQueue.main.async { self.completed(why, duration, failure: failure) } }
+            let complete = {
+                let failure = agentFailure ?? writer?.failure
+                DispatchQueue.main.async { self.completed(why, duration, failure: failure) }
+            }
             if let writer { writer.finish(complete) } else { complete() }
         }
     }
 
-    /// The file is finished: the result, answered to every stop that waited.
+    /// The file is finished: the result or failure, answered to every stop that waited.
     private func completed(_ why: String, _ duration: Double, failure: String?) {
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue ?? 0
         subscription?.cancel(); subscription = nil
-        let result: [String: Any] = ["path": path, "mimeType": type, "duration": duration, "size": size]
-        self.result = result
-        context.log("recording: \(id) stopped (\(why)), \(path), \(size) bytes" + (failure.map { "; the writer failed: \($0)" } ?? ""))
+        let unwritten = self.error ?? failure ?? (size == 0 ? "the file was not written" : nil)
+        let out: [String: Any]
+        if let unwritten {
+            reason = "error"
+            self.error = unwritten
+            self.result = nil
+            out = ["error": "UnknownError", "message": unwritten]
+            context.log("recording: \(id) stopped (\(why)), \(path) not written: \(unwritten)")
+        } else {
+            out = ["path": path, "mimeType": type, "duration": duration, "size": size]
+            self.result = out
+            context.log("recording: \(id) stopped (\(why)), \(path), \(size) bytes")
+        }
+        self.answer = out
         changed()
-        for f in finishing { f(result) }
+        let callbacks = finishing
         finishing = []
+        for f in callbacks { f(out) }
     }
 
     /// A buffer's frames, copied off the audio thread's reuse.
@@ -549,13 +571,14 @@ final class Writer {
     }
 
     /// Re-encode only a failed take, with bounded memory. Preserve the original
-    /// and PCM if recovery fails; replace the playable path only after closing AAC.
+    /// and PCM if recovery fails; replace the playable path only after closing the re-encoded file.
     func recover() throws {
         if let backupFailure { throw CaptureFailure(backupFailure) }
         guard let backupURL else { throw CaptureFailure("no recovery audio") }
         backup = nil
         let source = try AVAudioFile(forReading: backupURL, commonFormat: format.commonFormat, interleaved: format.isInterleaved)
-        let rebuilt = url.deletingPathExtension().appendingPathExtension("recovered.m4a")
+        let ext = (encoding[AVFormatIDKey] as? AudioFormatID) == kAudioFormatOpus ? "recovered.mp4" : "recovered.m4a"
+        let rebuilt = url.deletingPathExtension().appendingPathExtension(ext)
         defer { try? FileManager.default.removeItem(at: rebuilt) }
         var output: AVAudioFile? = try AVAudioFile(forWriting: rebuilt, settings: encoding,
                                                   commonFormat: format.commonFormat, interleaved: format.isInterleaved)

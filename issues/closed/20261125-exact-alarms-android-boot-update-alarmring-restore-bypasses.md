@@ -1,6 +1,7 @@
 # @exact/alarms (Android): boot/update AlarmRing.restore() bypasses revoked SCHEDULE_EXACT_ALARM check and starts systemExempted foreground service
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Checked canScheduleExactAlarms() in Android AlarmRing.restore() and due(), dropping held records instead of starting AlarmService when exact-alarm permission is revoked.
 **Systems:** packages/alarms (Android AlarmSystemReceiver, AlarmRing, AlarmService)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

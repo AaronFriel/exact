@@ -65,4 +65,38 @@ class PartsTest {
         assertTrue(live.part.exists())
         live.finish()
     }
+
+    /** Stopping before any AAC frame was emitted fails finish() and clears the ledger once the empty part is deleted. */
+    @Test fun finishWithZeroFramesThrowsAndClearsLedger() {
+        val file = File(dir, "empty.m4a")
+        val w = writer(file)
+        assertThrows(java.io.IOException::class.java) { w.finish() }
+        assertFalse(file.exists())
+        assertFalse(w.part.exists())
+        val owners = app.getSharedPreferences("exact.recording.parts", Context.MODE_PRIVATE).all
+        assertFalse("empty part must not remain in ledger", file.path in owners)
+    }
+
+    /** A rename failure fails finish(), preserves the part and its ledger entry, and leaves recovery intact. */
+    @Test fun finishWhenRenameFailsThrowsAndKeepsPartInLedger() {
+        val file = File(dir, "blocked.m4a")
+        val w = writer(file)
+        w.write(ByteBuffer.wrap(byteArrayOf(1, 2)), 2)
+        // A non-empty directory at the destination makes File.renameTo return false on POSIX.
+        assertTrue(file.mkdirs())
+        File(file, "blocker").writeText("keep")
+        assertThrows(java.io.IOException::class.java) { w.finish() }
+        assertTrue("part must survive a failed rename", w.part.exists())
+        assertFalse("temp mux file is cleaned up", File(file.path + ".mp4.tmp").exists())
+        val prefs = app.getSharedPreferences("exact.recording.parts", Context.MODE_PRIVATE)
+        assertTrue("ledger keeps the part for recovery", file.path in prefs.all)
+
+        // Once the destination is clear and another process recovers, the saved part becomes an MP4.
+        file.deleteRecursively()
+        prefs.edit().putString(file.path, "gone").commit()
+        recoverParts(app) { lines += it }
+        assertEquals(listOf("recording: recovered ${file.path}"), lines)
+        assertTrue(file.isFile)
+        assertFalse(w.part.exists())
+    }
 }

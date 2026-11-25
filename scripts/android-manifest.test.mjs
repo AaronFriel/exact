@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { fragmentPermissions, manifestFragment } from './android-manifest.mjs';
 import { androidImplementations, appleImplementations, webImplementations } from '../js/bake/src/typescript.mjs';
+import { composedModule } from '../host/apple/compose.mjs';
 import { packageConfig } from '../js/bake/src/package-config.mjs';
 
 test('package implementation filters use the supplied identities and ignore unused source text', () => {
@@ -63,6 +64,26 @@ test('only the selected interface supplies an implementation and configuration w
     assert.ok(androidImplementations(app, extensions)[0].dirs.every(p => p.includes('/@a/swatch/')));
     assert.ok(webImplementations(app, extensions).get('swatch').includes('/@a/swatch/'));
     assert.deepEqual([...packageConfig(app, 'web', { extensions })], [['swatch', { key: 'selected' }]]);
+  } finally { rmSync(app, { recursive: true, force: true }); }
+});
+
+test('geofencing and background declare start=load for Android and Apple composition', () => {
+  const app = mkdtempSync(resolve(tmpdir(), 'exact-start-at-load-'));
+  try {
+    mkdirSync(resolve(app, 'node_modules/@exact'), { recursive: true });
+    symlinkSync(resolve(import.meta.dir, '../packages/geofencing'), resolve(app, 'node_modules/@exact/geofencing'), 'dir');
+    symlinkSync(resolve(import.meta.dir, '../packages/background'), resolve(app, 'node_modules/@exact/background'), 'dir');
+    writeFileSync(resolve(app, 'app.contract'), 'component App\n  view\n    text "plain"\n');
+    const extensions = { geofencing: '@exact/geofencing', background: '@exact/background' };
+    const android = androidImplementations(app, extensions);
+    assert.deepEqual(android.filter(b => b.start).map(b => b.extension).sort(), ['background', 'geofencing']);
+    for (const target of ['ios', 'macos']) {
+      const apple = appleImplementations(app, target, extensions);
+      assert.deepEqual(apple.filter(b => b.start).map(b => b.extension).sort(), ['background', 'geofencing']);
+      const swift = composedModule(apple, false);
+      assert.match(swift, /let exactStartAtLoad: \[String\] = \[[^\]]*"background"/);
+      assert.match(swift, /let exactStartAtLoad: \[String\] = \[[^\]]*"geofencing"/);
+    }
   } finally { rmSync(app, { recursive: true, force: true }); }
 });
 
