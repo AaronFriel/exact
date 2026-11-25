@@ -341,7 +341,10 @@ extension NavigationHost {
                     // Only the scroller whose clearance takes back UIKit's inset loses it in layout.
                     let back = min(0, node.scrollView.flatMap { extras[ObjectIdentifier($0)]?.bottom } ?? 0)
                     let bottomOff = RouteGeometry.clearanceOff(c.node) & 4 != 0
-                    let bottom = noTop && node !== c.edgeScroll ? 0 : max(0, max(safe.bottom, bottomOff ? 0 : reach) + back - node.pageBand.bottom)
+                    // When a tab bar goes away on a cover page, the route takes its padding back.
+                    // The title scroller's old safe area disappears after that layout.
+                    let keepsBottom = covered && !presented && c.tabBarController != nil && !bottomOff && node !== c.edgeScroll && !peerBottom
+                    let bottom = keepsBottom || (noTop && node !== c.edgeScroll) ? 0 : max(0, max(safe.bottom, bottomOff ? 0 : reach) + back - node.pageBand.bottom)
                     if top > 0 || bottom > 0 { wanted[node.id] = .inset(top: top, bottom: bottom) }
                 } else if case .inset? = covers[node.id] { wanted[node.id] = covers[node.id] }
             }
