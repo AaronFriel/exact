@@ -33,6 +33,7 @@ android {
             "../../../packages/clipboard/android", "../../../packages/clipboard/test",
             "../../../packages/contacts/android", "../../../packages/contacts/test",
             "../../../packages/gamepad/android", "../../../packages/gamepad/test",
+            "../../../packages/face-detection/android", "../../../packages/face-detection/test",
             "../../../packages/geofencing/android", "../../../packages/geofencing/test",
             "../../../packages/geocoding/android", "../../../packages/geocoding/test",
             "../../../packages/geolocation/android", "../../../packages/geolocation/test",
@@ -74,6 +75,7 @@ dependencies {
     implementation("androidx.webkit:webkit:1.16.0")
     testImplementation("com.google.android.play:age-signals:0.0.4")
     testImplementation("com.google.android.play:app-update:2.1.0")
+    testImplementation("com.google.mlkit:face-detection:16.1.7")
     testImplementation("com.google.mlkit:text-recognition:16.0.1")
     testImplementation("com.google.mlkit:barcode-scanning:17.3.0")
     testImplementation("com.google.mlkit:genai-prompt:1.0.0-beta4")

@@ -1907,6 +1907,7 @@ reading. Nothing that isn't HTML is added by it.
   Rewriter; Android text in scripts other than Latin; Android's platform
   `TranslationManager` and `TextClassifier`; barcode generation and
   Vision's other requests; and the Windows and Linux cells.
+- **Expanded (Charlie, 2026-11-24, "recs ok"; LLP 1133.027 §11):** ss-control’s visitor-photo check admits still-image face detection on Apple and Android and the web’s own `FaceDetector`, optional signed head pose in degrees, and Android’s two eye-open probabilities (F1 addendum). Smile probability and capture quality stay out.
 - **Expanded (Daehyeon Mun, 2026-10-23; trade; LLP 1133.006):** the
   clipboard's `write([new ClipboardItem(…)])` from data code, by the
   Clipboard API's names, for `image/png` (the app converts other images

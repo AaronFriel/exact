@@ -5892,6 +5892,25 @@ distinguishes supported, experimental and mapped languages; all its Latin entrie
 are admitted. Its [line result](https://developers.google.com/android/reference/com/google/mlkit/vision/text/Text.Line)
 defines the corner order and the unknown-language tag.
 
+### Detect faces in a still image (`@exact/face-detection`)
+
+`detectFaces(image=, maxDetectedFaces=, fastMode=)` reads a path covered by `fs.read`, such as a camera still or a picked file. It returns the EXIF-upright `width` and `height` and a `faces` list, largest box first. A picture with no face succeeds with an empty list. A face’s `boundingBox` has `x`, `y`, `width` and `height` in upright, full-resolution pixels measured from the top left. A box can extend beyond the image. Intersect it with the image before cropping. Each landmark has point `locations` and a `type` when known (`eye`, `mouth`, or `nose`). Vision returns an eye contour. ML Kit returns one point per detected eye. Models can infer landmarks on a partly hidden face. [Shape Detection API §2.2](https://wicg.github.io/shape-detection-api/#face-detection-api)
+
+Optional `pose` holds three angles in degrees. From the photographed person’s frame, positive `yaw` turns the nose to their left, positive `pitch` lifts their chin, and positive `roll` tips their right ear toward their right shoulder. A host omits `pose` when any angle is unavailable. An app checking for exactly one face should omit `maxDetectedFaces` so it can see a second face.
+
+| Host | Detection |
+| --- | --- |
+| iOS, iPadOS, macOS, tvOS | Vision supplies face rectangles, pose and landmarks. |
+| Android | Bundled ML Kit 16.1.7 runs offline and added 13,791,238 bytes to the signed arm64 test APK. The `android` member holds `leftEyeOpenProbability` and `rightEyeOpenProbability` when available, each from 0 to 1. The sides are the person’s. ML Kit’s default minimum face size is a tenth of the input width. |
+| Web | The browser’s own `FaceDetector` where available. The web API supplies boxes and landmarks. Landmark types are optional, and the API supplies no head angles. |
+| Hosts without a detector | `NotSupportedError`, including under a drive. |
+
+Landmark positions were checked on macOS and Android. On the iOS 26.5 simulator, Vision moved eye points between reads of identical pixels and eventually placed them outside the face box. Use an iPhone to test landmark positions. The iPhone check is still pending. The tvOS implementation has been compiled only.
+
+The image and detection results stay on the device. Google documents the operational metrics its SDK collects. [ML Kit data disclosure](https://developers.google.com/ml-kit/android-data-disclosure)
+
+The native implementations decode at up to 2048 pixels on the longer side. The browser decodes the full bitmap, then draws it into an upright canvas at that limit. With `fastMode`, Vision uses a 1024-pixel thumbnail, ML Kit uses its fast performance mode, and the browser receives the hint. The Apple `requestHatch` can configure both Vision requests before they run. The landmarks request’s search region also applies to the rectangles request unless the app overrides it there. Android’s `optionsHatch` configures the ML Kit options builder before a client is created. ML Kit omits head angles when fast mode, all contours, no landmarks and no classification are selected together. Drives use the default native options. An explicit `maxDetectedFaces` must be an integer from 0 through 65535 (`TypeError`). A missing file fails with `NotFoundError`, unreadable image data with `InvalidStateError`, and detector failure with `OperationError`. A drive uses the same on-device detector as the app. [Measured boxes, angles, eye probabilities and APK size](../packages/face-detection/test/checklist.md)
+
 ### Read barcodes (`@exact/barcode-detection`)
 
 `getSupportedFormats()` answers `formats` and `tracks` (whether live scanning is
