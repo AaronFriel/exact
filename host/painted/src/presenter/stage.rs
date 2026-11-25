@@ -62,6 +62,12 @@ pub const SHEET_HANDLE: f32 = 48.0;
 const SHEET_MAX_WIDTH: f32 = 640.0;
 const SHEET_CORNER: f32 = 28.0;
 const SCRIM: f32 = 0.32;
+/// A centered Material sheet's left margin and width in the page.
+pub(crate) fn sheet_span(page_width: f32) -> (f32, f32) {
+    let width = page_width.min(SHEET_MAX_WIDTH);
+    ((page_width - width) / 2.0, width)
+}
+
 /// Material's motion: a sheet's entrance (emphasized decelerate), its exit
 /// (emphasized accelerate), a settle between detents, and the shared axis.
 const ENTER_MS: f64 = 350.0;
@@ -392,9 +398,7 @@ impl<D: DataSource> Presenter<D> {
 
     /// A sheet's left edge and width.
     fn sheet_span(&self) -> (f32, f32) {
-        let w = self.viewport.0;
-        let width = w.min(SHEET_MAX_WIDTH);
-        ((w - width) / 2.0, width)
+        sheet_span(self.viewport.0)
     }
 
     fn sheet_top_now(&self, sheet: &Sheet) -> f32 {
