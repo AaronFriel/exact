@@ -20,7 +20,11 @@
 
 - Measure the cost of refusing a Forma proposal after an unchanged prefix under load. On the M5 Max, the parent of the bottom-toolbar change took 103 ms against the 80 ms budget in `a_refusal_after_an_unchanged_prefix_stays_within_the_budget`.
 
-- On an iPhone with bottom tabs, join the toolbar buttons beside the tab bar to their test IDs in the in-process `tree --ax` containment walk. XCTest’s system accessibility snapshot includes both buttons with their labels and IDs (#1422).
+- Run `bun test ./scripts/agent.test.mjs -t 'the driver grammar names an unquoted mediasession action'`. The no-argument usage omits the pinch and mediasession forms the test expects.
+
+- Compare a first visit to Sound after Labs and Controls on a three-tab iPhone at 26.5. Its single Widget is fully covered. At launch and on push its frame matches stock. On first selection Exact measured 78.33 pt wide and a stock stack loaded before selection measured 80.33 pt. Repeat on 27.2 alongside the stock placement check (#1422).
+
+- On iPhone 17 and iPad (A16) at 26.5, open a three-tab app with a route toolbar and run `tree --ax`. Join the missing Reshape and Widget buttons to their test IDs in the containment walk. XCTest's system accessibility snapshot includes both (#1422).
 
 - Pocket Lab can replace its Android `/open?u=%s` protocol handler with the same `urlSchemes` array it uses on iOS. Revisit a shared manifest key if apps keep repeating the array across hosts (#1597).
 - Register `SSControl` in Android `protocol_handlers` and open an uppercase `SSControl:` link. Android’s case-sensitive resolver registers only the lowercase spelling.
