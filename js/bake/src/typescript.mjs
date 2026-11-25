@@ -1079,6 +1079,23 @@ export async function configure(stage, incremental=false, parse, web=false, buil
 // declaration says, an error as `{code, message}` (D1).
 // Members other interfaces declare on `name`'s names, by name, with their interface's shapes (LLP 1133.014 D10 item 1).
 const membersOf=(name, interfaces)=>interfaces.flatMap(i=>Object.entries(i.declaration.members ?? {}).filter(([o])=>o.split('#')[0]===name).flatMap(([o,m])=>Object.entries(m ?? {}).map(([option,spec])=>[o.split('#')[1],{ option, type: spec.type, answers: spec.answers, shapes: i.declaration.shapes ?? {} }]))).reduce((out,[fn,m])=>((out[fn] ??= []).push(m), out),{});
+// Resolve type-only records from the declaring package's installation. A Bun file:
+// dependency can link each file separately, so start at the real manifest.
+function importedRecords(root, imports) {
+  const records = {};
+  for (const [source, names] of Object.entries(imports ?? {})) {
+    const require = createRequire(realpathSync(join(root, 'package.json')));
+    const file = require.resolve(source), declaration = JSON.parse(readFileSync(file, 'utf8'));
+    for (const name of names) {
+      const fields = declaration.shapes?.[name];
+      if (basename(file) !== 'exact.json' || declaration.kind !== 'interface' || !fields
+          || !Object.values(fields).every(type => ['number', 'string', 'bool'].includes(type)))
+        throw new Error(`${source}'s ${name} must be a record of numbers, strings or booleans`);
+      records[name] = fields;
+    }
+  }
+  return records;
+}
 function moduleBindings(stage, app) {
   // The target the build compiles, as an implementation's `targets` names it, or none (a loop serving several).
   const mapping=resolve(stage,'__exact_paths.json'), named=existsSync(mapping) ? JSON.parse(readFileSync(mapping,'utf8')).target : null;
@@ -1092,7 +1109,8 @@ function moduleBindings(stage, app) {
     const own=Array.isArray(declaration.executor) && typeof declaration.binding==='string' ? readFileSync(resolve(root,declaration.binding),'utf8') : null;
     const iface=declaration.kind==='implementation' ? interfaces.find(i=>i.name===String(declaration.implements).replace(/@[^@]*$/,'')) : null;
     const spec=iface ? {...declaration,shapes:Object.assign({},iface.declaration.shapes,...iface.implementations.map(i=>i.json.shapes),declaration.shapes)} : declaration;
-    const text=own ?? moduleBinding(name,spec,declaration.kind==='implementation' ? [declaration] : implementations.map(i=>i.json),names=>domDeclarations(app,names),membersOf(name,interfaces),target), at=resolve(stage,file);
+    const imported=importedRecords(iface?.root ?? root, (iface?.declaration ?? declaration).shapeImports);
+    const text=own ?? moduleBinding(name,{...spec,shapes:{...imported,...spec.shapes}},declaration.kind==='implementation' ? [declaration] : implementations.map(i=>i.json),names=>domDeclarations(app,names),membersOf(name,interfaces),target), at=resolve(stage,file);
     if (!existsSync(at) || readFileSync(at,'utf8')!==text) writeFileSync(at,text);
     out.set(name,'./'+file);
   }

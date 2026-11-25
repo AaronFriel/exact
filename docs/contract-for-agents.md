@@ -5171,6 +5171,12 @@ JSON-LD. A page's own title and metas stay its `head` element's.
 
 ## Time, motion, graphics, and platform facts
 
+Desktop stills use `@exact/screen-capture`. On macOS, pass the `ScreenDetailed` from
+window management as `screen` and optionally a display-local CSS `rect`, or
+pass the session handle from `getWindowAtPoint` or `getFrontmostWindow` as
+`window`. The window still carries the frame for mapping clicks. Use
+`cursor="always"` to draw the pointer. See the [guide-step recipe](recipes/screen-capture.md).
+
 `clip-path` clips a box and its contents. Use `polygon(0% 25%, 100% 0%, 50% 100%)`
 for an outline that follows the box's size, or `inset(4px round 8px)` for an
 inset with rounded corners. Coordinates and radii take `px`, `%`, or unitless

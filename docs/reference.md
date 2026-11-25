@@ -5206,7 +5206,7 @@ asks, from a press. [Recipe](recipes/displays.md).
 
 ### Still desktop capture (`@exact/screen-capture`)
 
-`captureScreens({directory, type?, quality?})` writes a still of every
+`captureScreens({directory, type?, quality?, screen?, rect?, window?, cursor?})` defaults to a still of every
 display, in display-list order, without a picker or window activation
 (LLP 1178). It answers `{captures: [{path, width, height, type, screen}]}`:
 physical pixel sizes and the corresponding `ScreenDetailed`, with
@@ -5224,19 +5224,24 @@ wake cannot request or capture. Files publish in call order after all
 encodes finish; cancellation before publication leaves previous files.
 A failure before publication preserves every previous file; a failure
 between renames reports `EncodingError` and may leave some files new.
-Limits are 8,192² pixels per display and 2²⁷ per call, checked before
+Limits are 8,192² pixels per picture and 2²⁷ per call, checked before
 allocation (`QuotaExceededError`). Unsupported encodings fall back to PNG;
 JPEG is supported on both desktop hosts.
 
 On macOS, status is `prompt` until this install has asked, `denied` after an
 unsuccessful request, and `granted` when the OS permits capture. It is read
 again when the app becomes active. A denial is changed in System Settings.
+On macOS, select a display with `screen` from `getScreenDetails()`. A `rect` within that
+display uses display-local CSS pixels. Select a window with the handle from
+`getWindowAtPoint({x, y})` or `getFrontmostWindow()`. Both lookups use the
+capture grant and app origin. The window still adds its desktop `frame`.
+The Screen Capture API's `cursor` accepts `always` or `never` (default).
 See the [capture recipe](recipes/screen-capture.md) for setup and fixtures.
 
 | host | still capture |
 | --- | --- |
-| macOS 14+ | `SCScreenshotManager`, sRGB at backing pixels, without the pointer; Screen Recording permission, checked at each capture |
-| Windows | per-monitor `BitBlt` with `SRCCOPY \| CAPTUREBLT`, physical pixels, no pointer or permission dialog; GDI's SDR colors, tagged sRGB |
+| macOS 14+ | `SCScreenshotManager`, sRGB at backing pixels, Screen Recording checked at each capture |
+| Windows | per-monitor GDI for the default call. Window lookup and explicit capture selectors or cursor settings return `NotSupportedError` |
 | web, Linux | deterministic fixture images under the agent; real capture answers `NotSupportedError` |
 | mobile, TV, watch, terminal | unavailable |
 

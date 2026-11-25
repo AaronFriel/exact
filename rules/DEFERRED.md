@@ -2543,8 +2543,13 @@ Anthonyy232's screenshot annotation tool (#505, #506). Unblocks putting its
 toolbar on the display that holds the pointer and capturing before showing
 its window, without its own Win32 monitor and capture code.
 Take: none offered; waived by Charlie, 2026-11-14, after the panel (decision
-D5: all three seats chose to build both). Still out: `getDisplayMedia`, one
-display, a region, a named window, placing another window, and the desktop Linux, iPadOS and Android cells.
+D5: all three seats chose to build both). Still out: `getDisplayMedia`,
+placing another window, and the desktop Linux, iPadOS and Android cells.
+
+**Expanded (Charlie, 2026-11-24, W1, panel 3–1).** A guide recorder (#1582)
+can capture one window, one display or a display-local region and include
+the cursor. The capture package identifies the frontmost window and the
+window at a screen point under the existing recording grant (LLP 1178 D3).
 
 **Expanded (Charlie, 2026-11-24, "recs ok").** Float may read its own window's
 `screenX`, `screenY`, `outerWidth` and `outerHeight` on macOS and the web,
