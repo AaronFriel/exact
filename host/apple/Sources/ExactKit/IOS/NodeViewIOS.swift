@@ -1360,6 +1360,16 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         sv.alwaysBounceVertical = sv.scrollsY && !nested && (!fits || !carousel)
     }
 
+    // Giving the route's bottom cover to its scroller can extend the frame under
+    // the bar. With automatic adjustment off, only the safe area changes.
+    package override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        guard scrollView?.contentInsetAdjustmentBehavior == .never,
+              let route = ViewPresentation.controllers(for: self, layout: true).lazy.compactMap({ $0 as? any RouteSurface }).first,
+              route.edgeScroll === self else { return }
+        SafeAreaSteps.react(self) { [weak route] in route?.hosting?.coversChanged() }
+    }
+
     /// Its parts move with its frame: in an animation UIKit has open only if the last frame showed it (`Presenter.moveOrPlace`).
     package override func layoutSubviews() {
         HostPhases.shared.count(.nodeLayouts)

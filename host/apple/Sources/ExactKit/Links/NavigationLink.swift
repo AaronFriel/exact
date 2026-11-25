@@ -139,10 +139,11 @@ package enum RouteGeometry {
         // A native backend owns layout/footer insets, composed with the
         // refresh control and keyboard; zero is only the plain-scroll baseline.
         if s === node.scroll {
+            let expected = node.bandInset.adding(node.presenter?.navigation.clearanceInset(of: s) ?? .zero)
             #if os(tvOS)
-            if s.contentInset != node.bandInset { out.append("contentInset") }
+            if s.contentInset != expected { out.append("contentInset") }
             #else
-            if s.contentInset != node.bandInset, s.refreshControl?.isRefreshing != true { out.append("contentInset") } // a band's is the host's
+            if s.contentInset != expected, s.refreshControl?.isRefreshing != true { out.append("contentInset") }
             #endif
         }
         if s.contentInsetAdjustmentBehavior != (insetByUIKit ? .automatic : .never) { out.append("contentInsetAdjustmentBehavior") }
@@ -367,6 +368,7 @@ package protocol NavigationHosting: AnyObject {
     func reportCovers()
     func fitOwner()
     func insetByUIKit(_ node: NodeView) -> Bool
+    func clearanceInset(of scroll: UIScrollView) -> UIEdgeInsets
 
     // Scrolling.
     var scrollsToTopSelection: UIScrollView? { get set }
@@ -677,6 +679,7 @@ package final class NoNavigation: NavigationHosting {
     }
     /// The document stays in the scrolling viewport: no native container takes the whole view.
     package func fitOwner() { presenter.hostDocument(fixed: false) }
+    package func clearanceInset(of scroll: UIScrollView) -> UIEdgeInsets { .zero }
     /// An arrangement's scroller is inset by UIKit, as with navigation.
     package func insetByUIKit(_ node: NodeView) -> Bool {
         #if os(iOS)

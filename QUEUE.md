@@ -14,6 +14,7 @@
 - In a parallel `cargo test -p exact-kernel --test it` on the shared Mac, `svg_scene::bounds::a_use_box_stops_at_the_expansion_limit` took 6.93 s against its five-second bound. The same binary passed alone in 2.19 s and in the full suite with four test threads.
 - Consider optional types for direct imports of a development package from `app.json`. In a production build, `manifest.development.packages.swatch?.web?.label` checks against an empty package map. Packages read the selected key through `context.config` (#1608).
 
+- On an iPhone 17 simulator running iOS 26.5 at `19d272c1c`, run `bun host/apple/build.mjs --test --ios --only NavigationCollapseIOSTests`. The authored scrollTop test reads a zero expanded inset, and the in-place replacement test cannot find `list-second-taller` in the bare XCTest runner.
 - When Exact supports a new macOS version, repeat the modifier shortcut measurement in a guest with real key events and another app frontmost (#1413).
 - Apply each Linux portal binding change before submitting pending shortcuts (#1413). Bind F and K, hold F, request J, then reassign F and remove K in one `ShortcutsChanged`. The next `BindShortcuts` must contain F and J. The candidate also requests K again.
 - Android now supplies four of `ComponentActivity`’s view-tree owners for hosted views. Rule on the whole set before adding another. The activity-result registry is the likely next request (#1613).
