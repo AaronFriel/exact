@@ -43,8 +43,9 @@ fn the_clipboard_events_reach_the_nearest_handler() {
         &format!(r#"{{"op":"type","id":{log},"clipboard":"cut"}}"#),
     );
     assert!(reply.contains("no cut handler"), "{reply}");
-    // This host pastes text only and takes no drag from outside: both
-    // are refused by name, and neither presses nor pastes.
+    // This host pastes text only, refused by name, and takes a drag from
+    // outside: one over a cell that hears no drag reaches the presenter,
+    // and neither presses nor pastes.
     let reply = handle(
         &mut p,
         &format!(
@@ -57,17 +58,39 @@ fn the_clipboard_events_reach_the_nearest_handler() {
         )),
         "{reply}"
     );
-    for form in [
-        r#""drop":["/tmp/a.png"]"#,
-        r#""dragenter":["/tmp/a.png"]"#,
-        r#""dragleave":true"#,
-    ] {
+    let mut tap = |form: &str| -> serde_json::Value {
         let reply = handle(&mut p, &format!(r#"{{"op":"tap","id":{cell},{form}}}"#));
-        assert!(
-            reply.contains(&format!("unsupported: the {HOST_NAME} host takes no drag")),
-            "{reply}"
-        );
-    }
+        serde_json::from_str(&reply).unwrap()
+    };
+    let fields = |reply: &serde_json::Value, keys: &[&str]| -> Vec<serde_json::Value> {
+        keys.iter().map(|k| reply[*k].clone()).collect()
+    };
+    let refused = tap(r#""drop":["/tmp/a.png"]"#);
+    assert_eq!(
+        refused["error"],
+        format!("view {cell} took no drop: nothing under it declares `drop`, or none of its files could be opened"),
+        "{refused}"
+    );
+    let entered = tap(r#""dragenter":["/tmp/a.png"]"#);
+    assert_eq!(
+        fields(&entered, &["tapped", "dragenter", "delivery"]),
+        [
+            serde_json::json!(cell),
+            serde_json::json!(1),
+            serde_json::json!("presenter")
+        ],
+        "{entered}"
+    );
+    let left = tap(r#""dragleave":true"#);
+    assert_eq!(
+        fields(&left, &["tapped", "dragleave", "delivery"]),
+        [
+            serde_json::json!(cell),
+            serde_json::json!(true),
+            serde_json::json!("presenter")
+        ],
+        "{left}"
+    );
     let k = p.host().kernel();
     assert_eq!(
         k.node(log).unwrap().props.str(exact_kernel::PropId::Text),
