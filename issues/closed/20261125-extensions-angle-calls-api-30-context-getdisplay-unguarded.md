@@ -1,6 +1,7 @@
 # Extensions.angle calls API 30 Context.getDisplay() unguarded, crashing every Android 10 (API 29) app in ExactActivity.onCreate
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Guarded Context.getDisplay() in Extensions.angle with Build.VERSION.SDK_INT >= 30, falling back to Legacy.display(activity) on API 29, with an API 29 Robolectric regression test.
 **Systems:** Android Canvas host (Extensions / ExactActivity startup on API 29)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

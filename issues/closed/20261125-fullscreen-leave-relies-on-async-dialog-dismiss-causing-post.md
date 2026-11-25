@@ -1,6 +1,7 @@
 # FullScreen.leave() relies on async Dialog.dismiss(), causing post-release ExoPlayer calls and stale fullscreenchange events on pooled players
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Made FullScreen.leave clear state and detach or notify synchronously before dismissing the dialog, guarded MediaPlayer.left against post-release calls, and cleared fullscreen on bind and release, with Robolectric regression tests.
 **Systems:** Android Video host (FullScreen / MediaPlayer / Natives videoPool)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

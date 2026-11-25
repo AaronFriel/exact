@@ -1,6 +1,7 @@
 # Shaders mutates a singleton Matrix and FloatArray concurrently across the main thread and async row-recording worker thread
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Removed shared mutable Matrix and FloatArray fields from Shaders in favor of caller-owned per-Player scratch objects, with a concurrent Robolectric regression test.
 **Systems:** Android Canvas host (Player / Shaders / async row recording)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

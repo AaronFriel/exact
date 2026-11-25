@@ -111,6 +111,8 @@ internal class Player(private val fonts: Map<Int, Font>) {
     private val values = FloatArray(9)
     /** Op 55's matrix, apart from [values], which holds the stream's current one. */
     private val throughValues = FloatArray(9)
+    private val shaderMatrix = Matrix()
+    private val shaderValues = FloatArray(9)
     private val rect = RectF()
     private val radii = FloatArray(8)
     private val inner = RectF()
@@ -1169,7 +1171,7 @@ internal class Player(private val fonts: Map<Int, Font>) {
                     } else if (!strokePolyline(c, b, pathAt) && (shader != null || !icon(c, b, pathAt, i, stroke))) c.drawPath(path, stroke)
                     dash = null; stroke.shader = null; shader = null
                 }
-                43 -> { shader = Shaders.read(b, i); i += 2 + b.get(i + 1) }
+                43 -> { shader = Shaders.read(b, i, shaderMatrix, shaderValues); i += 2 + b.get(i + 1) }
                 44 -> { glyphBlur = f(b, i + 1); i += 2 }
                 25 -> {
                     val n = b.get(i + 2)

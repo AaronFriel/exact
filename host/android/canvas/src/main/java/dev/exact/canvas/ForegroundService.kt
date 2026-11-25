@@ -33,11 +33,14 @@ open class ForegroundService : Service() {
     class Call : ForegroundService()
 
     internal val kind: String get() = if (this is Call) "call" else "capture"
+    /** The latest start delivered to [onStartCommand]; stopping with it avoids killing a newer start. */
+    internal var lastStartId = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Claims.started(this)
+        lastStartId = startId
+        Claims.started(this, intent)
         // Not sticky: a process the system makes again holds no claim, and a service it would restart has none to show.
         return START_NOT_STICKY
     }
@@ -189,7 +192,9 @@ class ForegroundServices internal constructor(private val application: Context, 
             return claim
         }
         return try {
-            application.startForegroundService(Intent(application, Claims.service(kind)))
+            val mask = Claims.mask(types)
+            Claims.remember(kind, mask)
+            application.startForegroundService(Intent(application, Claims.service(kind)).putExtra(Claims.EXTRA_TYPES, mask))
             Log.i("exact", "foreground service ${types.joinToString("|")}: claimed")
             claim
         } catch (e: Exception) {
@@ -202,12 +207,19 @@ class ForegroundServices internal constructor(private val application: Context, 
 
 /** Every claim in the process, and the services that carry them. */
 internal object Claims {
+    const val EXTRA_TYPES = "dev.exact.foregroundTypes"
     val held = ArrayList<ForegroundClaim>()
     private val services = HashMap<String, ForegroundService>()
     private val activeServices = HashSet<String>()
+    /** The last permitted type mask started per kind, used if `onStartCommand` arrives after early release. */
+    private val lastMasks = HashMap<String, Int>()
     var playback = false
     internal val keepsExecution: Boolean get() = playback || held.any { !it.agent && it.kind in activeServices }
     private val ids = mapOf("capture" to 0x45584301, "call" to 0x45584302)
+
+    fun mask(types: Set<String>): Int = types.fold(0) { mask, type -> mask or bit(type) }
+
+    fun remember(kind: String, mask: Int) { if (mask != 0) lastMasks[kind] = mask }
 
     fun service(kind: String): Class<out ForegroundService> = if (kind == "call") ForegroundService.Call::class.java else ForegroundService.Capture::class.java
 
@@ -278,17 +290,30 @@ internal object Claims {
     }
 
     /** The service of [service]'s kind was started: it promotes itself at once, as Android requires. */
-    fun started(service: ForegroundService) {
+    fun started(service: ForegroundService, intent: Intent? = null) {
+        val fallback = intent?.getIntExtra(EXTRA_TYPES, 0)?.takeIf { it != 0 }
+            ?: lastMasks[service.kind]?.takeIf { it != 0 }
+            ?: if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST else 0
+        if (held.none { it.kind == service.kind && !it.agent }) {
+            // Every claim released before onStartCommand ran: satisfy Android's startForeground contract with a
+            // valid permitted type before stopping.
+            try {
+                service.startForeground(ids.getValue(service.kind), notification(service), fallback)
+            } catch (e: Exception) {
+                Log.i("exact", "foreground service ${service.kind}: refused: ${e.javaClass.simpleName}: ${e.message}")
+            }
+            stop(service)
+            return
+        }
         services[service.kind] = service
-        promote(service)
-        // A start with no claim (a process made again, or every claim released before it ran) promotes and stops.
-        if (held.none { it.kind == service.kind && !it.agent }) stop(service)
+        promote(service, fallback)
     }
 
-    private fun promote(service: ForegroundService) {
+    private fun promote(service: ForegroundService, fallback: Int = 0) {
         try {
             val types = types(service.kind)
-            service.startForeground(ids.getValue(service.kind), notification(service), types.fold(0) { mask, type -> mask or bit(type) })
+            val mask = mask(types).takeIf { it != 0 } ?: fallback
+            service.startForeground(ids.getValue(service.kind), notification(service), mask)
             activeServices += service.kind
             Exact.executionChanged()
             promoted(held.filter { it.kind == service.kind && !it.agent }, types)
@@ -299,8 +324,9 @@ internal object Claims {
             Log.i("exact", "foreground service ${service.kind}: refused: $why")
             val lost = held.filter { it.kind == service.kind && !it.agent }
             held.removeAll(lost.toSet())
+            lost.forEach { it.released = true }
             stop(service)
-            lost.forEach { it.released = true; it.lost(why) }
+            lost.forEach { it.lost(why) }
         }
     }
 
@@ -319,17 +345,23 @@ internal object Claims {
     }
 
     private fun stop(service: ForegroundService) {
-        activeServices -= service.kind
-        Exact.executionChanged()
-        service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
-        service.stopSelf()
-    }
-
-    fun destroyed(service: ForegroundService) {
         if (services[service.kind] === service) {
             services.remove(service.kind)
             activeServices -= service.kind
             Exact.executionChanged()
         }
+        service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        if (service.lastStartId != 0) service.stopSelf(service.lastStartId) else service.stopSelf()
+    }
+
+    fun destroyed(service: ForegroundService) {
+        if (services[service.kind] !== service) return
+        services.remove(service.kind)
+        activeServices -= service.kind
+        val lost = held.filter { it.kind == service.kind && !it.agent }
+        held.removeAll(lost.toSet())
+        lost.forEach { it.released = true }
+        Exact.executionChanged()
+        lost.forEach { it.lost("service destroyed") }
     }
 }

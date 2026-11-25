@@ -619,11 +619,14 @@ internal object Extensions {
     private var told = -1
 
     /** [activity]'s display's rotation in degrees, as the web's `screen.orientation.angle`. */
-    fun angle(activity: Activity?): Int = when (activity?.display?.rotation) {
-        android.view.Surface.ROTATION_90 -> 90
-        android.view.Surface.ROTATION_180 -> 180
-        android.view.Surface.ROTATION_270 -> 270
-        else -> 0
+    fun angle(activity: Activity?): Int {
+        val display = activity?.let { if (android.os.Build.VERSION.SDK_INT >= 30) it.display else Legacy.display(it) }
+        return when (display?.rotation) {
+            android.view.Surface.ROTATION_90 -> 90
+            android.view.Surface.ROTATION_180 -> 180
+            android.view.Surface.ROTATION_270 -> 270
+            else -> 0
+        }
     }
 
     /** A display changed: the extensions made are told a new angle. */

@@ -1,6 +1,7 @@
 # ForegroundService (Claims) orphans claims on OS destroy (permanently wedging future starts), races with stopSelf(), and passes type 0 on early release (API 34+ crash)
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Released held claims and notified lost on unexpected ForegroundService destruction, detached stopping services before stopSelf(lastStartId), and passed the claim's permitted foreground service type mask on early-release starts, with Robolectric regression tests.
 **Systems:** Android Canvas host (ForegroundService / Calls / MediaCapture)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -564,6 +564,7 @@ open class ExactActivity : Activity() {
         root.access.controller = { elements.controller(it) }
         root.addView(hosted, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        root.drags.page = view
         val ticker = if (intent.getStringExtra("tag") == "1") TagView(this) { view.tagState() } else View(this)
         elements.frame = { ticker.invalidate() }
         hosted.frame = { ticker.invalidate() }

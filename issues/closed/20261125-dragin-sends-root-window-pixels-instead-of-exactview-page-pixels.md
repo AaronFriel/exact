@@ -1,6 +1,7 @@
 # DragIn sends Root (window) pixels instead of ExactView (page) pixels, shifting all drag-and-drop hit-testing by safe-area insets
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Tracked the inset page view on DragIn and translated Root and FieldText drag coordinates into page-view pixels, with a Robolectric regression test.
 **Systems:** Android Canvas host (DragIn / ExactActivity / painted presenter drop hit-testing)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

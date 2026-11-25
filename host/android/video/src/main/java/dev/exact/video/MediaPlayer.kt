@@ -70,6 +70,7 @@ class MediaPlayer(
     private val full = FullScreen(context, exo) { left(it) }
 
     private var sink: MediaSink? = null
+    private var released = false
     /** The props last applied, as the painter sent them (D1). */
     private var applied: JSONObject? = null
     private var src = ""
@@ -131,6 +132,10 @@ class MediaPlayer(
     override fun bind(sink: MediaSink) {
         // A borrowed player carries nothing of the node before (D1), and reports nothing of it to this one.
         this.sink = null
+        if (full.on) {
+            full.leave(notify = false)
+            controls?.let { it.player = exo } ?: exo.setVideoTextureView(texture)
+        }
         projection.load(restoring = false, paused = true)
         tick(false)
         releaseFocus()
@@ -150,7 +155,7 @@ class MediaPlayer(
         val before = if (from != null) runCatching { JSONObject(from.applied) }.getOrNull() else applied
         generation = props.optInt("generation")
         // Full screen holds the player on the controller it was entered with.
-        if (full.on && (controls != null) != props.optBoolean("controls")) full.leave()
+        if (full.on && ((controls != null) != props.optBoolean("controls") || props.optBoolean("audio"))) full.leave()
         presenter(props.optBoolean("controls"), props.optBoolean("audio"))
         fit = props.getString("fit")
         objectRect = props.optJSONArray("objectRect")?.takeIf { it.length() == 4 }?.let { rect ->
@@ -331,9 +336,10 @@ class MediaPlayer(
     }
 
     override fun release() {
+        released = true
         access?.removeTouchExplorationStateChangeListener(exploring)
         sink = null
-        full.leave()
+        full.leave(notify = false)
         tick(false)
         releaseFocus()
         closePlayback()
@@ -393,6 +399,7 @@ class MediaPlayer(
     }
 
     private fun left(view: PlayerView) {
+        if (released) { view.player = null; return }
         val inline = controls
         if (inline != null) PlayerView.switchTargetView(exo, view, inline) else { view.player = null; exo.setVideoTextureView(texture) }
         layoutPicture()

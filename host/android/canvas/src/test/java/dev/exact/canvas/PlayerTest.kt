@@ -371,6 +371,51 @@ class PlayerTest {
         }
     }
 
+    @Test fun concurrentShaderReadsKeepTheirOwnLocalMatrices() {
+        fun linearShader(a: Float, d: Float, e: Float, fVal: Float): IntBuffer {
+            val words = intArrayOf(
+                43, 19, 0, 0,
+                0, 0, f(100), 0, 0, 0,
+                a.toRawBits(), 0, 0, d.toRawBits(), e.toRawBits(), fVal.toRawBits(),
+                2, 0f.toRawBits(), Color.RED, 1f.toRawBits(), Color.BLUE,
+            )
+            return IntBuffer.wrap(words)
+        }
+        val firstOp = linearShader(2f, 3f, 10f, 20f)
+        val secondOp = linearShader(4f, 5f, 30f, 40f)
+        val firstExpected = floatArrayOf(2f, 0f, 10f, 0f, 3f, 20f, 0f, 0f, 1f)
+        val secondExpected = floatArrayOf(4f, 0f, 30f, 0f, 5f, 40f, 0f, 0f, 1f)
+        val barrier = java.util.concurrent.CyclicBarrier(2)
+        val failure = java.util.concurrent.atomic.AtomicReference<Throwable>()
+
+        fun worker(op: IntBuffer, expected: FloatArray): Thread = Thread {
+            try {
+                val scratchMatrix = android.graphics.Matrix()
+                val scratchValues = FloatArray(9)
+                val outMatrix = android.graphics.Matrix()
+                val outValues = FloatArray(9)
+                barrier.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                repeat(1000) { iter ->
+                    val shader = if (iter % 2 == 0) Shaders.read(op, 0, scratchMatrix, scratchValues) else Shaders.read(op, 0)
+                    assertNotNull(shader)
+                    assertTrue(shader!!.getLocalMatrix(outMatrix))
+                    outMatrix.getValues(outValues)
+                    assertArrayEquals("iteration $iter", expected, outValues, 0f)
+                }
+            } catch (t: Throwable) {
+                failure.compareAndSet(null, t)
+            }
+        }
+
+        val t1 = worker(firstOp, firstExpected)
+        val t2 = worker(secondOp, secondExpected)
+        t1.start(); t2.start()
+        t1.join(10_000); t2.join(10_000)
+        assertFalse(t1.isAlive)
+        assertFalse(t2.isAlive)
+        failure.get()?.let { throw it }
+    }
+
     @Test @Config(sdk = [30], shadows = [GlyphOutlines::class])
     fun overlappingLegacyRunsCompositeSeparately() {
         val font = android.graphics.fonts.Font.Builder(java.io.File("../../../apps/canvas-gallery/assets/ExposureSansOriginal03-Regular.ttf")).build()
