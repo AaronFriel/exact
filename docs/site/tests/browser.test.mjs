@@ -505,7 +505,7 @@ for (const mode of ['default', '--loopback', '--lan']) {
 
 for (const [from, label, path, title] of [
   ['/recipes/permissions', 'error alert', '/recipes/error-alert', 'Recipe: tell the person something failed'],
-  ['/recipes/app-json', 'porting and release', '/recipes/porting-and-release', 'Recipe: porting an app, a release build, splitting the work'],
+  ['/recipes/app-json', 'Release', '/recipes/porting-and-release', 'Recipe: porting an app, a release build, splitting the work'],
 ]) {
   test(`the short recipe label ${label} opens its titled page`, () => withPage({}, async page => {
     await visit(page, from);
