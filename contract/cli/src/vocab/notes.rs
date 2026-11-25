@@ -3,6 +3,7 @@
 
 pub(super) fn note(name: &str) -> Option<&'static str> {
     Some(match name {
+        "aria-keyshortcuts" => "a space-separated list of chords. Mod means Meta on Apple platforms and Control elsewhere. Write `Mod+Shift+O` for the primary shortcut on every host. Draw its cap with `text formatShortcut(\"Mod+Shift+O\")`",
         "heightDragFor" => "names a strict ancestor by `id`; the target needs `box-sizing=\"border-box\"` and a finite nonnegative numeric point `height`. The handle and its ancestors must be displayed, enabled and non-inert. The compiler warns with `lower-height-drag-ineligible` when it can prove a requirement fails; computed values remain runtime checks",
         "src" => "an `image`'s source is its argument: `image url` (HTML's `img src`)",
         "min" | "max" | "step" => "on an `input` a number of either sign is written as its text: `min=-40`, `step=0.5`, `max=1e6` (LLP 1116.010 D3); a decimal pad (`inputmode=\"decimal\"`) with a negative `min` has the ± key",
