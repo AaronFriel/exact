@@ -8,6 +8,51 @@ import { createServer as createTCPServer } from 'node:net';
 import { basename, dirname, resolve } from 'node:path';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { decodePng, encodePng, pngDimensions } from '../../scripts/png.mjs';
+
+/** Parse a CoreSimulator runtime identifier into an integer tuple `[major, minor, patch]`. */
+export function parseRuntimeVersion(runtime) {
+  const m = /(?:iOS|tvOS|watchOS)-(\d+)-(\d+)(?:-(\d+))?/.exec(String(runtime ?? ''));
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)] : [0, 0, 0];
+}
+
+/** Descending comparator for runtime version tuples (`17.10` sorts ahead of `17.9`). */
+export function compareRuntimeVersionDesc(a, b) {
+  const va = parseRuntimeVersion(a), vb = parseRuntimeVersion(b);
+  for (let i = 0; i < 3; i++) if (va[i] !== vb[i]) return vb[i] - va[i];
+  return 0;
+}
+
+/** Human-readable OS label from a CoreSimulator runtime identifier, e.g. `iOS 27.0`. */
+export function formatRuntime(runtime) {
+  const m = /(iOS|tvOS|watchOS)-(\d+)-(\d+)(?:-(\d+))?/.exec(String(runtime ?? ''));
+  if (!m) return String(runtime ?? '');
+  return `${m[1]} ${m[2]}.${m[3]}${m[4] ? `.${m[4]}` : ''}`;
+}
+
+export function isTargetPlatformRuntime(runtime, tv = false) {
+  return tv ? /SimRuntime\.tvOS/.test(String(runtime ?? '')) : /SimRuntime\.iOS/.test(String(runtime ?? ''));
+}
+
+/** Resolve an explicit `--sim` / `EXACT_SIM` query: exact UDID, exact name, else
+ * unambiguous case-insensitive substring strictly within the target platform's runtimes. */
+export function matchSimulatorQuery(all, pick, { tv = false } = {}) {
+  if (!pick) return null;
+  const exact = all.find((d) => d.udid === pick || d.name === pick);
+  if (exact) return { dev: exact, matchedBySubstring: false };
+  const query = String(pick).trim().toLowerCase();
+  const scoped = all.filter((d) => isTargetPlatformRuntime(d.runtime, tv));
+  const matches = scoped.filter((d) => d.name.toLowerCase().includes(query) || d.udid.toLowerCase().startsWith(query));
+  if (!matches.length) throw new Error(`no ${tv ? 'tvOS' : 'iOS'} simulator matching "${pick}" (xcrun simctl list devices available)`);
+  const sorted = [...matches].sort((a, b) =>
+    Number(b.state === 'Booted') - Number(a.state === 'Booted')
+    || compareRuntimeVersionDesc(a.runtime, b.runtime)
+    || a.name.localeCompare(b.name));
+  if (new Set(sorted.map((d) => d.name)).size > 1) {
+    const listed = sorted.map((d) => `${d.name} (${formatRuntime(d.runtime)}, ${d.udid})`).join(', ');
+    throw new Error(`multiple ${tv ? 'tvOS' : 'iOS'} simulators match "${pick}": ${listed}. Name one more specifically with --sim`);
+  }
+  return { dev: sorted[0], matchedBySubstring: true };
+}
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -418,11 +463,11 @@ export function chooseSimulator(pick = process.env.EXACT_SIM, { tv = false, hint
     return kept.state === 'Booted' ? { ...kept, cachedBooted: true } : kept;
   }
   const all = recentSimulators();
-  const version = (d) => Number(/(?:iOS|tvOS)-(\d+)-(\d+)/.exec(d.runtime)?.slice(1).join('.') ?? 0);
   const kind = (d) => d.type || d.name.replaceAll(' ', '-');
-  const iphones = all.filter((d) => (tv ? /SimRuntime\.tvOS/.test(d.runtime) && /^Apple-TV/.test(kind(d)) : /SimRuntime\.iOS/.test(d.runtime) && /^iPhone/.test(kind(d)))).sort((a, b) => version(b) - version(a) || a.name.localeCompare(b.name));
-  let dev = pick ? all.find((d) => d.udid === pick || d.name === pick) : null;
-  if (pick && !dev) throw new Error(`no simulator ${pick} (xcrun simctl list devices available)`);
+  const iphones = all.filter((d) => (tv ? /SimRuntime\.tvOS/.test(d.runtime) && /^Apple-TV/.test(kind(d)) : /SimRuntime\.iOS/.test(d.runtime) && /^iPhone/.test(kind(d)))).sort((a, b) => compareRuntimeVersionDesc(a.runtime, b.runtime) || a.name.localeCompare(b.name));
+  const matched = pick ? matchSimulatorQuery(all, pick, { tv }) : null;
+  let dev = matched?.dev ?? null;
+  if (matched?.matchedBySubstring) console.error(`simulator: "${pick}" matched ${dev.name} (${formatRuntime(dev.runtime)}, ${dev.udid})`);
   // Several booted: whose is which is not this process's to guess (an install onto another drive's simulator,
   // 2026-10-09: build.mjs --ios takes --sim, not --phone, for a simulator). One booted, or none, is still chosen.
   const booted = iphones.filter((d) => d.state === 'Booted');
@@ -437,7 +482,7 @@ export function chooseSimulator(pick = process.env.EXACT_SIM, { tv = false, hint
       if (!saidSimulator.has(dev.udid)) { saidSimulator.add(dev.udid); console.error(`${booted.length} ${tv ? 'Apple TV' : 'iPhone'} simulators are booted; using ${dev.name} ${dev.udid}, ${mine ? `the one this app last used of those with ${app} installed` : `the one with ${app} installed`}; name another with ${hint}`); }
     } else {
       const named = (d) => `${d.name} ${d.udid}${has.includes(d) ? ` (has ${app})` : ''}`;
-      throw new Error(`${booted.length} ${tv ? 'Apple TV' : 'iPhone'} simulators are booted (${booted.map(named).join(', ')})${app ? `, ${has.length ? 'several' : 'none'} with ${app} installed` : ''}: name one with ${hint}`);
+      throw Object.assign(new Error(`${booted.length} ${tv ? 'Apple TV' : 'iPhone'} simulators are booted (${booted.map(named).join(', ')})${app ? `, ${has.length ? 'several' : 'none'} with ${app} installed` : ''}: name one with ${hint}`), { code: 'EXACT_SIMULATOR_AMBIGUOUS', candidates: booted });
     }
   }
   dev ??= booted[0] ?? iphones.find((d) => /^iPhone-\d+-Pro$/.test(kind(d))) ?? iphones[0];

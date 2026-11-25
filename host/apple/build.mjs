@@ -1,44 +1,19 @@
 #!/usr/bin/env bun
 import { writePrivacyManifest } from './privacy.mjs';
 import { writeAppleBatchReader } from '../../kernel/build/apple-batch.mjs';
-// Build the macOS app — or, with --ios, the iOS app: the app's static
-// library (cargo), then the presenter (swift build) linked against
-// it. Usage:
-//   bun host/apple/build.mjs [crate=caltrain-apple] [--run] [--sandbox]     macOS (--run assembles and launches the .app; --sandbox signs the App Sandbox)
-//   bun host/apple/build.mjs [crate] --test [--only <Class,…>]               the Swift host tests, or only the classes named
-//   bun host/apple/build.mjs [crate] --test --ios [--sim <udid|name>] [--only <Class,…>]  the tests compiled for UIKit, or only the classes named, on a simulator
-//   bun host/apple/build.mjs --ios [crate] [--run] [--sim <udid|name>]        iOS, on a simulator
-//   bun host/apple/build.mjs --tvos [crate] [--run] [--sim <udid|name>]       tvOS, on an Apple TV simulator
-//   bun host/apple/build.mjs --tvos --device [crate] [--run] [--archive <out.ipa>]  tvOS, on an Apple TV
-//   bun host/apple/build.mjs --device [crate] [--run] [--phone <udid|name>]   iOS, on a phone
-//   bun host/apple/build.mjs --device [crate] --unsigned                    iOS, an ad-hoc .app, no installation
-//   bun host/apple/build.mjs --device [crate] --archive <out.ipa>            iOS, an .ipa to distribute
-//   bun host/apple/build.mjs --device [crate] --archive <out.ipa> --unsigned an .ipa a service re-signs
-//   bun host/apple/build.mjs --device [crate] --archive <out.ipa> --unsigned --development  the same, of the development build
-//   bun host/apple/build.mjs [crate] --bundle --distribution | --appstore [--ad-hoc]  macOS, what `exact release` or `exact appstore` signs
-// Add --url <http(s) app URL> to connect any of these clients to the same
-// address as the browser (LLP 1030.000 §7): with --run it is the launch
-// locator, and a development client (--bundle, --ios, --device) registers
-// its opening link for that server's origin alone, with a per-build token.
-// --ios builds the same archive for the simulator's Rust target, the UIKit
-// presenter for the simulator triple, assembles the .app here (its
-// Info.plist written, never committed), installs it on a simulator — --sim
-// or EXACT_SIM names one; else a booted iPhone; else the iPhone Pro on the newest iOS;
-// --no-install stops before that and installs on no simulator (an iOS module roster no Mac Catalyst slice can read is read on one), a compile check — and with --run shows it in Simulator.app. --device is the
-// same for a phone: the aarch64-apple-ios target and the iphoneos SDK, the
-// bundle signed with a development identity and a provisioning profile on
-// this Mac that covers the phone and the bundle id (EXACT_IDENTITY, a
-// SHA-1, and EXACT_PROFILE, a path, override the automatic choice), then
-// devicectl to install and, with --run, launch — the phone connected,
-// unlocked, paired, Developer Mode on. --archive is the same device build
-// with no phone: it signs with EXACT_IDENTITY and EXACT_PROFILE (both
-// required: an ad hoc or App Store profile and its distribution identity,
-// as a build service such as EAS supplies them), takes get-task-allow from that profile, and writes the signed bundle as an .ipa instead of
-// installing it. --unsigned also works without --archive: it needs neither, and never installs. The bundle is ad-hoc
-// signed with no profile and no team, for a consumer that re-signs it with
-// its own (AppDrop, a store's resigner). The simulator and phone helpers live
-// in devices.mjs, shared with scripts/agent.mjs, which launches the same bundle.
-// These developer builds explicitly allow unsigned updates. --release, --distribution, --archive (or EXACT_UPDATE_TRUST=production) build a signed-update-only artifact.
+// Build the macOS, iOS, or tvOS app: Rust static library (cargo) + Swift presenter (swift build).
+//   bun host/apple/build.mjs [crate=caltrain-apple] [--run] [--sandbox] [--no-live]
+//   bun host/apple/build.mjs --ios [crate] [--run] [--sim <udid|name>|--pick] [--logs] [--rebuild] [--no-live]
+//   bun host/apple/build.mjs --tvos|--device [crate] [--run] [--phone <udid|name>] [--archive <out.ipa>] [--unsigned] [--development]
+//   bun host/apple/build.mjs [crate] --test [--ios] [--sim <udid|name>] [--only <Class,…>]
+//   bun host/apple/build.mjs [crate] --bundle --distribution|--appstore [--ad-hoc]
+// Add --url <http(s) URL> to connect a client to a dev server (LLP 1030.000 §7); development --run auto-discovers
+// a running dev loop unless --no-live is passed (LLP 1189 D2), and reuses fresh/plan-only simulator builds unless
+// --rebuild is passed (LLP 1189 D3). --release/--distribution/--archive bake production trust.
+import { discoverDevLoop } from '../web/dev-discovery.mjs';
+import { canPromptInteractive, resolveHumanSimulator } from './sim-pick.mjs';
+import { launchAndOptionallyStream } from './sim-logs.mjs';
+import { canFastSimulatorRun, tryFastSimulatorRun } from './fast-run.mjs';
 import { platformWidgetEntries, widgetEntityKeys, activityEntries, hasEntries, widgetGroup, prepareWidgetCore, sharedWidgetCore, placeCoreFramework, dropLeftoverCore, entryProfiles, alarmActivity } from './widgets.mjs';
 import { assembleMac, assembleIOS, buildIntents, shortcutKeys, placeMacDylibs } from './bundle.mjs';
 import { EXTENSION_KINDS, assertNotificationServiceGrants, extensionKinds, notificationService, notificationServiceDirectory, notificationServicePlatformRefusal, staleModuleCache, withoutExtensions } from './extensions.mjs';
@@ -626,7 +601,20 @@ async function main(args, lockHeld = false) {
   const hermesEarly = ios && existsSync(resolve(app.dir, 'app.ts')) && process.env.EXACT_JS_ENGINE !== 'stub' && hermesBundle(rustTarget, process.env);
   if (hermesEarly && !hermesEarly.installed) refused.push((await import('../../scripts/exact.mjs')).hermesRefusal(hermesEarly, process.env));
   if (refused.length) { console.error(refused.join('\n')); process.exitCode = 1; return; }
-  if (ios && !device && !ipa && !args.includes('--no-install') && !args.includes('--prebuild')) chooseSimulator(args.includes('--sim') ? args[args.indexOf('--sim') + 1] : undefined, { tv, app: app.id, dir: app.dir, hint: '--sim <udid|name> (or EXACT_SIM)' }); // refused before anything compiles, not after (LLP 1156.000 D5)
+  const noLive = args.includes('--no-live'), forceRebuild = args.includes('--rebuild'), wantLogs = args.includes('--logs'), wantPick = args.includes('--pick');
+  if (!ios && (wantLogs || wantPick)) { console.error(`${wantLogs ? '--logs' : '--pick'} is for iOS/tvOS simulator launches (--ios)`); process.exitCode = 1; return; }
+  if (args.includes('--run') && !noLive && !device && !distribution && !unsigned && !ipa && !args.includes('--json') && process.env.EXACT_UPDATE_TRUST !== 'production' && !launchEnv.EXACT_DEV_PLAN) {
+    const live = await discoverDevLoop(app.dir);
+    if (live) { launchEnv = { ...launchEnv, EXACT_DEV_PLAN: live.url }; console.error(`host/apple: connecting to running dev loop at ${live.url} (--no-live for standalone)`); }
+  }
+  let chosenSim = null;
+  if (ios && !device && !ipa && !args.includes('--no-install') && !args.includes('--prebuild')) {
+    chosenSim = await resolveHumanSimulator(args.includes('--sim') ? args[args.indexOf('--sim') + 1] : undefined, {
+      tv, app: app.id, dir: app.dir, hint: '--sim <udid|name> (or EXACT_SIM)', forcePick: wantPick,
+      interactive: (args.includes('--run') || wantPick) && canPromptInteractive(args),
+    });
+    if (!chosenSim) return; // cancelled interactive picker
+  }
   if (!existsSync(resolve(app.target, 'apple-swift'))) { const room = freeSpace(app.dir); if (room && room.gb < ROOM_GB) console.warn(`host/apple: a first build here; ${room.text}`); } // a cold build (LLP 1156.000 D3)
   // A build of this app already running (a --prebuild's) is waited for, as test and agent wait for it, and a background
   // build's failure is said by the next build (scripts/agent-build.mjs `waitForBuild`, `reportPrebuild`).
@@ -644,6 +632,10 @@ async function main(args, lockHeld = false) {
   const release = lockHeld ? () => {} : awaitBuildOutput(app, appleArtifacts(app, { optimize }).lock, () => console.error(`waiting for the Apple build of ${app.name} already running`));
   const cleanup = [], beside = []; // what to remove, and the steps started beside the build, when it ends
   try {
+  if (!forceRebuild && chosenSim && canFastSimulatorRun(args, { ios, device, tv, ipa, unsigned, production: process.env.EXACT_UPDATE_TRUST === 'production', distribution, packaged, gallery })) {
+    const fast = await tryFastSimulatorRun({ app, dev: chosenSim, args, launchEnv, install });
+    if (fast.handled) return;
+  }
   const crate = app.crate(ios ? 'ios' : 'macos');
   const modules = app.modulesFor(tv ? 'tvos' : ios ? 'ios' : 'macos', tv ? 'ios' : undefined); // tvOS builds the iOS shell’s Swift sources.
   const gpuCrate = app.crate('gpu');
@@ -1372,8 +1364,8 @@ async function main(args, lockHeld = false) {
     if (args.includes('--json')) reportBuilt({ path: ipa, ...built() }); return;
   }
   if (unsigned || args.includes('--no-install')) { if (args.includes('--run')) throw new Error('--no-install takes no --run'); console.log(`host/apple: ${paths.bundle} (${timing()}); built and signed, installed on nothing (${unsigned ? '--unsigned' : '--no-install'})`); if (args.includes('--json')) reportBuilt({ path: paths.bundle, ...built() }); return; }
-  const dev = device ? ph : simulator(args.includes('--sim') ? args[args.indexOf('--sim') + 1] : undefined, { tv, app: app.id, dir: app.dir, hint: '--sim <udid|name> (or EXACT_SIM)' });
-  const place = () => {
+  const dev = device ? ph : simulator(chosenSim?.udid ?? (args.includes('--sim') ? args[args.indexOf('--sim') + 1] : undefined), { tv, app: app.id, dir: app.dir, hint: '--sim <udid|name> (or EXACT_SIM)' });
+  const place = async () => {
     // A phone installs the clip with the app that embeds it; a simulator registers it (`simctl listapps`, a launch
     // of its id) only when the nested bundle is installed itself (measured on iOS 26.5: the app's install leaves it out).
     for (const [, kind] of bundles) {
@@ -1389,10 +1381,7 @@ async function main(args, lockHeld = false) {
     if (args.includes('--json')) reportBuilt({ path: paths.bundle, ...built(), installed: { name: dev.name, udid: dev.udid ?? null } });
     if (args.includes('--run')) {
       if (device) run('xcrun', deviceLaunchArgs(ph.udid, app.id, launchEnv));
-      else {
-        showSimulator(dev);
-        run('xcrun', ['simctl', 'launch', '--terminate-running-process', dev.udid, app.id], { env: { ...process.env, ...(launchEnv.EXACT_DEV_PLAN ? { SIMCTL_CHILD_EXACT_DEV_PLAN: launchEnv.EXACT_DEV_PLAN } : {}), SIMCTL_CHILD_EXACT_ASSETS: simulatorAppContainer(dev.udid, app.id, 'app') } });
-      }
+      else await launchAndOptionallyStream(dev, app.id, { ...(launchEnv.EXACT_DEV_PLAN ? { SIMCTL_CHILD_EXACT_DEV_PLAN: launchEnv.EXACT_DEV_PLAN } : {}) }, { logs: wantLogs, executable: paths.executable });
     }
   };
   await (device ? place() : (await import('../../scripts/agent-launch.mjs')).simulatorApps(dev.udid, bundles.flatMap(([, kind]) => kind === 'clip' ? [] : [kind === 'host' ? `${app.id}.host` : app.id]), place, { name: dev.name }));

@@ -1372,7 +1372,6 @@ async function main(argv) {
   const [verb, name, ...rest] = argv;
   if (verb === 'tamber') { console.error('exact: rename the tamber verb to forma: use `exact forma`'); return process.exit(2); }
   if (!verb || verb === '--help' || verb === '-h' || verb === 'help') return console.log(USAGE);
-  // Help before any work (`setup --help` installed, `new --help` wrote an app); the compiler answers its own.
   if (verb !== 'contract' && argv.some(arg => arg === '--help' || arg === '-h')) return console.log(helpText(verb, { all: argv.includes('all') }) ?? USAGE);
   if (verb === 'game' && name === 'vocab') return import('../game/vocab.mjs').then(m => m.main(rest));
   if (verb === 'status' || verb === 'web' && rest.includes('--ready')) {
@@ -1462,6 +1461,7 @@ async function main(argv) {
     await snapbackDevice.devicePreflight(app, nextOrigin ? [nextOrigin] : []);
     return;
   }
+  if (verb === 'dev') { if (!name) { console.error('exact dev: name an app (exact list)'); process.exit(2); } const r = spawnSync(process.execPath, [resolve(ROOT, 'host/web/dev.mjs'), '--app', name, ...rest], { stdio: 'inherit' }); process.exit(r.status ?? 1); }
   if (!['run', 'install', 'uninstall', 'release', 'appstore'].includes(verb)) { console.error(`exact: no verb ${verb}\n\n${USAGE}`); process.exit(2); }
   if (!name) { console.error(`exact ${verb}: name an app (exact list)`); process.exit(2); }
   // An app outside the repository (EXACT_APP_DIR, or a path): a bare `run` of one that names no native platform runs

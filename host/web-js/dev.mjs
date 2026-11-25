@@ -28,6 +28,7 @@ import { partitionWebRoots, webSourceRoots } from '../web/build.mjs';
 import { shaderWatchRoots } from '../../scripts/app.mjs';
 import { within } from '../../scripts/paths.mjs';
 import { localInstaller } from '../web/local-install.mjs';
+import { attachDevControls, createLaunchGate } from '../web/dev-keys.mjs';
 import { designPath, frameOnlyByTool, formaServer } from '../../scripts/forma-server.mjs';
 import { pluginOnLoopback } from '../../scripts/forma-remote.mjs';
 import { openRemoteCanvas } from '../../scripts/forma-canvas.mjs';
@@ -240,8 +241,8 @@ function copyCompiler(path, copy, built) {
 const compilerCopy = (app) => resolve(app.target, `web-js-dev-compiler-${app.name.replace(/[^\w.-]/g, '_')}${EXE}`);
 
 /** Build `app` on the JS target and serve it with reload, until the process ends. */
-export async function devJs({ app, dist, port, host, origins, gate, lan, allowHosts = [], remoteAsked = { remote: null, tunnel: null, plugin: false, hosts: [] }, residentPort = 0, pairTtlMs }) {
-  let stopping = false, shutdown = null;
+export async function devJs({ app, dist, port, host, origins, gate, lan, allowHosts = [], remoteAsked = { remote: null, tunnel: null, plugin: false, hosts: [] }, residentPort = 0, pairTtlMs, devFlags = {} }) {
+  let stopping = false, shutdown = null, controls = null;
   // A design (`exact-web-js design`), read from the compiler with no build:
   // a value-only edit's and a scrub's. Optimised (host-dev), built as the
   // loop starts and again after any edit that is not a design's, so it is
@@ -600,9 +601,9 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     client: n => client(n, null, { base: '/__dev/gallery', stream: '/__dev/gallery/stream', page: 'gallery' }) });
   const frames = frameLoops({ app, root, compiler: previewOptions.compiler, tableTool: previewOptions.tableTool,
     client: (n, base) => client(n, null, { base, stream: base + '/stream' }) });
-  const rebuild = async () => {
+  const rebuild = async ({ force = false } = {}) => {
     // A burst a build already took (its timer still armed) is no edit.
-    if (stopping || !edited.size) return;
+    if (stopping || (!force && !edited.size)) return;
     const at = saved, t = Date.now();
     // A path that existed during the save and is gone by now (an editor's
     // or sed's temporary file) edited nothing; one already gone when its
@@ -1119,7 +1120,8 @@ for(;;){
   // The install pages (LLP 1030.003 D6a) and, from a loopback page on a Mac,
   // the local iOS build (D6b): this server's, since only it sees the real
   // peer (a forwarded request's is loopback).
-  const installer = localInstaller({ app: () => app, origins, port, gate, listener: { host, port } });
+  const launchGate = createLaunchGate();
+  const installer = localInstaller({ app: () => app, origins, port, gate, listener: { host, port }, launchGate });
   // An agent attached to a tab a person has open here, once they allow it there (LLP 1012.000 D2).
   const attach = devAttach({ port, root });
   // The design server's wire (LLP 1121 D13), when the app has a design.
@@ -1386,7 +1388,7 @@ for(;;){
     for (const entry of packageEntries.values()) entry.watch.close();
     for (const w of watchers) w.close(); residentChild?.kill('SIGTERM'); server.close(); server.closeAllConnections?.();
     // The design server lets go of its lock before this exits.
-    await Promise.all([buildExit, forma?.close(), doors?.close(), gallery.stop(), frames.stop()]);
+    await Promise.all([buildExit, forma?.close(), doors?.close(), gallery.stop(), frames.stop(), controls?.stop()]);
     // A local iOS build in flight is stopped and waited for, as the resident loop does.
     const install = installer.child;
     if (install && install.exitCode === null && install.signalCode === null) { const exit = new Promise((ok) => install.once('exit', ok)); install.kill('SIGTERM'); await exit; }
@@ -1409,6 +1411,11 @@ for(;;){
   // Said once the server answers, not at the first build: a test or an agent takes it as the cue to connect.
   console.log('plan ready');
   listening = true; for (const line of held.splice(0)) console.log(line);
+  controls = attachDevControls({
+    app, root, url: `http://127.0.0.1:${port}/`, wasm: false, flags: devFlags, launchGate,
+    onReload: () => { void rebuild({ force: true }); },
+    onStop: stop,
+  });
   await new Promise(() => {});
 }
 

@@ -58,7 +58,7 @@ const NATIVE_PORTS = 'iOS simulator: a Unix socket; --device: a free TCP port; m
 
 // host/apple/build.mjs's flags, which `ios` and `mac` both run: each documents its own, and takes the rest.
 const APPLE = ['--painted-benchmark', '--watchos', '--watch-sim <udid>', '--ios', '--tvos', '--device', '--run', '--no-install', '--prebuild', '--release', '--host', '--embed', '--bundle', '--distribution', '--appstore', '--ad-hoc', '--sandbox', '--unsigned', '--development', '--extensions <kinds>', '--test', '--only <Class,…>',
-  '--archive <out.ipa>', '--sim <udid|name>', '--phone <udid|name>', '--url <url>', '--optimize <speed|size|balanced>', '--link <plan>', '--widget-gallery'];
+  '--archive <out.ipa>', '--sim <udid|name>', '--phone <udid|name>', '--url <url>', '--optimize <speed|size|balanced>', '--link <plan>', '--widget-gallery', '--no-live', '--rebuild', '--logs', '--pick'];
 const appleRest = (documented) => APPLE.filter((spec) => !documented.some(([row]) => specs(row).some((d) => name(d) === name(spec))));
 const OPTIMIZE = ['--optimize speed|size|balanced', 'production Rust and ExactKit; default balanced on iOS/tvOS, size for embeds, speed on Mac; a game keeps speed and refuses size and balanced; app.json host.ios|macos.optimize overrides the default'];
 const PREBUILD = ['--prebuild', 'start the build apart from this shell and return; its log: .exact/<ios|macos>-build.log'];
@@ -85,6 +85,18 @@ export const HELP = {
     example: 'bun exact.mjs snapback --port 4410',
   },
   status: {line:'the game\'s web and prove runs: phase and elapsed time', usage:'bun exact.mjs status', flags:[], body:'Lists the game\'s web and prove invocations with their phase, elapsed time, previous duration and exit status.', example:'bun exact.mjs status'},
+  dev: {
+    line: 'dev server with live reload and platform keys',
+    usage: 'bun exact.mjs dev [--ios|--mac|--android|--open] [--sim <udid|name>] [--port <n>] [--lan] [--no-interactive]',
+    get flags() { return HELP.web.flags; },
+    get more() { return HELP.web.more; },
+    get internal() { return HELP.web.internal; },
+    body: `Runs the development loop in the foreground until q or ^C, printing its URL and single-key
+platform shortcuts (i iOS, I pick sim, m macOS, a Android, w web, r reload, l logs, q quit).
+Pass --ios, --mac, --android or --open to launch a platform as soon as the server listens.`,
+    get bodyAll() { return HELP.web.bodyAll; },
+    example: 'bun exact.mjs dev --ios            # start dev loop and open in iOS Simulator',
+  },
   web: {
     line: 'serve the app and reload on save (foreground)',
     usage: 'bun exact.mjs web [--port <n>] [--lan] [--allow-host <name>]… [--wasm]',
@@ -96,6 +108,7 @@ export const HELP = {
       ['--lan', 'bind every interface, so a phone on this network opens the printed LAN URL'],
     ],
     more: [
+      ['--ios · --mac · --android · --open · --sim <udid|name> · --no-interactive', 'launch a platform once listening (iOS/macOS connect for live reload); --sim picks the simulator; --no-interactive disables TTY keys'],
       ['--allow-host <name>', 'also answer to this host name (a tunnel\'s); repeatable'],
       ['--remote <host:port>', 'with a design: a TLS-only listener for paired remote clients (a certificate made for this run; its fingerprint printed)'],
       ['--trust-tunnel <port>', 'with a design: a loopback port for a tunnel you run; only paired tokens work through it'],
@@ -249,12 +262,12 @@ Ports    none to choose: test's and agent's (headless Chrome over a pipe; a simu
     usage: 'bun exact.mjs ios [--run|--prebuild|--no-install] [--json] [--release] [--sim <udid|name>] [--device [--phone <udid|name>]] [--url <url>] [--optimize speed|size|balanced]',
     common: ['ios [--run] [--sim <name>]    build for a simulator; --run launches it'],
     flags: [
-      ['--run', 'also launch it (in Simulator.app, or on the phone); returns once launched'],
+      ['--run · --logs', 'also launch it (in Simulator.app, or on the phone); --logs streams simulator app logs in the foreground until ^C'],
       ['--no-install', 'build and sign the simulator .app, and install it on no simulator; the default on Linux/WSL'],
       jsonBuilt(', signing (an identity\'s SHA-1, or ad-hoc), installed ({name, udid}, unless --no-install, --unsigned or --archive)', '; not with --run, --prebuild or --test'),
       PREBUILD,
       RELEASE,
-      ['--sim <udid|name>', 'which simulator (else EXACT_SIM, a booted iPhone, or the newest Pro)'],
+      ['--sim <udid|name> · --pick', 'which simulator (exact or substring; else EXACT_SIM, a booted iPhone, or the newest Pro) · interactively pick a simulator on a TTY'],
       ['--device', 'an iPhone, signed with an installed development profile and identity; DEVELOPMENT_TEAM restricts their team; EXACT_PROFILE/EXACT_IDENTITY override'],
       ['--phone <udid|name>', 'which phone, with --device'],
       ['--archive <out.ipa>', 'with --device: an .ipa to distribute (EXACT_IDENTITY, EXACT_PROFILE), no phone; production trust, so with an update store EXACT_UPDATE_RECEIPT or EXACT_UPDATE_GENESIS=1'],
@@ -262,24 +275,20 @@ Ports    none to choose: test's and agent's (headless Chrome over a pipe; a simu
       ['--development', 'with --archive --unsigned: the development build --run installs, as an .ipa (development trust, host-dev; no update store receipt)'],
       ['--extensions <kinds>', 'which app extensions to package: all (the default), none, or a list of widgets,activities,controls,intents,alarms,notifications,watch,share (controls need intents); the bake still compiles every entry, and app code that reaches a missing one is refused, not crashed'],
       ['--tvos', 'an Apple TV simulator instead (with --device, an Apple TV)'],
-      ['--url <url>', 'connect the client to that dev server (web\'s URL) for live reload'],
+      ['--url <url> · --no-live · --rebuild', 'connect to that dev server for live reload (else auto-connects a running dev loop on --run) · launch standalone without attaching to a running dev loop · force a full native rebuild instead of fast reuse'],
       OPTIMIZE,
     ],
     get internal() { return appleRest(this.flags); },
     body: `Linux/WSL builds an ARM64 simulator bundle without installing it. Use macOS to run the
 simulator. The first build takes minutes, later ones a minute or two. Of several booted simulators it
-takes the one the app is installed on, else refuses to guess (--sim or EXACT_SIM). test ios
-and agent ios run it first themselves when the build is missing or older than its sources;
-an edit to only app.contract or what app.ts imports runs its new plan on the existing build
-instead, in about a second.
-Ports    none. Runs to completion (--run too); --prebuild returns at once, the build going on
-         apart from this shell (its pid printed; test, agent and ios without it wait for it).`,
+takes the one the app is installed on, else prompts on a TTY (or refuses non-interactively: --sim or EXACT_SIM).
+With --run, a fresh or Contract/TS-only edit reuses the existing simulator build in about a second (--rebuild forces a full build).
+Ports    none. Runs to completion (--run too, unless --logs streams until ^C); --prebuild returns at once.`,
     example: 'bun exact.mjs ios --run',
   },
   share: {
     line: 'build for iPhone and print an AppDrop link that installs it',
     usage: 'bun exact.mjs share [--new-link | --force] [--json]',
-    common: ['share    an AppDrop link that installs the app on an iPhone'],
     flags: [
       ['--new-link', 'a new link for this branch, when the last share was from another branch'],
       ['--force', 'publish over the other branch\'s link instead'],
@@ -354,7 +363,7 @@ Ports    none. Runs to completion, or until Ctrl-C with --watch.`,
       ['--bundle', 'assemble the .app bundle (the macOS default)'],
       ['--sandbox', 'sign the App Sandbox the Mac App Store build signs, and refuse what it refuses; the agent drives it, its stores in ~/Library/Containers/<id>'],
       ['--painted-benchmark', 'build the app’s <macos-crate>-painted bin with ink; benchmark carrier only (LLP 1149 S1.1)'],
-      ['--url <url>', 'connect the app to that dev server (web\'s URL) for live reload'],
+      ['--url <url> · --no-live', 'connect the app to that dev server (web\'s URL) for live reload (else auto-connects a running dev loop on --run) · launch standalone without attaching'],
       OPTIMIZE,
     ],
     get internal() { return appleRest(this.flags); },
@@ -707,7 +716,7 @@ export function printHelp(verb, { verbs, own = {}, all = process.argv.slice(2).i
 // `--variant`, which every verb that builds or drives the app takes. `guardFlags` takes it out of the arguments before
 // the verb's script parses them, so it is no script's flag, and `--help all` names it.
 const VARIANT = ['--variant <name>', "app.json's variants.<name>: the app under that identity, installed beside the plain build (or EXACT_VARIANT; LLP 1030.008)"];
-const VARIANT_VERBS = new Set(['web', 'web-build', 'serve', 'test', 'agent', 'verify', 'ios', 'mac', 'linux', 'android']);
+const VARIANT_VERBS = new Set(['dev', 'web', 'web-build', 'serve', 'test', 'agent', 'verify', 'ios', 'mac', 'linux', 'android']);
 /** Takes `--variant <name>` out of `args` (in place) and, when given, sets EXACT_VARIANT in `env` for this process and
  * every one it starts, as `--sim` sets EXACT_SIM, so the flag wins over an exported value; the app the verb resolves
  * then claims the selection (scripts/variants.mjs `claimVariant`). Returns `args`. Here, beside `guardFlags`, because
@@ -745,6 +754,8 @@ export function appleBuildRefusal(args, env = process.env, platform = process.pl
   if (args.includes('--development') && !(archive && unsigned)) return '--development needs --archive and --unsigned: it packages the development build as an .ipa a service re-signs';
   if (args.includes('--development') && (args.includes('--release') || env.EXACT_UPDATE_TRUST === 'production')) return '--development packages the development build, so it takes neither --release nor EXACT_UPDATE_TRUST=production';
   if (unsigned && args.includes('--run')) return '--unsigned takes no --run: an ad-hoc signed device bundle cannot launch on a stock device; use a development profile and identity';
+  if (args.includes('--logs') && (!args.includes('--run') || args.includes('--device') || args.includes('--json'))) return '--logs requires a simulator --run (not with --device or --json)';
+  if (args.includes('--pick') && (args.includes('--device') || args.includes('--json'))) return '--pick selects a simulator and takes neither --device nor --json';
   if (archive && (!args.includes('--device') || args.includes('--run') || args.includes('--host') || !unsigned && (!env.EXACT_IDENTITY || !env.EXACT_PROFILE))) return '--archive needs --device and EXACT_IDENTITY and EXACT_PROFILE (or --unsigned), and takes neither --run nor --host';
   return null;
 }

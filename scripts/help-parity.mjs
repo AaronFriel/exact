@@ -37,8 +37,10 @@ export function scriptFlags(root) {
   const pairTtl = slice('scripts/forma-pairing.mjs', read('scripts/forma-pairing.mjs'), 'export function pairTtlOf(', '\n}\n');
   const apple = parsed(read('host/apple/build.mjs'), read('host/apple/devices.mjs'), read('host/apple/link.mjs'), read('host/apple/bundle.mjs'));
   const agent = parsed(read('scripts/agent-launch.mjs'), read('scripts/agent-widget.mjs'));
+  const web = parsed(read('host/web/dev.mjs'), read('host/web/dev-keys.mjs'), read('scripts/install-page.mjs'), read('scripts/forma-remote.mjs'), read('scripts/forma-relay.mjs'), pairTtl, readiness);
   return [
-    ['web', parsed(read('host/web/dev.mjs'), read('scripts/install-page.mjs'), read('scripts/forma-remote.mjs'), read('scripts/forma-relay.mjs'), pairTtl, readiness)],
+    ['dev', web],
+    ['web', web],
     ['web-build', parsed(read('host/web/build.mjs'))],
     ['serve', parsed(read('host/web/serve.mjs'))],
     ['agent', agent], ['test', agent], ['verify', parsed(read('scripts/verify.mjs'))],
