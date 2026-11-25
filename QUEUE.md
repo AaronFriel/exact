@@ -2186,3 +2186,4 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - Keep `exact-bake compat --json` output parseable when invoked with Cargo’s `OUT_DIR` in the environment. Point it at a directory containing `app.plan` and run it for Linux or Android. Both write Cargo directives before the JSON.
 - Keep a regression fixture for an incomplete multi-ABI build. With a fresh `EXACT_BAKE_OUTPUT`, bake arm64 and then an unavailable x86_64 target. Check that the builder returns null and publishes no provisional arm64 build receipt.
 - Record the bytes Cargo read for native library inputs that only dep-info names. Replace one such source with different bytes and restore its pre-build mtime. A timestamp-only drive can accept the older library.
+- Compare an Android agent tap on a standalone iframe or video with controls to a finger at the same point. The reader offers those contacts to the hosted view, while an addressed agent press can finish in the presenter.
