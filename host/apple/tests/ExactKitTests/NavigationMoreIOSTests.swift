@@ -776,6 +776,7 @@ final class NavigationMoreIOSTests: XCTestCase {
         let root = try XCTUnwrap(navigation.observation()["route"] as? String)
         try tapNode(session, "open-detail")
         waitFor("Detail pushed in Home") { home.viewControllers.count == 2 && home.transitionCoordinator == nil && !navigation.changing }
+        let detail = try XCTUnwrap(home.topViewController as? RouteController)
         let back = try node(session, "back-detail").id
         UIView.setAnimationsEnabled(true)
         defer { UIView.setAnimationsEnabled(false) }
@@ -786,6 +787,8 @@ final class NavigationMoreIOSTests: XCTestCase {
             navigation.routerTab == 1 && !navigation.inTransition
         }
         XCTAssertEqual(journal(session, "press view \(back) (back)"), 1, "Home's Back reached the router")
+        waitFor("the detached Detail releases its root") { detail.view.window == nil && detail.retiringRoot == nil }
+        XCTAssertNil(detail.node.superview, "the outgoing root leaves its mount")
         tapTab(tabs, 0)
         waitFor("Home shows its root, and the router follows", facts: { "router tab \(navigation.routerTab), route \(String(describing: navigation.observation()["route"])), Home holds \(home.viewControllers.count), in transition \(navigation.inTransition)" }) {
             navigation.routerTab == 0 && home.transitionCoordinator == nil && !navigation.inTransition && navigation.observation()["route"] as? String == root
@@ -816,6 +819,7 @@ final class NavigationMoreIOSTests: XCTestCase {
         waitFor("the Back reaches the router") { navigation.observation()["route"] as? String == root }
         XCTAssertNotNil(home.transitionCoordinator, "while UIKit's pop still runs")
         XCTAssertNil(session.presenter.views[detail.node.id], "the app's batch removed Detail")
+        XCTAssertTrue(detail.retiringRoot === detail.node && detail.node.isDescendant(of: detail.view))
         XCTAssertTrue(detail.view.subviews.contains { !before.contains(ObjectIdentifier($0)) }, "Detail's pixels stay for the pop: in a window \(detail.view.window != nil), subviews \(detail.view.subviews.map { String(describing: type(of: $0)) }), before \(before.count), node's superview \(String(describing: detail.node.superview.map { type(of: $0) }))")
     }
 
