@@ -25,6 +25,7 @@ use exact_runner::ControlValue;
 
 #[cfg(target_os = "android")]
 pub(super) mod android;
+mod open_url;
 mod packages;
 #[cfg(test)]
 mod packages_tests;
@@ -237,6 +238,10 @@ impl Haptic {
 /// A request the shell took and has not answered.
 #[derive(Debug)]
 pub(super) enum Waiting {
+    Open {
+        element: Option<String>,
+        scheme: String,
+    },
     /// The share sheet: its outcome is a journal line (LLP 1069.003 D2).
     Share,
     Auth {
@@ -1052,6 +1057,15 @@ impl<D: DataSource> Presenter<D> {
             return false;
         };
         match waiting {
+            Waiting::Open { element, scheme } => {
+                let opened = answer == Some("opened");
+                if !opened {
+                    self.host.log(format!(
+                        "openURL {scheme}: the system could not open the URL"
+                    ));
+                }
+                self.answer_open(element.as_deref(), opened);
+            }
             // The outcome is a journal line, as on every host (LLP 1069.003 D2).
             Waiting::Share => self.host.log(match answer {
                 Some("shared") => "share: shared".to_string(),
@@ -1104,6 +1118,7 @@ impl<D: DataSource> Presenter<D> {
     /// belongs to the activity, which answers it as it closes (`Requests.destroy`);
     /// a reader made again over the same activity leaves it up.
     /// File pickers use the process-owned activity-result callback across recreation.
+    /// A URL is answered by the main thread, even with the activity detached.
     pub(super) fn requests_reset(&mut self) {
         (self.requests.back, self.requests.back_epoch) = (None, None);
         self.requests.keyboard = None;
@@ -1115,7 +1130,8 @@ impl<D: DataSource> Presenter<D> {
             .filter(|(_, w)| {
                 !matches!(
                     w,
-                    Waiting::Pick(_)
+                    Waiting::Open { .. }
+                        | Waiting::Pick(_)
                         | Waiting::Files(_)
                         | Waiting::Export(_)
                         | Waiting::Auth { opened: true, .. }
@@ -1331,98 +1347,6 @@ impl<D: DataSource> Presenter<D> {
                 }
             }
             _ => self.host.log("copyText requires one string"),
-        }
-    }
-
-    /// `openURL(url)` on a host whose shell can leave the app: an absolute
-    /// `http`, `https`, `mailto` or `tel` URL, the one allowlist every host
-    /// opens (a path is a location in the app, which `navigate` takes).
-    /// `openURL(url, id)`: `change` at `id` hears `opened` or `failed`.
-    pub(super) fn open_url(&mut self, args: &[exact_plan::Value]) {
-        let opened = self.open_url_now(args);
-        self.answer_open(args, opened);
-    }
-
-    fn open_url_now(&mut self, args: &[exact_plan::Value]) -> bool {
-        let url = args.first().and_then(exact_plan::Value::as_str);
-        // The app's page in Settings (LLP 1133.002 D11), the shell's to open;
-        // under the agent, journaled only.
-        if url == Some("app-settings:") {
-            if !self.has_shell() {
-                self.host
-                    .log("openURL app-settings: unavailable on this host");
-                return false;
-            }
-            let agent = std::env::var("EXACT_AGENT").is_ok_and(|v| v == "1");
-            self.host.log(format!(
-                "openURL app-settings: opens the app's page in Settings{}",
-                if agent { " (not under the agent)" } else { "" }
-            ));
-            if !agent {
-                self.request(Request::Open("app-settings:".into()));
-            }
-            return true;
-        }
-        match url.and_then(|url| self.leave_for(url)) {
-            Some(opened) => opened,
-            None => {
-                self.host.log(format!(
-                    "openURL refused: {:?} is not an absolute http, https, mailto or tel URL",
-                    url.unwrap_or_default()
-                ));
-                false
-            }
-        }
-    }
-
-    /// `openURL(url, id)`'s answer, `opened` or `failed`, as `change` at
-    /// the element `id` names; the runner says in the journal when none does.
-    pub(super) fn answer_open(&mut self, args: &[exact_plan::Value], opened: bool) {
-        let Some(id) = args.get(1).and_then(exact_plan::Value::as_str) else {
-            return;
-        };
-        let request = serde_json::json!({ "command": "openURL", "id": id });
-        let ruling = exact_runner::commands::request(self.host.runner_mut(), &request.to_string());
-        let ruling: serde_json::Value = serde_json::from_str(&ruling).unwrap_or_default();
-        self.dirty = true;
-        let Some(view) = ruling["view"].as_u64() else {
-            return;
-        };
-        let answer = if opened { "opened" } else { "failed" };
-        let now = self.host.now();
-        let change = Event::Change(ControlValue::Text(answer.into()));
-        if let Some(e) = self.host.dispatch_at(view as ViewId, change, now) {
-            eprintln!("exact: {e}");
-        }
-        if let Some(e) = self.after_commit() {
-            eprintln!("exact: {e}");
-        }
-    }
-
-    /// Leave the app for `url`, where a shell can and `url` is one of the
-    /// four kinds that do; whether it was asked.
-    pub(super) fn leave(&mut self, url: &str) -> bool {
-        self.leave_for(url).is_some()
-    }
-
-    /// [`Self::leave`], and whether the open was taken: the opener's
-    /// answer, or the shell's request sent.
-    fn leave_for(&mut self, url: &str) -> Option<bool> {
-        let target =
-            crate::text::markup::target(url).filter(|t| !t.starts_with('/') && !t.contains('\0'));
-        if let (Some(target), Some(open)) = (target, self.url_opener.as_ref()) {
-            if let Err(error) = open(target) {
-                self.host.log(format!("openURL: {error}"));
-                return Some(false);
-            }
-            return Some(true);
-        }
-        match target.filter(|_| self.requests.shell) {
-            Some(target) => {
-                self.request(Request::Open(target.to_string()));
-                Some(true)
-            }
-            None => None,
         }
     }
 

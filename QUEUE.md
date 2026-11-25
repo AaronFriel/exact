@@ -1,5 +1,6 @@
 # Queue
 
+- An undeclared `openURL("unknown:/route?token=private")` puts the entire query in the painted host’s refusal journal. Report the refused scheme without query values.
 - On Android, put a scrolled list with `margin-top=-48` under a visible sheet handle at the lower of two detents. Start a downward drag on the grip. The reader gives the list that direction while the painted presenter claims the handle in both directions.
 - Give a sheet its exit animation when its navigation root handles only Back. Open a modal route, push a second route inside it, then tap the scrim. Both routes pop before the painted stage can retain their closing frame. A root that handles `navigate` dismisses the stack in one turn.
 - The neutral route-header test accepts a selector that matches no navigation root. Substitute `[data-fixture-absent]` for `[navigationkey]` in the test’s copy of `index.html` and run `bun test ./host/web/tests/neutral-look.test.mjs -t 'route header geometry'`. The four declarations still pass.

@@ -234,6 +234,7 @@ impl<D: DataSource> Presenter<D> {
         self.give_clock();
         self.modules_replaced();
         self.auth_replaced();
+        self.opens_replaced();
         self.frame_partitions_asked();
         self.brush.replaced();
         self.brush.canvases.drawings = self.host.canvas_snapshots().clone();

@@ -858,6 +858,11 @@ pub(crate) fn compatibility_with_trust(
         "store": { "L": store, "acceptedKinds": if binary_only { vec![] } else { kinds } },
         "app": manifest.id,
     });
+    if platform == "android" {
+        if let Some(schemes) = manifest.json.pointer("/open_url/schemes") {
+            inputs["capabilities"]["openUrlSchemes"] = schemes.clone();
+        }
+    }
     // A variant's base identity, which a Rust source naming its own id names
     // (LLP 1030.008 D2); absent otherwise, so no other app's id moves.
     if let Some(variant) = manifest.json.get("variant") {

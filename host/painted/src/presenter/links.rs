@@ -503,6 +503,97 @@ component App
     }
 
     #[test]
+    fn android_open_url_waits_for_the_intent_and_keeps_declarations_out_of_links() {
+        let source = r#"component App
+  state status = ""
+  action hear(value: string)
+    status = status + value
+  view
+    input id="result" change=hear
+"#;
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
+            &crate::test_plan(source),
+            (),
+            (300., 500.),
+            1.,
+            Default::default(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none());
+        p.compat = r#"{"inputs":{"capabilities":{"openUrlSchemes":["demo","unhandled","file","intent"]}}}"#.into();
+        p.serve_requests();
+        let status = |p: &Presenter<()>| {
+            p.host
+                .runner()
+                .slot("status")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        let open = |p: &mut Presenter<()>, url: &str| {
+            p.open_url(&[
+                exact_plan::Value::from(url),
+                exact_plan::Value::from("result"),
+            ]);
+        };
+        assert!(
+            !p.leave("demo:///links"),
+            "an inline link keeps its own policy"
+        );
+        p.take_requests();
+        open(&mut p, "DeMo:///links?from=test");
+        let words = p
+            .take_requests()
+            .expect("the declared scheme reaches Android");
+        assert_eq!(words[0], 1);
+        let accepted = words[1] as u32;
+        open(&mut p, "unhandled://item");
+        let missing = p.take_requests().unwrap()[1] as u32;
+        assert_ne!(accepted, missing);
+        p.requests_reset();
+        assert_eq!(status(&p), "");
+        assert!(p.answer_request(missing, Some("failed")));
+        assert!(p.answer_request(accepted, Some("opened")));
+        assert!(!p.answer_request(accepted, Some("opened")));
+        assert_eq!(status(&p), "failedopened");
+        p.take_requests();
+        for url in [
+            "unlisted:thing",
+            "file:///path",
+            "intent:thing",
+            "demo:\0bad",
+        ] {
+            open(&mut p, url);
+            assert!(p.take_requests().is_none());
+        }
+        assert_eq!(status(&p), "failedopenedfailedfailedfailedfailed");
+        open(&mut p, "https://example.com");
+        let old = p.take_requests().unwrap()[1] as u32;
+        p.open_url(&[exact_plan::Value::from("https://example.com/queued")]);
+        p.opens_replaced();
+        assert!(!p.answer_request(old, Some("opened")));
+        let queued = p
+            .take_requests()
+            .expect("an issued link still opens after reload");
+        assert_eq!(queued[0], 1);
+        open(&mut p, " app-settings: ");
+        assert!(p.take_requests().is_none());
+
+        p.agent = true;
+        let before = status(&p);
+        open(&mut p, "demo:///links");
+        assert_eq!(status(&p), before + "opened");
+        assert!(p.take_requests().is_none());
+        assert!(p
+            .host
+            .runner()
+            .journal()
+            .any(|s| s.contains("openURL demo: journaled under the agent")));
+    }
+
+    #[test]
     fn desktop_links_and_open_url_commands_use_the_registered_handler() {
         use std::{
             cell::{Cell, RefCell},

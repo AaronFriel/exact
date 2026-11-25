@@ -1192,9 +1192,10 @@ export const classifications = [
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/admission.rs and in_flight.rs tie admission, aborts and retirement to pending tickets. Retained effectful work is separately represented by module_work.rs.", [
     ["painted:host/painted/src/presenter.rs", "Presenter::after_commit Presenter::run_dispatch"],
     ["painted:host/painted/src/presenter/commands.rs", "Presenter::package_turn Presenter::run_queued_commands"],
+    ["painted:host/painted/src/presenter/requests/open_url.rs", "Presenter::hand_url Presenter::open_url"],
     ["painted:host/painted/src/presenter/requests.rs",
-      "Presenter::bind_modules Presenter::copy_text Presenter::drop_picks Presenter::editing Presenter::haptic Presenter::leave_for Presenter::not_carried " +
-      "Presenter::open_url_now Presenter::orientation_moved Presenter::orientation_unavailable Presenter::package_lines Presenter::pickable Presenter::picks_renewed " +
+      "Presenter::bind_modules Presenter::copy_text Presenter::drop_picks Presenter::editing Presenter::haptic Presenter::not_carried " +
+      "Presenter::orientation_moved Presenter::orientation_unavailable Presenter::package_lines Presenter::pickable Presenter::picks_renewed " +
       "Presenter::press_haptic Presenter::request_files Presenter::say_target Presenter::wakelock_unavailable"],
   ], "durable for a retained effectful/background ticket; holds() also accepts those tickets (reply.rs:27-33)."),
   group("session lifecycle", ["one-shot"], "session creation, boot, replacement or teardown; no independent completion", "UI-owned",
@@ -1352,7 +1353,8 @@ export const classifications = [
   ]),
   group("replies", ["one-shot", "subscription", "durable operation"], "pending ticket and source turn; UI target by default", "UI-owned",
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/reply.rs:27-88 checks pending, background, tool and module-work tickets; reply.rs:309 preserves effectful reply writes. Ordinary resource/then ownership is inferred from PendingReq.target in commit.rs:960.", [
-    ["painted:host/painted/src/presenter/requests.rs", "Presenter::answer_date Presenter::answer_open"],
+    ["painted:host/painted/src/presenter/requests.rs", "Presenter::answer_date"],
+    ["painted:host/painted/src/presenter/requests/open_url.rs", "Presenter::answer_open"],
   ], "durable when the ticket names background/tool work or retained effectful module work; see reply.rs:70-88 and module_work.rs. Not all tool handlers survive session teardown."),
   group("session lifecycle", ["one-shot"], "session creation, boot, replacement or teardown; no independent completion", "UI-owned",
     "The named public runner-crate source is the session lifecycle API or its value/admission helper. Runner boot constructs session state (runner/src/runner.rs); host ABI buffers and configuration belong to that runtime handle.", [
