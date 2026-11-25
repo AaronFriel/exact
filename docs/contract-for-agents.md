@@ -5489,7 +5489,8 @@ and `dragleave` clears otherwise; a `paste`'s `ClipboardEvent` carries `files` t
 [Pointer](contract-grammar.md#pointer) and [Clipboard](contract-grammar.md#clipboard).
 A Paste button can send a mutation that calls `@exact/clipboard`'s `readText()` with the
 `clipboard.read` grant. To insert the result at the caret, call `setRangeText(id, text)`
-when the mutation answers. On Android the window needs input focus and `read()` lists only plain text.
+when the mutation answers. On Android the window needs input focus. A Paste image action uses `read()`
+and `await item.getType("image/png")` to get a sanitized PNG under `app:/tmp/`.
 
 Use `keycapture=shortcut` on a container when its shortcut must run before
 the focused field's `key=` handler. Capture runs outermost first, then the

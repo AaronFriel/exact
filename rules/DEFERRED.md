@@ -1928,8 +1928,12 @@ reading. Nothing that isn't HTML is added by it.
   **Android text reads (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"; panel 3–1).**
   Pocket Lab’s Paste text button and paste at the caret require person-started work and window input focus.
   Without either, reject with `NotAllowedError`. On a focused read, `readText()` returns the first plain-text
-  item and `read()` returns only `text/plain`. An empty clipboard gives `""` and `[]` respectively
+  item and `read()` includes its `text/plain` representation. An empty clipboard gives `""` and `[]` respectively
   (LLP 1133.006 D6 and the Android entry in D7).
+  **Android image reads and writes (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"; panel 4–0).**
+  Pocket Lab’s Paste image reads an `image/*` content URI as a sanitized temporary PNG under D2 and D6’s bounds.
+  Android writes of plain text, HTML with a plain alternative and PNG through the host’s file provider are
+  admitted and await implementation. A text write over the Binder bound is refused.
   **Formatted clipboard writes (Charlie, 2026-11-24, "recs ok").** Pocket Lab
   can write sanitized `text/html` on macOS, iOS and the web (LLP 1133.006 D1).
   **Device-local and expiring copies (Charlie, 2026-11-24, "recs ok").**
@@ -1938,8 +1942,7 @@ reading. Nothing that isn't HTML is added by it.
   `android.isSensitive`, Windows clipboard reads, Windows HTML writes, `text/uri-list` until a
   second consumer asks, RTF, custom formats, file
   promises, several items in one write, a Contract `write`, a
-  clipboard-change event, the Linux cell, Android image reads and all Android `@exact/clipboard` writes,
-  including HTML and images.
+  clipboard-change event and the Linux cell.
   **Built (maintainers' agent, 2026-11-12, #196;
   LLP 1133.006 D7):** Windows
   writes a PNG by `app:/` path, sanitized within the same 64 MiB file and
