@@ -89,6 +89,22 @@ test.each([false, true])('a view validates and delivers its agent vocabulary (su
   } finally { await browser?.close(); server.stop(true); }
 });
 
+test('a missing view factory names its package, extension and web target', async () => {
+  const server = moduleServer();
+  let browser;
+  try {
+    browser = await suiteBrowser();
+    const page = await browser.newPage();
+    await page.goto(server.url.href);
+    await expect(page.evaluate(async () => {
+      const { modules } = await import('/host/web-js/modules.js');
+      const loader = async () => ({ implementation: () => ({}), roster: {} });
+      modules({}, { words: loader }, { 'words-panel': ['words', false, [], {}, '@fixture/words'] });
+      await exact.packageViews.make('words-panel', {});
+    })).rejects.toThrow('the words extension of @fixture/words has no view factory for <words-panel> on the web JS target');
+  } finally { await browser?.close(); server.stop(true); }
+});
+
 test.each(['cleared', 'conflicting'])('%s preferences cancel the camera clip during module initialization', async change => {
   const server = moduleServer(), browser = await suiteBrowser('chromium', { needs: ['hevc'] });
   try {

@@ -100,10 +100,10 @@ globalThis.exact.nativeHost = ({ dispatch, log, packages = null }) => {
   function attachNow(el) {
     const st = el.exactNative;
     if (!st || st.destroyed) return;
-    if (failure) return fail(st, failure.state ?? 'unavailable', failure.message);
+    if (failure) return st.missingFactory ? fail(st, 'error', st.missingFactory) : fail(st, failure.state ?? 'unavailable', failure.message);
     // The name is a table key, checked again on plan bytes (D2, D5).
     if (!/^[a-z][a-z0-9_]*(-[a-z][a-z0-9_]*)+$/.test(st.name)) return fail(st, 'error', `refused module name ${JSON.stringify(st.name)}`);
-    if (!Object.hasOwn(table.roster, st.name)) return fail(st, 'error', `the module artifact has no factory for ${st.name}`);
+    if (!Object.hasOwn(table.roster, st.name)) return fail(st, 'error', st.missingFactory ?? `the module artifact has no factory for ${st.name}`);
     const mine = ++nonce;
     st.nonce = mine;
     const { live, event } = events(el, st, mine);

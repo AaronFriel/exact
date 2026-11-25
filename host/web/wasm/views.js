@@ -1,6 +1,6 @@
 import { symbolBox, symbolSize, symbolPlaceholder, syncSymbolPlaceholder, symbolFit, tintFit } from "../symbol-geometry.js";
 import { downForDrag, elementOf, lightDomDragPath, observeDragInput, pressedAt } from "../drag-input.js";
-import { picker, track, iframeLoading, localAssetURL, host, loadAfterPaint, moduleReady, views, writeIn, now, afterNativePaint, log, retiredViews, lists, root, encoder, readOut, imageProbes, inflight, IMAGE_ERROR, CORS_ERROR, heldValues, composing, loadDecorations, markupPending, scrollDocs, followScroll, pendingScrolls, DATA_LIMIT, authoredDisabled, holdWake, holdOrientation } from "../glue.js";
+import { picker, track, iframeLoading, localAssetURL, host, pageNative, loadAfterPaint, moduleReady, views, writeIn, now, afterNativePaint, log, retiredViews, lists, root, encoder, readOut, imageProbes, inflight, IMAGE_ERROR, CORS_ERROR, heldValues, composing, loadDecorations, markupPending, scrollDocs, followScroll, pendingScrolls, DATA_LIMIT, authoredDisabled, holdWake, holdOrientation } from "../glue.js";
 import { pageGivenFiles, commitGuestOrigin, frameURL, refuseURL, valuedControl, renderMarkup, editMenu, inertAncestor, contextAt, liveById, navigates, navigableURL, dataURL, settleValue, fitVisualViewport } from "../navigation.js";
 import { send } from "./commit.js";
 import { attach } from "./input.js";
@@ -100,6 +100,18 @@ export function nativeCreate(el, id) {
       host.nativeHost?.then((h) => h.destroy(el));
     }
   };
+  const owners = host.packageViewOwners;
+  if (owners && Object.hasOwn(owners, st.name)) {
+    const owner = owners[st.name] || "the declaring package";
+    st.missingFactory = `the web wasm target cannot load the view factory for <${st.name}> from ${owner}`;
+    // An app artifact can already supply this tag (LLP 1024 D2). With no artifact the refusal is known now.
+    if (!pageNative) {
+      st.state = "error";
+      st.error = st.missingFactory;
+      log(`native ${st.name} #${id}: error: ${st.error}`);
+      return;
+    }
+  }
   (host.nativeHost ??= afterNativePaint().then(() => loadAfterPaint("./native-glue.js", "nativeHost")).then((make) => make({
     log,
     dispatch(el, kind, text) {
@@ -110,9 +122,9 @@ export function nativeCreate(el, id) {
     }
   }))).then((h) => h.attach(el), (e) => {
     host.nativeHost = null;
-    st.state = "unavailable";
-    st.error = String(e?.message ?? e);
-    log(`native ${st.name} #${id}: unavailable: ${st.error}`);
+    st.state = st.missingFactory ? "error" : "unavailable";
+    st.error = st.missingFactory ?? String(e?.message ?? e);
+    log(`native ${st.name} #${id}: ${st.state}: ${st.error}`);
   });
 }
 // A virtualized list has logical rows; its (`collection`) feedback is navigation.js's.

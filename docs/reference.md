@@ -6725,6 +6725,11 @@ build.
 a new binary. See
 [A package's configuration](contract-for-agents.md#a-packages-configuration).
 
+The web JS target loads a package’s view from its bound web implementation.
+A game’s wasm target can make a view supplied by the app’s own web artifact.
+If only the package supplies the view, the node reports its tag and package
+in the error and the view stays empty.
+
 ## Access hatches
 
 An access hatch hands the app's native code the platform object Exact built for

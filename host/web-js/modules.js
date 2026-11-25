@@ -50,7 +50,7 @@ import { hatchClock } from "./hatches.js";
 // `rows`: source → [extension.name, send, substitute, type, request, options' type, live];
 // `bound`: extension → a loader of its web implementation, where the app binds one
 // (LLP 1133.001 D4), which answers outside the agent;
-// `views`: a package view's tag → [extension, displayed, binding props, agent vocabulary] (views.js);
+// `views`: a package view's tag → [extension, displayed, binding props, agent vocabulary, package] (views.js);
 // `events`: extension.event → [its action, taken when heard; activation | emit | wake; hold; its parameters' types; its
 // name; a wake's budget].
 // Who a call comes from, least privileged first (the runner's `CallOrigin`)

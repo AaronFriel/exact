@@ -19,7 +19,7 @@
 import { After, say, viewId } from "./rt.js";
 import { displayed } from "./wakelock-glue.js";
 
-/** `views`: tag → [extension, displayed, binding props, agent vocabulary]; `chunk(extension)`, its web implementation's module;
+/** `views`: tag → [extension, displayed, binding props, agent vocabulary, package]; `chunk(extension)`, its web implementation's module;
  * `instance(extension)`, the session's instance of it. */
 export function packageViews(views, chunk, instance) {
   const tags = Object.keys(views);
@@ -27,10 +27,13 @@ export function packageViews(views, chunk, instance) {
   (globalThis.exact ??= {}).packageViews = {
     serves: tag => Object.hasOwn(views, tag),
     async make(tag, { element, props, events, view }) {
-      const [extension] = views[tag];
+      const [extension, , , , owner] = views[tag];
       const [m, implementation] = await Promise.all([chunk(extension), instance(extension)]);
       const View = m?.roster?.[tag]?.view;
-      if (typeof View !== "function") throw new Error(`${extension}'s web implementation serves no ${tag}`);
+      if (typeof View !== "function") {
+        const provider = owner ? `the ${extension} extension of ${owner}` : `the ${extension} extension`;
+        throw new Error(`${provider} has no view factory for <${tag}> on the web JS target`);
+      }
       return new View({ implementation, element, props, events, view: String(view) });
     },
   };
