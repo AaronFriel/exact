@@ -182,6 +182,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/pointer.rs", "Presenter::pointer_dispatch"],
     ["painted:host/painted/src/presenter/radio.rs", "Presenter::activate_radio"],
     ["painted:host/painted/src/presenter/replacement.rs", "Presenter::buttons_released Presenter::pointer_released Presenter::reader_touch Presenter::set_touching"],
+    ["painted:host/painted/src/presenter/height_drag.rs", "Presenter::take_height_scroll_release"],
     ["painted:host/painted/src/presenter/scroll_drag.rs", "Presenter::reader_drag_began Presenter::reader_drag_ended Presenter::reader_fling_ended Presenter::reader_refresh Presenter::scroll_drag"],
     ["painted:host/painted/src/presenter/scroll_end.rs", "Presenter::deliver_scroll_ends"],
     ["painted:host/painted/src/presenter/scrollers.rs",
@@ -1245,7 +1246,7 @@ export const classifications = [
       "Presenter::select_text Presenter::set_selection_range Presenter::sync_field_values Presenter::text_field"],
     ["painted:host/painted/src/presenter/glide.rs", "Presenter::step_glides"],
     ["painted:host/painted/src/presenter/group.rs", "Presenter::grip_in Presenter::group_edges Presenter::group_key Presenter::group_lift Presenter::group_lists Presenter::group_of"],
-    ["painted:host/painted/src/presenter/height_drag.rs", "Presenter::begin_height_drag Presenter::finish_height_drag Presenter::move_height_drag"],
+    ["painted:host/painted/src/presenter/height_drag.rs", "Presenter::begin_height_drag Presenter::cancel_height_drag Presenter::finish_height_drag Presenter::list_handle Presenter::move_height_drag"],
     ["painted:host/painted/src/presenter/hosted.rs", "Presenter::field_beside Presenter::field_words Presenter::hosted_at Presenter::hosted_ids Presenter::hosts_field"],
     ["painted:host/painted/src/presenter/ime.rs", "Presenter::composing_field Presenter::finish_ime Presenter::ime_edit"],
     ["painted:host/painted/src/presenter/links.rs", "Presenter::inline_block Presenter::inline_box Presenter::link_at Presenter::run_link"],
@@ -1300,7 +1301,7 @@ export const classifications = [
   group("timer fires", ["subscription"], "session timer generation/deadline or one frame task", "UI-owned",
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/native_timers.rs binds one subscription in each live ordinary timer record at native_timers handoff. Repeats reuse it; owned_tasks.rs resets it on rearming. Typed and integer fires retain the original index/generation and clock checks. Frame tasks and other clock entries still use their existing paths. Advance/frame can also pump replies and deferred thens.", [
     ["painted:host/painted/src/presenter/clock.rs", "Presenter::android_clock Presenter::give_clock"],
-    ["painted:host/painted/src/presenter/scroll_end.rs", "Presenter::scroll_end_live Presenter::scroll_end_moved Presenter::timer_or_scroll_due_ms"],
+    ["painted:host/painted/src/presenter/scroll_end.rs", "Presenter::retire_scroll_ends Presenter::scroll_end_hold Presenter::scroll_end_live Presenter::scroll_end_moved Presenter::timer_or_scroll_due_ms"],
   ]),
   group("fills", ["one-shot"], "collection/view generation, window and fill token", "UI-owned",
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/list_seam.rs validates feedback/fill against the current collection; instance/collection/index.rs versions rows and into_view.rs versions reveal requests.", [

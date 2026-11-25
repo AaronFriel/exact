@@ -59,6 +59,7 @@ pub(super) enum HeldKind {
     Height {
         handle: NodeKey,
         target: NodeKey,
+        list: Option<height_drag::ListDrag>,
     },
 }
 pub(super) struct Contact {
@@ -143,11 +144,11 @@ impl<D: DataSource> Presenter<D> {
                 && contact
                     .hold
                     .as_ref()
-                    .is_none_or(|h| self.host.has_hold(h.primary.token));
+                    .is_none_or(|h| self.host.has_hold(h.motion().token));
         }
         match &contact.hold {
             Some(held) => {
-                self.host.has_hold(held.primary.token)
+                held.primary.is_none_or(|m| self.host.has_hold(m.token))
                     && match held.kind {
                         HeldKind::Arrange(token) => self.arrange_live(token),
                         HeldKind::Transform {
@@ -159,7 +160,7 @@ impl<D: DataSource> Presenter<D> {
                             self.host.transform_hold_live(pair, binding)
                                 && self.transform_revision(binding) == Some(revision)
                         }
-                        HeldKind::Height { handle, target } => {
+                        HeldKind::Height { handle, target, .. } => {
                             self.input_live(handle)
                                 && self.host.height_drag_target(handle) == Some(target)
                         }
@@ -261,7 +262,7 @@ impl<D: DataSource> Presenter<D> {
         if stale {
             let contact = self.contact.take().unwrap();
             if let Some(held) = contact.hold {
-                match self.host.snap_retained_motion(held.primary.token) {
+                match self.host.snap_retained_motion(held.motion().token) {
                     Ok(changed) => self.dirty |= changed,
                     Err(error) => self.host.log(error),
                 }
@@ -1065,7 +1066,7 @@ impl<D: DataSource> Presenter<D> {
             match begin {
                 Ok(Some(held)) => {
                     if let Some(target) = contact.retained.as_ref().and_then(|c| c.swipe_target()) {
-                        if !self.begin_retained_motion(target, held.primary.token) {
+                        if !self.begin_retained_motion(target, held.motion().token) {
                             self.end_contact(&held, HoldEnd::Cancel, self.host.now())?;
                             self.set_collection_interaction(None);
                             return Ok(false);
@@ -1104,9 +1105,12 @@ impl<D: DataSource> Presenter<D> {
                 now_ms,
                 event_ms,
             ),
-            HeldKind::Height { .. } => {
-                self.move_height_drag(held, contact.origin.1 as f64 - y as f64, now_ms, event_ms)
-            }
+            HeldKind::Height { .. } => self.move_height_drag(
+                held,
+                Value::new((contact.origin.0 - x) as f64, (contact.origin.1 - y) as f64),
+                now_ms,
+                event_ms,
+            ),
             HeldKind::Swipe { .. } => {
                 self.move_swipe(held, x as f64 - contact.origin.0 as f64, now_ms, event_ms)
             }
@@ -1208,19 +1212,19 @@ impl<D: DataSource> Presenter<D> {
                         let current = self
                             .host
                             .engine()
-                            .value(held.primary.token.node(), held.primary.token.property())
+                            .value(held.motion().token.node(), held.motion().token.property())
                             .unwrap_or(Value::ZERO)
                             .x;
                         let mut error = None;
                         if let Some(kind) = ways
                             .completes(current)
-                            .filter(|_| self.host.has_hold(held.primary.token))
+                            .filter(|_| self.host.has_hold(held.motion().token))
                         {
                             if let Some(retained) = &contact.retained {
                                 let delivered = match retained.swipe_for(kind) {
                                     Some(target) => self.retained_swipe_dispatch(
                                         target,
-                                        held.primary.token,
+                                        held.motion().token,
                                         now_ms,
                                     ),
                                     None => Ok(false),
@@ -1242,7 +1246,7 @@ impl<D: DataSource> Presenter<D> {
                             } else {
                                 error = self
                                     .host
-                                    .dispatch_held(held.primary.token, kind, now_ms)
+                                    .dispatch_held(held.motion().token, kind, now_ms)
                                     .err();
                                 error = error.or(self.after_commit());
                             }
@@ -1394,7 +1398,7 @@ impl<D: DataSource> Presenter<D> {
         match held.kind {
             HeldKind::Arrange(token) => self.end_arrange(token, None, now_ms).map(|_| ()),
             HeldKind::Transform { pair, .. } => self.end_transform_drag(pair, None, now_ms),
-            HeldKind::Height { .. } => self.height_end(held.primary.token, end, now_ms).map(|_| ()),
+            HeldKind::Height { .. } => self.cancel_height_drag(held, end, now_ms),
             HeldKind::Swipe { .. } => self.end_swipe(held, end, now_ms),
         }
     }
