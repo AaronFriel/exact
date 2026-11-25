@@ -4790,6 +4790,21 @@ toolbar follows the route through navigation. UIKit includes it in the safe
 area, so the scroller's last row can scroll clear. Every other host lays out
 each live row where the author put it.
 
+On an iPhone, UIKit draws a navigation toolbar's buttons under the app's bottom
+tab bar, which can cover them. Hide the tablist on the pushed route that owns the toolbar. For a
+route named `detail`, give the existing tablist this display.
+
+```text
+row role="tablist"
+  display=(top(nav).name == "detail" ? "none" : "flex")
+```
+
+For several toolbar routes, join their name checks with `or` in the same display.
+UIKit keeps the tabs hidden if you push another screen from Detail. Pop back
+past Detail to the tab root and the tabs return. At a tab root, put the actions
+in the header or push the screen. This display applies on every host. Only
+iPhone needs the adjustment for its bottom tab bar.
+
 A bottom toolbar must be a direct child of the route's column. An app that
 ships iOS can put only buttons and spacers in it. The compiler refuses two
 unconditional bottom toolbar rows and warns when an unconditional sibling
