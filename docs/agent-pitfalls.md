@@ -1323,16 +1323,12 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   a text field commits on Enter and on blur, as in HTML. Fix: submit on `submit`
   (Return, a form's button) and keep `change` for normalizing the draft.
   (The Bluesky clone's muted words dialog, 2026-10-08.)
-- **A text field shows an edit its action refused or normalized.** A field bound with
-  `value=text input=edit`, where `edit` ignores a blank value, shows the blank while
-  `text` keeps the old value, and the next keystroke builds on what is shown; so does
-  one whose action or source normalizes `-2` to the `0` it already held. Cause: on
-  the web (both targets) a text field is re-set only when what its binding reads
-  changes, so an unchanged binding does not overwrite the edit. Fix: bind the field to draft state that `edit` always writes, and on commit
-  (`change`, Enter, `blur`) write the accepted value or reset the draft to it, which
-  changes the bound value and redraws the field; the guide's "Editing a value: the field's contract" has the recipe. (Authoring bench, LLP 1087, t2-todo:
-  two builders, about 10 minutes each, 2026-10-04; t1-tip, a normalized count,
-  2026-10-05.)
+- **Skipping an assignment keeps the rejected text visible.** On the web JS
+  target, a live filter assigns the accepted value on every edit, including
+  when it equals the previous value. An action that only validates, or a data
+  layer that suppresses the assignment, leaves the draft in place. Keep raw
+  text in state for a number that can be half-typed, then parse on commit.
+  See "Editing a value: the field's contract" in the guide.
 
 - **A checkbox bound to a resource field does not tick until the save answers.** With
   `checked=form.terms change=editTerms`, where `editTerms` sends a mutation that

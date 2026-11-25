@@ -8,6 +8,25 @@ use exact_runner::instance::Input;
 use std::fmt::Write as _;
 
 impl Em<'_> {
+    pub(super) fn virtualized(&self, i: u32) -> Result<bool, String> {
+        let plan = self.plan;
+        let row = plan.node(NodesId(i));
+        let mut virtualized = false;
+        for b in row.bindings.iter().map(|b| plan.binding(b)) {
+            if b.kind == BindingKind::Prop && b.id == PropId::Virtualized as u16 {
+                match style::literal(plan, plan.code(b.expr)) {
+                    Some(exact_plan::Value::Bool(v)) => virtualized = v,
+                    _ => {
+                        return Err(format!(
+                            "node {i}: a dynamic `virtualized` is not in the JS target"
+                        ))
+                    }
+                }
+            }
+        }
+        Ok(virtualized)
+    }
+
     pub(super) fn collection_children(
         &mut self,
         i: u32,

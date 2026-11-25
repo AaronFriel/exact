@@ -2231,3 +2231,6 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - Keep the document language and fallback journal in sync when System changes during startup (#1660). Hold an English page’s checkpoint, cache German, then switch System to Arabic. At five seconds the journal still asks for German. In the System action, make `navigator.language` return English twice, then Arabic. Inspect `lang` and `dir` against the English heading.
 - Restore autofocus on a rendered page revealed before adoption (#1660). Hold the checkpoint past five seconds on an English page with an autofocus field and German selected. Chromium and WebKit focus the body at reveal and the field when the checkpoint arrives.
 - Measure client-only startup while the entry itself is unavailable (#1660, LLP 1048 D2). Hold only `app-*.js` for six seconds with German selected. Both the inline-table and split-table releases have an empty root until the entry executes.
+
+- Should an explicit same-value assignment in a select's `change` restore the bound option? In #1733's filtered-field fixture, choose B while `pick = pick` keeps A. Chromium shows B under LLP 1069.001 D4.
+- Run `cargo test -p exact-web-js the_js_target_reads_a_role_as_the_kernel_does`. On b505d1ade the JS reader accepts a nested accent fallback that the kernel refuses.

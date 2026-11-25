@@ -700,9 +700,8 @@ validation and button enablement follow typing. A text field fires `change` on
 Enter or blur; its handler should normalize the draft. Use `submit` for explicit
 submission.
 
-A text field is re-set only when what its `value` binding reads changes, never
-after each keystroke (React writes the bound value back; Exact does not, so a
-half-typed `-` or `1.` survives). That makes the contract:
+Use a raw draft for a number, date fragment or other value with half-typed
+states. This gives the editor three responsibilities:
 
 - **while editing**, the field is bound to raw text in state that `input`
   always writes;
@@ -716,12 +715,26 @@ half-typed `-` or `1.` survives). That makes the contract:
   field (an eye, a "Forgot password?"). Submit on Return with `submit`, which
   runs on Return alone, after the commit (and never for an IME's Return).
 
-A field bound straight to the accepted value breaks this: an action that
-normalizes `-2` to the `0` it already held leaves the binding unchanged, so the
-field keeps showing `-2`. So does normalizing while the person types: a `task … when draft != …`, a
-timer or an `input` action that rewrites the draft (an empty field back to
-`"1"`) puts text back under the caret mid-edit, and the next keystroke lands
-after it (`1` then `3` reads `13`). Normalize only in `change`.
+For a live filter on the web JS target, assign the accepted text in
+`input`, including when it equals the previous value. For example:
+
+```contract
+component StockCount
+  state digits = "40"
+  action edit(v: string)
+    digits = v.split("").filter(c => "0123456789".includes(c)).join("")
+  view
+    input value=digits input=edit inputmode="numeric" aria-label="Stock count"
+```
+
+Typing `a` between `4` and `0` leaves the caret between the two digits.
+For a length cap alone, use `maxlength=3`. A conditional action that
+skips the assignment on rejection leaves the rejected text visible. An
+unconditional assignment of a parsed number erases a half-typed `-` or
+`1.`. Assigning `v.trim()` removes a trailing space as it is typed.
+Keep raw text in a draft and normalize on `change` when those
+intermediate states matter. The wasm and native hosts still use their
+existing value-change behavior.
 
 ```contract
 component Quantity

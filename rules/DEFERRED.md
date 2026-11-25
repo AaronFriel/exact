@@ -1216,6 +1216,11 @@ selectMode preserve; no undo step — for now”. Consumer: the issue's editor
 replacing `@name` with a reference. LLP 1069.001 records the web, AppKit, UIKit and Linux implementations
 and remaining host limits. Take: none named; this feature lane is explicitly approved.
 
+**Text-field filters (Charlie, 2026-11-24, "recs ok").** LLP 1102 §3.16 and
+1069.001 D4 admit reconciling the edited text field when its synchronous
+`input` action assigns state its value reads. This unblocks a live digits
+filter even when rejecting a character leaves the accepted value equal.
+
 **Restated (Charlie, 2026-09-27, LLP 1069.001):** the tag count guards against
 invented components, not HTML's own elements. A built-in tag is an HTML
 element with HTML's meaning; `select` and `option` are admitted on that

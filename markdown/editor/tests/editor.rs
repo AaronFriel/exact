@@ -988,6 +988,10 @@ fn an_app_write_keeps_the_caret_and_resets_history() {
         !p.e.set_value(&u("hi hello world")).source,
         "an echo changes nothing"
     );
+    let mut p = Page::open("abcde");
+    p.caret(2);
+    p.e.rewrite_value(&u("ABCDE"), true);
+    assert_eq!(p.e.selection(), (2, 2));
     let mut p = Page::open("a\nb");
     assert!(
         !p.e.set_value(&u("a\r\nb")).source,

@@ -450,6 +450,7 @@ export function mde(e) {
         cur = n;
         Ids.set(n, id);
         Views.set(id, n);
+        e.$markup = n.exactMarkup;
         Object.defineProperties(e, {
           value: {
             configurable: true,
