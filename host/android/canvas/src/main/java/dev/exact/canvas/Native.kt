@@ -173,6 +173,21 @@ object Native {
     /** The reader moved scroller [id] by ([dx], [dy]) px, knowing revision [rev] of it. exact2 clamps the move to
      * the scroller's travel, and drops one sent under a revision the app's own scroll has moved on from. */
     @JvmStatic external fun scrolled(id: Int, dx: Float, dy: Float, rev: Int)
+    /** A drag is at ([x], [y]) px (LLP 1094.001 D5): exact2 sends the nodes under it their `dragenter` and
+     * `dragleave`. */
+    @JvmStatic external fun dragOver(x: Float, y: Float)
+    /** The drag left the window or was cancelled: the nodes under it hear their leave. */
+    @JvmStatic external fun dragLeft()
+    /** A field took the drop at ([x], [y]) px: the nodes under the drag there hear the enters it waited for, then
+     * their leave. */
+    @JvmStatic external fun dragDropped(x: Float, y: Float)
+    /** The drag was released at ([x], [y]) px before its items arrive: the drop's number, 0 when nothing takes it. */
+    @JvmStatic external fun dropReleased(x: Float, y: Float): Int
+    /** Who takes a drop Android gives field [id]'s view at ([x], [y]) px: -1 not the field (another node is painted
+     * there, or the field takes no touch), else 0 the field, 1 its own node, 2 one above it. */
+    @JvmStatic external fun fieldDrop(id: Int, x: Float, y: Float): Int
+    /** Drop [id]'s items arrived, as JSON (`{"paths": […], "text": "…", "url": "…"}`). */
+    @JvmStatic external fun dropLanded(id: Int, items: String)
     /** A finger began dragging scroller [id] (its `scrolldragstart`), or ([ended]) let go of it (its
      * `scrolldragend`): at ([vx], [vy]) px/s, positive as its offset grows, and, with [rest], to come to rest at
      * ([restX], [restY]) px; [flings] when it threw a fling. From the start until the lift, or the fling's end

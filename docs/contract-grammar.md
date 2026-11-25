@@ -2544,9 +2544,9 @@ the drag carries files, plain text or a link and its source allows a copy
 readable under `fs.read doc:/`), `text`, `url` and the modifiers. `text` is
 the drag's plain text, its items' joined by line breaks; `url` is its first
 link that is not a file (a `file:` URL is a file), of any scheme, so check
-it before following it. Each is `""` when the drag has none, and neither is
-made from the other: a link whose source gives no plain text has `text` `""`. Files of any type
-are taken, and a dropped folder is a folder's handle (`fs.stat` says
+it before following it. Each is `""` when the drag has none, so a link
+whose source gives no plain text has `text` `""`. Each file
+arrives as a `doc:` handle, whatever its type, on the hosts that take files (the reference's table), and a dropped folder, on a host that takes one, is a folder's handle (`fs.stat` says
 `isDirectory`, `fs.readdir` lists it); the app never learns an absolute
 path. A drag with files over an `input` or a `textarea` inside such a node
 is the node's, as on the web, where its listener prevents the field's own
@@ -2565,10 +2565,17 @@ A browser without `getAsFileSystemHandle` hands the app read-only copies.
 iOS and iPadOS take a drag from another app or from the same one through
 UIKit's drop interaction, a file as a copy and no folder; a field there
 keeps text, links and text files, and the text of a drag that also carries
-files, as UIKit's text views do. tvOS, Linux, Android and the terminal take
-no drop yet. The driver's
+files, as UIKit's text views do. Android takes one from another app or
+from the same one, a file as a copy of its `content:` item and no folder,
+and no `file:` path, which another app cannot share; a field there keeps
+text, links and text files, as Android's text views do, unless the field
+declares `drop`, and gives a file to the `drop` above it. Android's apps
+send a link as text, so Android alone makes `url` from text: while a drop
+has no `url` yet, a text item whose whole last line is an `http://` or
+`https://` link gives that link as `url`, and its lines before it, such as
+the title Chrome sends, as `text`. tvOS, Linux and the terminal take no drop. The driver's
 `tap <target> drop [<path…>] [--text "…"] [--url "…"]` drops files,
-folders (not on iOS), text and a link, at least one of them, as a test's
+folders (not on iOS or Android), text and a link, at least one of them, as a test's
 `tap "zone" drop …` step does.
 
 `dragenter` and `dragleave` are DOM's, as a node hears them when it ignores
