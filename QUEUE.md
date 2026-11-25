@@ -6,7 +6,6 @@
 - Detect a silent macOS single-side shortcut (#1413). With Accessibility granted, suppress delivery of Right Command and make the Quartz event tap unavailable. Press and release Right Command 4 ms apart between flag samples. The candidate still reports `MetaRight` registered five seconds later.
 - Apply each Linux portal binding change before submitting pending shortcuts (#1413). Bind F and K, hold F, request J, then reassign F and remove K in one `ShortcutsChanged`. The next `BindShortcuts` must contain F and J. The candidate also requests K again.
 - Android now supplies four of `ComponentActivity`’s view-tree owners for hosted views. Rule on the whole set before adding another. The activity-result registry is the likely next request (#1613).
-- Reproduce the macOS split-transition XCTest failure and record the failing test method and assertion.
 - Reproduce the keyboard navigation-scroller failure on iPad and record the test method, iPad model and OS version.
 - Run `bun test ./scripts/links.test.mjs -t 'JavaScript derives callback associations'` on a loaded Mac with a cold fixture. Its native bake can still be compiling dependencies at the test's 120-second timeout.
 - On an iOS 26.5 simulator, install a single-picture app, cold-launch it, then change only its launch PNG and install over the same bundle ID and build number. The next launch can show the colour alone even though the compiled image has a new name. A fresh bundle ID shows the mark (#1595).
