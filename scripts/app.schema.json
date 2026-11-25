@@ -1376,11 +1376,14 @@
       "x-hint": "write #RGB, #RRGGBB or #RRGGBBAA, or a Display P3 colour as color(display-p3 r g b) or color(display-p3 r g b / a), each component from 0 to 1 or 0% to 100%",
       "description": "A launch colour: hex, or Display P3 as CSS writes it, which iOS and the web's first paint show in Display P3 and Android and the browser's manifest take clipped to sRGB."
     },
+    "shippedSwiftPackage": {
+      "description": "A Swift package shipped by an Apple implementation, relative to its exact.json (LLP 1133.001 D9).",
+      "type": "object", "required": ["path", "products"], "additionalProperties": false, "properties": {
+        "path": { "type": "string", "pattern": "^(?!/|[A-Za-z]:/)(?!.*(?:^|/)\\.\\.?(/|$))[^\\\\\\s]+$", "x-hint": "use a relative package directory with no whitespace, backslashes, . or .. components" },
+        "products": { "$ref": "#/$defs/swiftPackages/items/properties/products" } } },
     "swiftPackages": {
       "description": "Swift Package Manager products for native Swift, with exact versions. The app keeps Package.resolved; exact lock refreshes it (LLP 1133.001 D9, expo/exact#751).",
-      "type": "array",
-      "items": {
-        "type": "object", "required": ["url", "exactVersion", "products"], "additionalProperties": false,
+      "type": "array", "items": { "type": "object", "required": ["url", "exactVersion", "products"], "additionalProperties": false,
         "properties": {
           "url": { "type": "string", "pattern": "^https://[^/?#@\\s]+/[^?#\\s]+$" },
           "exactVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$" },
@@ -1390,18 +1393,15 @@
     },
     "alternativeNames": {
       "description": "Other names Siri and App Shortcuts answer to for the app, such as its name before a rename (Info.plist's INAlternativeAppNames): each a `name` and an optional `pronunciationHint`, written as it sounds. At most three. A watch app gets the iPhone app's. Apple admits names based on the app's own or ones its users commonly call it, never another app's.",
-      "type": "array",
-      "maxItems": 3,
+      "type": "array", "maxItems": 3,
       "items": {"type": "object", "additionalProperties": false, "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1}, "pronunciationHint": {"type": "string", "minLength": 1}}}
     },
     "webCsp": {
       "description": "Directives by name in lower case, each a list of sources to add to Exact's, or a string that replaces Exact's value (the word `exact` standing for Exact's sources).",
-      "type": "object",
-      "additionalProperties": { "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }
+      "type": "object", "additionalProperties": { "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }
     },
     "icon": {
-      "type": "object",
-      "required": ["src"],
+      "type": "object", "required": ["src"],
       "properties": {
         "src": { "type": "string", "description": "The file, relative to app.json: a PNG, SVG or ICO under assets/." },
         "sizes": { "type": "string", "description": "As the file is, \"1024x1024\" or \"any\" for an SVG; absent, read from the file." },

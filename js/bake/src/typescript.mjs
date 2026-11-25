@@ -1124,7 +1124,7 @@ function modulePackages(app) {
         const declaration=read(resolve(root,main));
         if (!['interface','implementation'].includes(declaration?.kind)) continue;
         const implementations=Object.keys(pkg.exports).filter(k=>k.startsWith('./')).map(k=>({name:name+k.slice(1),file:entry(pkg.exports,k)}))
-          .filter(i=>i.file && /\/exact\.json$/.test(i.file)).map(i=>({name:i.name,dir:dirname(resolve(root,i.file)),json:read(resolve(root,i.file))})).filter(d=>d.json?.kind==='implementation');
+          .filter(i=>i.file && /\/exact\.json$/.test(i.file)).map(i=>({name:i.name,root,dir:dirname(resolve(root,i.file)),json:read(resolve(root,i.file))})).filter(d=>d.json?.kind==='implementation');
         out.set(name,{name,root,declaration,implementations});
       }
     }
@@ -1147,7 +1147,7 @@ export function implementationFor(app, iface, target) {
       const root=join(dir,'node_modules',packageName), pkg=read(join(root,'package.json'));
       const main=typeof pkg?.exports==='string' && key==='.' ? pkg.exports : pkg?.exports?.[key];
       const at=typeof main==='string' ? main : main?.contract ?? main?.default;
-      if (pkg && typeof at==='string' && /(^|\/)exact\.json$/.test(at)) { const json=read(resolve(root,at)); return json && {name,dir:dirname(resolve(root,at)),json}; }
+      if (pkg && typeof at==='string' && /(^|\/)exact\.json$/.test(at)) { const json=read(resolve(root,at)); return json && {name,root,dir:dirname(resolve(root,at)),json}; }
       if (dirname(dir)===dir) return null;
     }
   };
@@ -1264,7 +1264,7 @@ export function appleImplementations(app, target, extensions, contractSources = 
         prop?.binds === true && ['handle<track>', 'option<handle<track>>'].includes(prop.type)).map(([name]) => name)];
     }));
     return [{
-      swiftPackages: impl.json.swiftPackages, swiftPackagesSource: resolve(impl.dir, 'exact.json'),
+      swiftPackages: impl.json.swiftPackages, swiftPackagesSource: resolve(impl.dir, 'exact.json'), swiftPackageRoot: impl.root, swiftPackageInterface: i.name, swiftPackageTarget: target,
       privacyManifest: resolve(impl.dir, 'PrivacyInfo.xcprivacy'), extension,
       module: 'ExactPkg_' + extension.replace(/\W/g, '_'), className: impl.json.class,
       sources: files.map(f => resolve(impl.dir, f)), plist, plistKeys: impl.json.plistKeys ?? null,

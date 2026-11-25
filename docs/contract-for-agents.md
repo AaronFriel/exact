@@ -4181,18 +4181,23 @@ An Apple implementation names Swift Package Manager products in its
 }
 ```
 
-For an app's own `modules/apple/*.swift`, put the same `swiftPackages` array
-under `host.ios` or `host.macos` in `app.json`. Swift imports the product's
-modules normally. All Apple destinations share one `Package.resolved` beside
-the app. Run `bun exact.mjs lock` after changing these declarations, bindings
-or used interfaces; review and commit the lock. Lock discovery follows the
-compiled plan, including views placed through Contract libraries. Builds
-refuse a missing or mismatched lock and disable automatic resolution.
-Conflicting direct versions name both requesters.
-SwiftPM verifies binary targets by checksum. One shared dynamic library links
-all declared products used by the app's Swift and its bound implementations,
-so SDK singletons and configuration are shared across consumers. It loads with
-the first consumer that needs it; an unused implementation stays unloaded.
+An implementation can ship a Swift package with `{"path":"LocalKit","products":["MapKitBridge"]}`.
+Write directory names separated by `/`, relative to `exact.json`, without spaces, `.` or `..` components.
+Links must stay inside the npm package. Its files count as native inputs because the Swift manifest can read them.
+SwiftPM evaluates `Package.swift` during locking and building. Exact uses the same SwiftPM manifest
+sandbox as a normal build. On macOS it permits file reads and restricts writes and network access.
+It covers manifest evaluation only. SwiftPM supplies no equivalent manifest sandbox on Linux.
+The package must declare the products. A target those products use on an Apple destination must have no
+`unsafeFlags` setting for that destination. For every remote dependency,
+require an exact version in `Package.swift` and list the same URL and version in this `swiftPackages` array.
+For an app's own `modules/apple/*.swift`, put URL entries under `host.ios` or `host.macos` in `app.json`.
+Swift imports the product's modules normally. After changing declarations, bindings or used interfaces,
+run `bun exact.mjs lock`. All Apple destinations share the app's `Package.resolved` for remote packages.
+Review and commit it. A build disables automatic resolution and checks every remote pin. A local-only
+graph needs no Swift lock. Conflicting paths, URLs or versions for one identity name both declarations.
+Lock discovery follows the compiled plan, including views placed through Contract libraries.
+SwiftPM verifies binary targets by checksum. One shared dynamic library links the products used by the
+app and its bound implementations. It loads with its first consumer and keeps one copy of SDK state.
 A dynamic framework a package brings, such as `Sparkle.framework`, goes into
 the Mac app's `Contents/Frameworks` whole, with its helpers and XPC services;
 `exact release` signs each inside out with the Developer ID and the hardened

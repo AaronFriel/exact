@@ -875,6 +875,12 @@ Unblocks vendor SDKs distributed as Swift packages; app-local xcframeworks
 remain supported. CocoaPods stays out: its trunk stops accepting podspecs
 on 2026-12-02, and the Apple build has no Xcode project for it to integrate into.
 
+**Expanded (Charlie, 2026-11-24, "recs ok"), #1327.** An implementation may
+ship a Swift package by relative path inside its npm package, with symlinks
+resolved. Targets used by the named products on an Apple destination may
+have no `unsafeFlags` for that destination. Each remote dependency must be
+listed at its exact version. Only remote packages enter the Swift lock.
+
 **Expanded (Charlie, 2026-10-13, issue-program ruling 10):** runner-owned
 WebSocket sending: the stream mapper receives a socket handle and a mutation
 sends ordered, never-coalesced protocol frames (LLP 1016.000 D7). T3 Code's

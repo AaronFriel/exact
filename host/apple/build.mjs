@@ -1154,7 +1154,7 @@ async function main(args, lockHeld = false) {
   const macTarget = ['-target', moduleTripleFor(app, false)];
   const { place: placePackages, libraries: packageLibraries, resources: packageResources, frameworks: packageFrameworks, imports: packageImports, link: packageLink, products: packageProducts } = packageCompiler({ packages, packageDir, packageTargets,
     packageCopies, seam, packagesRoot, swiftc, production, distribution, ios, tv,
-    app, extensions: buildReceipt.graph.extensions, minimum: { ios: app.manifest.host?.ios?.minimumOS, tvos: app.manifest.host?.ios?.minimumOS,
+    app, extensions: buildReceipt.graph.extensions, swiftInputs: buildReceipt.binary.inventories, minimum: { ios: app.manifest.host?.ios?.minimumOS, tvos: app.manifest.host?.ios?.minimumOS,
       macos: app.manifest.host?.macos?.minimumOS } });
   placePackages(packageDir);
   moduleLibraries.push(...packageFrameworks);

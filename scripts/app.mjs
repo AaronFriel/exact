@@ -10,26 +10,14 @@ export { webHostFiles } from '../host/web-js/glue.mjs';
 import { compilerPaths, unitDepInfo, cargoBakeInputs, cargoLibraryTarget, bakeSourceInputs, pendingSourceInputs, inputProducts, inputHashes, sourcePath, packageDirectories, directoryInputNames, buildInputCollector, binarySourceInputs, swiftTargetInputs, watchOutput } from './cargo-dep-info.mjs';
 import { notificationServiceBuildInventory, notificationServiceInputChanges, notificationServiceSourceRoot } from './notification-service.mjs';
 export { compilerPaths, unitDepInfo } from './cargo-dep-info.mjs';
-import { LIBRARY_CACHE, directDependencies, prepareLibrary } from './package-libraries.mjs';
+import { LIBRARY_CACHE, directDependencies, prepareLibrary, addedSwiftPackageInputs, swiftPackageInventories, swiftPackageInputChanged } from './package-libraries.mjs';
 import { ensureBun } from './bun.mjs';
 import { nativeResourceMappings, nativeResourceInventory, appleAssetCatalogInventory, launchImageInventory } from '../host/apple/assets.mjs';
-// Where an app lives. Inside this repo an app is `apps/<name>` — its crates
-// normally belong to the root workspace and build into `target/`; an explicit
-// package.workspace uses that workspace's lock and target. Outside it (weird-castle:
-// its own repo or a member of a surrounding workspace, depending on our crates by
-// path so the two iterate together), `EXACT_APP_DIR` names the directory and
-// everything else follows from it: the workspace cargo runs in, the target
-// directory the artifacts land in, `app.contract`, `assets/`, `gpu/`. Every
-// script that builds, serves, or drives an app resolves it here, so nothing
-// else knows the difference; `EXACT_APP_DIR` selects the app for `bun host/web/build.mjs weird-castle-web`.
-// The app manifest (LLP 1030 D2; 1030.000 D7): `app.json` beside
-// `app.contract` — the W3C Web App Manifest's own keys, which the web host
-// copies out as `manifest.json`, plus `app` (identity: the id every platform
-// derives its bundle id from, the name, the origin), `host.<platform>` (what
-// bake generates each platform's host files from), and `deploy` (policy,
-// never identity). Validated here against `scripts/app.schema.json` with a
-// validator small enough to live beside the reader; an app without one gets
-// the derived defaults it had before the manifest existed.
+// Repository apps live under apps/ and normally share the checkout's Cargo workspace and target.
+// An app with its own package.workspace uses that workspace's lock and target. EXACT_APP_DIR selects
+// an external app for the same build, serve and drive entry points.
+// scripts/app.schema.json defines the W3C manifest and Exact's app and host fields (LLP 1030 D2).
+// The app field sets identity and deploy sets policy. The reader supplies derived defaults for an app without a manifest.
 import { spawnSync } from '../host/apple/toolchain.mjs';
 import { checkDesignName } from './forma-design-path.mjs';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -669,7 +657,11 @@ function schema() {
 export function mavenProblems(value, at) {
   return value === undefined ? [] : validate(value, schema().properties.host.properties.android.properties.maven, at, schema());
 }
-export const swiftPackagesProblems = (value, at) => value === undefined ? [] : validate(value, schema().$defs.swiftPackages, at, schema());
+export function swiftPackagesProblems(value, at, implementation) {
+  const root = schema(), remote = root.$defs.swiftPackages;
+  if (!implementation || !Array.isArray(value)) return value === undefined ? [] : validate(value, remote, at, root);
+  return value.flatMap((item, i) => validate(item, item && Object.hasOwn(item, 'path') ? root.$defs.shippedSwiftPackage : remote.items, `${at}[${i}]`, root));
+}
 /** The subset of JSON Schema the manifest's schema uses — type, required, properties, additionalProperties, items, minItems, enum, pattern, minLength, oneOf, $ref into $defs — checked by hand so the reader needs no dependency. Every problem in one pass. */
 export function validate(value, node, at, root) {
   const problems = [];
@@ -1114,7 +1106,9 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
   if (platform === 'macos' || platform === 'ios') {
     add(resolve(app.dir, 'Package.resolved'), true);
     add(resolve(ROOT, 'host/apple/privacy.mjs'));
-    privacyManifests.push(...appleImplementations(app.dir, target.includes('-tvos') ? 'tvos' : platform, bundleGraph.extensions ?? {}, bundleGraph.contractSources ?? []).map(p => capturePrivacyManifest(p.privacyManifest)));
+    const os = target.includes('-tvos') ? 'tvos' : platform, implementations = appleImplementations(app.dir, os, bundleGraph.extensions ?? {}, bundleGraph.contractSources ?? []);
+    privacyManifests.push(...implementations.map(p => capturePrivacyManifest(p.privacyManifest)));
+    inventories.push(...swiftPackageInventories(app, implementations, os));
     const packageRoot=resolve(ROOT,'host/apple');
     const swiftEnv = {...env, EXACT_APP_COMPOSITION: compat.inputs.store.L === '0' ? 'embedded' : 'updating'}; delete swiftEnv.SDKROOT;
     // Cache SwiftPM's description by manifest, composition and source inventory.
@@ -1415,7 +1409,12 @@ export function pendingBuildInputs(build, { includeSources = false, launch } = {
   for (const link of build.binary.links ?? []) {
     try { if (readlinkSync(link.path) !== link.target) changed.push(link.path); } catch { changed.push(link.path); }
   }
-  for (const inventory of build.binary.inventories ?? []) for (const name of notificationServiceInputChanges(inventory.path, inventory.identity)) changed.push(name===notificationServiceSourceRoot?inventory.name:`${inventory.name}/${name}`);
+  const apple = build.binary.assetCatalogApp;
+  if (apple) changed.push(...addedSwiftPackageInputs(apple.dir, apple.platform, build.graph?.extensions, build.binary.inventories));
+  for (const inventory of build.binary.inventories ?? []) {
+    if (inventory.kind === 'swift-package') { if (swiftPackageInputChanged(inventory.path, inventory.identity)) changed.push(inventory.name); }
+    else for (const name of notificationServiceInputChanges(inventory.path, inventory.identity)) changed.push(name===notificationServiceSourceRoot?inventory.name:`${inventory.name}/${name}`);
+  }
   if (includeSources) changed.push(...pendingSourceInputs(build.sourceInputs));
   return changed;
 }

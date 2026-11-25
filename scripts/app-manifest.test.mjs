@@ -1,7 +1,7 @@
 // app.json keys the web manifest standard defines (scripts/app.schema.json).
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 
@@ -72,6 +72,93 @@ test('Apple Swift products require a URL, exact semantic version and named produ
     assert.ok(assertSwiftLock(app([dependency]), graph).length);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test.skipIf(process.platform !== 'darwin')('shipped Swift products are contained, checked by SwiftPM and counted as native inputs', async () => {
+  const { swiftPackageGraph, assertSwiftLock, packageCompiler } = await import('../host/apple/compose.mjs');
+  const { swiftPackageInventories, swiftPackageInputChanged } = await import('./package-libraries.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'shipped-swift-')), root = resolve(dir, 'node_modules/probe');
+  const source = resolve(root, 'apple/exact.json'), kit = resolve(root, 'apple/Kit'), file = resolve(kit, 'Package.swift');
+  const local = { path: 'Kit', products: ['Kit'] }, remote = { url: 'https://example.org/vendor.git', exactVersion: '1.2.3', products: ['Vendor'] };
+  const app = { dir, manifest: {} };
+  const bound = entries => [{ swiftPackageRoot: root, swiftPackageInterface: 'probe', swiftPackagesSource: source, swiftPackages: entries }];
+  const graph = (entries = [local]) => {
+    writeFileSync(source, JSON.stringify({ kind: 'implementation', implements: 'probe@1.0.0', targets: ['macos'], swiftPackages: entries }));
+    return swiftPackageGraph(app, bound(entries));
+  };
+  const manifest = (dependencies = '', flags = '') => writeFileSync(file, `// swift-tools-version:5.9
+import PackageDescription
+let package = Package(name: "Example", products: [.library(name: "Kit", targets: ["Lib"])],
+  dependencies: [${dependencies}], targets: [.target(name: "Lib", swiftSettings: [${flags}])])
+`);
+  try {
+    mkdirSync(kit, { recursive: true });
+    writeFileSync(resolve(root, 'package.json'), JSON.stringify({ name: 'probe', version: '1.0.0', exports: { '.': './exact.json', './apple': './apple/exact.json' } }));
+    writeFileSync(resolve(root, 'exact.json'), JSON.stringify({ kind: 'interface', name: 'probe' }));
+    assert.throws(() => graph(), /Kit has no Package.swift/);
+    for (const path of [kit, '../../outside', './Kit', 'a/../Kit', 'Bad\\Kit', 'Map Kit']) {
+      assert.throws(() => graph([{ ...local, path }]), error => error.message.includes(JSON.stringify(path)) && error.message.includes('swiftPackages'));
+    }
+    symlinkSync(dir, resolve(kit, 'outside'));
+    manifest();
+    assert.throws(() => graph(), /outside escapes/);
+    rmSync(resolve(kit, 'outside'));
+    mkdirSync(resolve(root, 'apple/.swiftpm'));
+    symlinkSync('../Kit', resolve(root, 'apple/.swiftpm/Alias.git'));
+    assert.equal(graph([{ path: '.swiftpm/Alias.git', products: ['Kit'] }])[0].identity, 'alias');
+    const [p] = graph();
+    assert.equal(p.identity, 'kit');
+    assert.equal(assertSwiftLock(app, [p]), null);
+    const implementation = resolve(root, 'apple/Bridge.swift'), dest = resolve(dir, 'macos');
+    mkdirSync(resolve(kit, 'Sources/Lib'), { recursive: true });
+    writeFileSync(resolve(kit, 'Sources/Lib/Value.swift'), 'public func value() -> Int { 1327 }');
+    writeFileSync(implementation, `import ExactPackage
+import Lib
+public final class Bridge: ExactPackage {
+    public init(context: ExactPackageContext) {}
+    public func later(_ name: String, _ args: [String: Any], preferred: Any?, reply: @escaping ([String: Any]) -> Void) { reply(["value": value()]) }
+}`);
+    const pkg = { ...bound([local])[0], module: 'ExactPkg_probe', className: 'Bridge', sources: [implementation] };
+    const compiler = packageCompiler({ app, packages: [pkg], extensions: {}, packageDir: dest, packagesRoot: dir, packageCopies: [[implementation]],
+      packageTargets: new Map([[dest, ['macosx', ['-target', `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macosx14.0`]]]]),
+      swiftInputs: swiftPackageInventories(app, [pkg], 'macos').map(input => ({ ...input, identity: Object.fromEntries(Object.entries(input.identity).reverse()) })),
+      seam: resolve(import.meta.dir, '../host/apple/modules/ExactPackage.swift') });
+    const copied = resolve(compiler.graph[0].path, 'Sources/Lib/Value.swift'), captured = readFileSync(copied);
+    writeFileSync(copied, 'public func value() -> Int { 0 }');
+    assert.throws(() => compiler.place(dest), /cached Swift package changed/);
+    writeFileSync(copied, captured);
+    compiler.place(dest);
+    assert.ok(readFileSync(resolve(dest, 'libExactPkg_probe.dylib')).length);
+    const [{ identity }] = swiftPackageInventories(app, bound([local]), 'macos');
+    assert.equal(swiftPackageInputChanged(dir, identity), false);
+    mkdirSync(resolve(root, '.build'));
+    writeFileSync(resolve(root, '.build/CACHEDIR.TAG'), 'Signature: 8a477f597d28d172789f06886806bc55');
+    writeFileSync(resolve(root, '.build/log'), 'SwiftPM scratch');
+    assert.equal(swiftPackageInputChanged(dir, identity), false);
+    writeFileSync(resolve(root, 'flavor.txt'), 'a manifest input outside Kit');
+    assert.equal(swiftPackageInputChanged(dir, identity), true);
+    assert.throws(() => swiftPackageGraph({ dir, manifest: { host: { ios: { swiftPackages: [local] } } } }), /app.json.*swiftPackages/);
+    assert.throws(() => graph([{ ...local, products: ['Missing'] }]), /Kit.*does not declare product Missing/);
+    assert.throws(() => graph([local, { ...remote, url: 'https://example.org/kit' }]), /conflict.*Kit.*example.org/);
+    const second = resolve(root, 'apple/v:2/Kit');
+    mkdirSync(second, { recursive: true });
+    writeFileSync(resolve(second, 'Package.swift'), readFileSync(file));
+    assert.equal(graph([{ path: 'v:2/Kit', products: ['Kit'] }])[0].identity, 'kit');
+    assert.throws(() => graph([local, { path: 'v:2/Kit', products: ['Kit'] }]), /conflict.*apple\/Kit.*apple\/v:2\/Kit/);
+    manifest('', '.unsafeFlags(["-O"], .when(configuration: .release))');
+    assert.throws(() => graph(), /Package.swift: Lib uses unsafeFlags/);
+    manifest('', 'ProcessInfo.processInfo.environment["EXACT_FIXTURE_UNUSED"] == nil ? .define("SAFE") : .unsafeFlags(["-O"])');
+    writeFileSync(file, readFileSync(file, 'utf8').replace('import PackageDescription', 'import PackageDescription\nimport Foundation'));
+    assert.equal(graph()[0].identity, 'kit');
+    for (const requirement of ['from: "1.2.3"', 'branch: "main"', 'revision: "abc"']) {
+      manifest(`.package(url: "${remote.url}", ${requirement})`);
+      assert.throws(() => graph([remote, local]), /vendor.git.*exact version/);
+    }
+    manifest(`.package(url: "${remote.url}", exact: "1.2.3")`);
+    assert.throws(() => graph(), /Package.swift.*vendor.git.*1.2.3.*exact.json/);
+    assert.throws(() => graph([{ ...remote, exactVersion: '2.0.0' }, local]), /vendor.git.*1.2.3/);
+    assert.deepEqual(graph([local, remote]).map(p => p.identity), ['kit', 'vendor']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 120_000);
 
 test('Swift lock discovery follows reachable interfaces and inherited dependencies', async () => {
   const { appSwiftPackageGraph } = await import('../host/apple/compose.mjs');
