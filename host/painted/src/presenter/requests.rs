@@ -276,7 +276,10 @@ pub(super) struct State {
     pub(super) export_workers: BTreeMap<u32, std::thread::JoinHandle<()>>,
     /// What the shell was last told of Back, the kernel epoch that was read
     /// at, and what it was last told of the keyboard.
-    back: Option<bool>,
+    pub(super) back: Option<bool>,
+    pub(super) hosted_back: Option<fn(&[i32])>,
+    pub(super) back_layers: Option<super::back::BackLayers>,
+    pub(super) opening_back_layers: Vec<(i32, u32)>,
     back_epoch: Option<u64>,
     keyboard: Option<(u32, ViewId)>,
     pad_input: Option<bool>,
@@ -815,10 +818,14 @@ impl<D: DataSource> Presenter<D> {
         let epoch = self.host.kernel().epoch();
         if self.requests.back_epoch != Some(epoch) {
             self.requests.back_epoch = Some(epoch);
-            let goes = self.back_goes();
-            if self.requests.back != Some(goes) {
-                self.requests.back = Some(goes);
-                self.queue(Request::Back(goes));
+            if self.requests.hosted_back.is_some() {
+                self.update_hosted_back();
+            } else {
+                let goes = self.back_goes();
+                if self.requests.back != Some(goes) {
+                    self.requests.back = Some(goes);
+                    self.queue(Request::Back(goes));
+                }
             }
         }
         let keyboard = (self.editing(), self.hosted_focus());
@@ -937,6 +944,7 @@ impl<D: DataSource> Presenter<D> {
     /// Whether Back has somewhere to go may have changed with no commit (a
     /// surface of the top layer opened or closed): it is read again.
     pub(super) fn back_changed(&mut self) {
+        self.update_hosted_back();
         self.requests.back_epoch = None;
     }
 

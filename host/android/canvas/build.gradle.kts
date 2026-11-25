@@ -72,6 +72,7 @@ dependencies {
     composeCompilerForTests("org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable:${KotlinCompilerVersion.VERSION}")
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.material3)
+    testImplementation("androidx.activity:activity-compose:1.9.0")
     testImplementation(libs.compose.test.junit4)
     testImplementation("androidx.core:core:1.16.0")
     testImplementation("com.google.firebase:firebase-messaging:26.0.1")

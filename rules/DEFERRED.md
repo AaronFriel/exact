@@ -727,12 +727,12 @@ commands, writes on the location (`todo add milk`), and printing a GUI app
   delivery on Windows (LLP 1115.004 D15).
 - **Android.** Same, until 2026-10-07. **Admitted (Charlie, 2026-10-07,
   waiver):** "admit android. we are working on android now -- it's becoming
-  real. amend that." Unblocks Android as a supported host instead of work
-  below the line:
+  real. amend that." Unblocks Android as a supported host instead of work below the line:
   - **Its host work:** the Canvas host (LLP 1076 §3.3) and the GPU painter.
     **Expanded (Charlie, 2026-11-24, "ask panel about questions then follow recs of panel"; panel 4–0).**
     Pocket Lab may colour Android’s bars through their elements and the root accent (LLP 1115.001 D11).
   - **Parley's Android arm** (`text/parley-android`, LLP 1085.000).
+  - **Hosted Back (Charlie, 2026-11-24, "recs ok"; panel 4–0).** Module and hatch views share system Back and its predictive gesture with the route and dismissible layers through the root dispatcher (LLP 1115.001 D6).
   - **A place in the sweep.**
 
   No take was named; the ruling stands as its own waiver until Charlie names

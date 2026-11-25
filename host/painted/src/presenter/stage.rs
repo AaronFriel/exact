@@ -596,6 +596,7 @@ impl<D: DataSource> Presenter<D> {
         if (self.stage.shift.as_ref()).is_some_and(|s| !s.progress.moving(now)) {
             self.stage.shift = None;
         }
+        self.update_hosted_back();
         self.hold_arriving();
         self.place_sheets(&stack, &kinds);
         self.dirty |= self.stage_moving();
@@ -838,6 +839,24 @@ impl<D: DataSource> Presenter<D> {
     /// The open sheets nothing presented covers, bottom first.
     fn front_sheets(&self) -> impl DoubleEndedIterator<Item = &Sheet> {
         self.stage.sheets.iter().filter(|s| !s.covered)
+    }
+
+    /// Sheets keep their callback positions while another route covers them. Only a sheet
+    /// that is itself the selected route can take the route's Back.
+    pub(super) fn back_sheets(&self) -> (Vec<ViewId>, Option<ViewId>) {
+        let mut sheets = Vec::new();
+        let mut selected = None;
+        if self.stage_presents() {
+            for sheet in &self.stage.sheets {
+                if let Some(n) = self.host.kernel().node_by_key(sheet.modal) {
+                    sheets.push(n.id);
+                    if self.stage.seen.last() == Some(&sheet.modal) {
+                        selected = Some(n.id);
+                    }
+                }
+            }
+        }
+        (sheets, selected)
     }
 
     /// Whether a sheet is open in front.
