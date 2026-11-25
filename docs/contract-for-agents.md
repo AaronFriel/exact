@@ -6089,7 +6089,7 @@ both. Its declared shape chooses what it reads: `available`, `generation`, `size
 answer reads, 0 before the first. `observations` has an inset set (`top`, `right`,
 `bottom`, `left`) per family: `safeArea`, `keyboard`, `keyboardUndocked`,
 `safeAreaCorners`, `layoutMargins`, `layoutMarginsCorners`, `readableContent`,
-`readableContentCorners`, `readableContentGuide` and `systemMinimumLayoutMargins`.
+`readableContentCorners`, `readableContentGuide`, `systemMinimumLayoutMargins` and `bar`.
 `margins` has the `layoutMargins`, `readableContent` and `readableContentGuide`
 rectangles (`x`, `y`, `width`, `height`). Declare every field but `available` and
 `generation` an `option`, and each family and rectangle in them too: each is `none`
@@ -7687,6 +7687,10 @@ the bars as the host lays them out (a rotation, a bar shown or hidden). Any box 
 set it for its subtree, spelled as it is read:
 `--exact-safe-area-inset-bottom="0px"` (a length, no percentage; one that reads
 itself is ignored, as a CSS cycle is).
+
+Use `var(--exact-bar-inset-start)` and `var(--exact-bar-inset-end)` for the width of navigation beside the route. The reading box’s direction determines start and end. On iPad a tab sidebar beside the route counts, and on iPhone Duo a visible tab rail counts, even when it occupies the device’s side inset. A side without a bar reads `0px`, as do both sides on other hosts. A split column reads the bar on the edge it adjoins. A drawer over the route and a sheet’s own margin contribute zero.
+
+In a left-to-right box, `padding-left="max(10px, calc(22px - max(env(safe-area-inset-left), var(--exact-bar-inset-start))))"` leaves 22 points where both insets are zero and 10 where either reaches 12 points. For the same physical left padding in a right-to-left box, use `--exact-bar-inset-end`.
 
 The host clears a route's content of the chrome it did not write (LLP 1123 D3), on
 every host with bars: on each edge it pads the route by that inset, or the route's
