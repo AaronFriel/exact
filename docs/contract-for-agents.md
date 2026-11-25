@@ -5673,6 +5673,8 @@ On Android a checked item keeps its symbol leading and shows the check trailing.
 Without a symbol, the check is leading. An Android menu button’s `aria-label` names
 the action for accessibility. Otherwise the reader uses its exposed text, falling
 back to the painted title and subtitle when all the text is decorative.
+Windows window and status menu flyouts draw only the title line. When a checked
+item has a symbol, the flyout shows the symbol alone.
 
 A submenu is a row whose `popovertarget` names another menu popover (`Copy ▸
 path / link`): a submenu `NSMenuItem` on macOS, a nested `UIMenu` on iOS, and
