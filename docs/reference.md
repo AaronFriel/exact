@@ -6744,10 +6744,9 @@ build.
 a new binary. See
 [A package's configuration](contract-for-agents.md#a-packages-configuration).
 
-The web JS target loads a package’s view from its bound web implementation.
-A game’s wasm target can make a view supplied by the app’s own web artifact.
-If only the package supplies the view, the node reports its tag and package
-in the error and the view stays empty.
+Both web targets load a placed package view from its bound web implementation
+after first paint. A game can also supply the tag in its own web module.
+Package sources and sends in a wasm game still use the runner’s substitutes.
 
 ## Access hatches
 

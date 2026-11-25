@@ -28,8 +28,9 @@
 // is raised by the host (an activation the implementation binds, `isTrusted`
 // only) or emitted (the device's origin), and heard in order, once, each as
 // its own commit (D6).
-import { data, Resources, commit, R, Failed, nextTicket, say, clock, order, drive, Clocked, After, time, Store, Hosts, navigateRoot, locationOf, inflight, Origin } from "./rt.js";
+import { data, Resources, commit, R, Failed, nextTicket, say, clock, order, drive, Clocked, After, time, Store, Hosts, navigateRoot, locationOf, inflight, Origin, viewId } from "./rt.js";
 import { reportTime } from "./navigation.js";
+import { packageFiles, packageInstances, packageServices } from "./package-session.js";
 import { packageViews } from "./views.js";
 import { packagePictures } from "./pictures.js";
 import { appGrantSet, coversPath, rawGrantText } from "./admission.js";
@@ -406,41 +407,10 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
   // the track table (`tracks`), admitted paths' files (`files`), the audio session (`audioSession`), and
   // `clocked(fn)`, which runs `fn` after each move of the session's clock. The web has no session end an
   // implementation could finish in.
-  const loaded = new Map(), chunks = new Map(), live = new Set(), ready = new Map(), constructed = new Map();
+  const live = new Set(), ready = new Map(), constructed = new Map();
   // Under the agent the drive's page fact (`prefer visibility-state`, agent.js) is the foreground; the machine's never is.
   let agentShown = true;
   const shown = () => clock.agent ? agentShown : typeof document !== "object" || document.visibilityState !== "hidden";
-  // The session's track table (LLP 1133.009 D10 item 6): tracks and streams by id, each track with the
-  // implementation that opened it, its `owner`, through which a consuming implementation subscribes.
-  const table = new Map(), holds = new Set();
-  const tracks = {
-    // An exclusive hold on a device for a recognizer that opens it itself (LLP 1133.012 D8, D12 item 4): granted
-    // only while no track of `kind` has a running capture (its owner's `leased(id)`), and while it lasts the owner
-    // opens no capture of that kind. Its release, or a throw `NotReadableError`.
-    hold(kind) {
-      if ([...table.values()].some(e => e.kind === kind && e.owner?.leased?.(e.id))) throw Object.assign(new Error(`a ${kind} capture runs`), { code: "NotReadableError" });
-      const h = { kind };
-      holds.add(h);
-      return () => { holds.delete(h); };
-    },
-    held: kind => [...holds].some(h => h.kind === kind),
-    add: entry => { table.set(entry.id, entry); },
-    lookup: id => table.get(id) ?? null,
-    remove: id => { table.delete(id); },
-    all: () => [...table.values()],
-    /** `consumer` ({live(source), muted(reason), unmuted(), ended()}) joins track `id`; how = {start, origin}. */
-    subscribe(id, consumer, how = {}) {
-      const entry = table.get(id);
-      if (!entry?.owner?.subscribe) throw Object.assign(new Error(`no track ${id}`), { code: "NotFoundError" });
-      return entry.owner.subscribe(id, consumer, how);
-    },
-    /** `observer` hears track `id` as a consumer does and takes no lease (LLP 1133.027 D17 item 1); its leave. */
-    observe(id, observer) {
-      const entry = table.get(id);
-      if (!entry?.owner?.observe) throw Object.assign(new Error(`no track ${id}`), { code: "NotFoundError" });
-      return entry.owner.observe(id, observer);
-    },
-  };
   // An admitted path's file (LLP 1133.009 D10 item 4), in the store `storage.fs` reads: the app's, or the drive's
   // scratch store under the agent; none when the drive names none.
   let store = null;
@@ -449,116 +419,67 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
     if (key == null) throw Object.assign(new Error(env.agentStorageRefusal), { code: "agent" });
     return import(new URL("./storage-fs.js", import.meta.url).href).then(m => m.createFileStore(key));
   });
-  const files = {
-    // A file's first write makes its directory, as a recorder's writer needs it.
-    write: (path, bytes) => fileStore().then(async s => { await s.mkdir(path.slice(0, path.lastIndexOf("/"))); return s.writeFile(path, bytes); }),
-    append: (path, bytes) => fileStore().then(s => s.appendFile(path, bytes)),
-    read: path => fileStore().then(s => s.readFile(path)),
-    // A directory a handle fills (LLP 1133.012 D12 item 7): emptied, made, and listed.
-    remove: path => fileStore().then(s => s.rm(path)),
-    mkdir: path => fileStore().then(s => s.mkdir(path)),
-    // A Blob made the file's entry by reference, as a picked file is (LLP 1133.008.000 D2): the page reads none of it.
-    // `refusal` is asked inside the store's transaction, and what it returns stops the write.
-    put: (path, blob, refusal) => fileStore().then(async s => { await s.mkdir(path.slice(0, path.lastIndexOf("/"))); return s.putBlob(path, blob, refusal); }),
-    putAll: (entries, refusal) => fileStore().then(async s => {
-      await Promise.all([...new Set(entries.map(e => e.path.slice(0, e.path.lastIndexOf("/"))))].map(path => s.mkdir(path)));
-      return s.putBlobs(entries, refusal);
-    }),
-    list: path => fileStore().then(s => s.readdir(path)).catch(() => []),
-  };
-  // The page's Audio Session (W3C Audio Session; LLP 1133.009 D7, LLP 1133.012 D4): `play-and-record` while a
-  // capture's claim is held, else the strongest spoken type claimed (`playback` over `transient-solo` over
-  // `transient`), else what the page had.
-  const claims = new Set(), spoken = ["transient", "transient-solo", "playback"];
-  let before = null;
-  const session = () => typeof navigator === "object" ? navigator.audioSession : undefined;
-  const compose = () => {
-    const s = session();
-    if (!s) return;
-    const types = [...claims].map(c => c.type);
-    const want = types.includes("play-and-record") ? "play-and-record" : spoken.filter(t => types.includes(t)).at(-1);
-    if (want && before == null) before = s.type;
-    if (want) s.type = want;
-    else if (before != null) { s.type = before; before = null; }
-  };
-  const audioSession = {
-    /** A capture's claim, or speech's with `{type}`, one of the spoken types. */
-    claim(how = {}) {
-      const claim = { type: spoken.includes(how.type) ? how.type : "play-and-record", release: () => { claims.delete(claim); compose(); } };
-      claims.add(claim);
-      compose();
-      return claim;
-    },
-    /** The type in force: the page's, or the strongest claimed where the page has no Audio Session. */
-    type() {
-      const types = [...claims].map(c => c.type);
-      return session()?.type ?? (types.includes("play-and-record") ? "play-and-record" : spoken.filter(t => types.includes(t)).at(-1) ?? "auto");
-    },
-  };
+  const { tracks, audioSession } = packageServices();
+  const files = packageFiles(fileStore);
   // The extension's chunk, and the session's one instance of its implementation, which its names and its views share
   // (LLP 1133.008 D8 item 1).
-  const chunk = extension => { if (!chunks.has(extension)) chunks.set(extension, bound[extension]()); return chunks.get(extension); };
-  const instance = extension => {
-    if (!bound[extension]) return null;
-    if (!loaded.has(extension)) loaded.set(extension, chunk(extension).then(async m => {
-      const context = { changed: key => reask([...byKey.values()].filter(r => r.key.split("#")[0] === key && route(r) !== "substitute").map(r => r.key)), agent: clock.agent, ...(clock.agent && extension === "clipboard" && { clipboard: clock.clipboard }), config: m.config ?? {}, now: () => { time(); return clock.now; }, clocked: fn => { Clocked.push(fn); }, foreground: shown, log: say, tracks, files, audioSession,
-        after: (ms, body) => hatchClock.after(ms, body),
-        // The app's grant lines, and the host's auth session for an implementation (LLP 1133.014 D10 item 3).
-        grants: data.grants ?? "", get authSession() { return globalThis.exact?.authSession; },
-        revokePicture: source => pictures?.revokePicture(source), pictureChanged: source => pictures?.pictureChanged(source), invoke: invoker(extension),
-        // A package's own raising has the device's origin; a person's is the host's to give (LLP 1133.004 D6).
-        emit: (name, args) => raise(`${extension}.${name}`, args, "device"),
-        // The web's wake is the page's own (LLP 1133.017 D8): an implementation raises a declared wake event, and is
-        // answered the invocation's outcome (`completed`, `expired`, `refused`, `unheard`).
-        wakes: { raise: (name, args, how = {}) => wk.raise(`${extension}.${name}`, args, { hidden: !shown(), ...how }) },
-        // Only an event that is the web's user activation (HTML's activation-triggering input events, and `click`), and
-        // trusted, is a person's; any other type binds nothing.
-        activation: (target, type, name, args, { navigate } = {}) => !ACTIVATING.has(type) ? say(`${extension}.${name}: a ${type} is no person's activation; nothing is bound`) : target.addEventListener(type, e => {
-          if (!e.isTrusted) return say(`${extension}.${name}: an untrusted ${type} raises nothing`);
-          try { globalThis.focus?.(); } catch {}
-          if (navigate) navigateRoot(locationOf(navigate)); else raise(`${extension}.${name}`, args, "app");
-        }),
-        // An implementation that keeps the declared list (LLP 1133.033 D19: the web's call is the module's own state):
-        // `declared(name, args)` is the substitute's answer, after the admission the call already passed; `listed(state,
-        // seen)` tells `seen` the list's entries (`{ref, fields}`) now and at each change.
-        declared: (name, args) => {
-          const row = [...byKey.values()].find(r => extensionOf(r) === extension && declaredOf(r) === name && route(r) !== "substitute");
-          if (!row) return { error: "NotSupportedError" };
-          return row.send ? applyEffect(row, args ?? {}) : valueOf(row);
-        },
-        listed: (state, seen) => {
-          const name = lists.state({ key: `${extension}.` }, state);
-          const tell = () => seen((lists.get(name) ?? []).map(e => ({ ref: e.ref, fields: { ...e.fields } })));
-          watchers.set(name, [...(watchers.get(name) ?? []), tell]);
-          tell();
-        },
-        // A Media Session action (W3C Media Session, `setActionHandler`): the browser calls it only for the person's
-        // press on its own controls, so the handler set here is a person's act. When it fires, `pick()` names the entry
-        // and the declared choice it takes (`[ref, choice]`), applied as `tap @ref <choice>` is. `pick` null clears it.
-        // False where the browser has no such action.
-        mediaAction: (action, pick) => {
-          const ms = typeof navigator === "object" ? navigator.mediaSession : undefined;
-          if (!ms?.setActionHandler) return false;
-          try {
-            ms.setActionHandler(action, pick ? () => {
-              const [ref, choice] = pick() ?? [];
-              const entry = [...lists.values()].flat().find(e => e.ref === ref);
-              if (!entry) return say(`${extension}: media session ${action}: no entry`);
-              const done = up.choose(entry, choice);
-              if (done?.error) say(`${extension}: media session ${action}: ${done.error}`);
-            } : null);
-          } catch { return false; }
-          say(`${extension}: media session ${action} ${pick ? "set" : "cleared"}`);
-          return true;
-        } };
-      const impl = m.implementation?.(context) ?? null;
-      constructed.set(extension, impl);
-      if (clock.agent) await impl?.preferred?.(preferredOf(extension));
-      ready.set(extension, impl);
-      return impl;
-    }));
-    return loaded.get(extension);
-  };
+  const { chunk, instance, loaded } = packageInstances(bound, async (extension, m) => {
+    const context = { changed: key => reask([...byKey.values()].filter(r => r.key.split("#")[0] === key && route(r) !== "substitute").map(r => r.key)), agent: clock.agent, ...(clock.agent && extension === "clipboard" && { clipboard: clock.clipboard }), config: m.config ?? {}, now: () => { time(); return clock.now; }, clocked: fn => { Clocked.push(fn); }, foreground: shown, log: say, tracks, files, audioSession,
+      after: (ms, body) => hatchClock.after(ms, body),
+      // The app's grant lines, and the host's auth session for an implementation (LLP 1133.014 D10 item 3).
+      grants: data.grants ?? "", get authSession() { return globalThis.exact?.authSession; },
+      revokePicture: source => pictures?.revokePicture(source), pictureChanged: source => pictures?.pictureChanged(source), invoke: invoker(extension),
+      // A package's own raising has the device's origin; a person's is the host's to give (LLP 1133.004 D6).
+      emit: (name, args) => raise(`${extension}.${name}`, args, "device"),
+      // The web's wake is the page's own (LLP 1133.017 D8): an implementation raises a declared wake event, and is
+      // answered the invocation's outcome (`completed`, `expired`, `refused`, `unheard`).
+      wakes: { raise: (name, args, how = {}) => wk.raise(`${extension}.${name}`, args, { hidden: !shown(), ...how }) },
+      // Only an event that is the web's user activation (HTML's activation-triggering input events, and `click`), and
+      // trusted, is a person's; any other type binds nothing.
+      activation: (target, type, name, args, { navigate } = {}) => !ACTIVATING.has(type) ? say(`${extension}.${name}: a ${type} is no person's activation; nothing is bound`) : target.addEventListener(type, e => {
+        if (!e.isTrusted) return say(`${extension}.${name}: an untrusted ${type} raises nothing`);
+        try { globalThis.focus?.(); } catch {}
+        if (navigate) navigateRoot(locationOf(navigate)); else raise(`${extension}.${name}`, args, "app");
+      }),
+      // An implementation that keeps the declared list (LLP 1133.033 D19: the web's call is the module's own state):
+      // `declared(name, args)` is the substitute's answer, after the admission the call already passed; `listed(state,
+      // seen)` tells `seen` the list's entries (`{ref, fields}`) now and at each change.
+      declared: (name, args) => {
+        const row = [...byKey.values()].find(r => extensionOf(r) === extension && declaredOf(r) === name && route(r) !== "substitute");
+        if (!row) return { error: "NotSupportedError" };
+        return row.send ? applyEffect(row, args ?? {}) : valueOf(row);
+      },
+      listed: (state, seen) => {
+        const name = lists.state({ key: `${extension}.` }, state);
+        const tell = () => seen((lists.get(name) ?? []).map(e => ({ ref: e.ref, fields: { ...e.fields } })));
+        watchers.set(name, [...(watchers.get(name) ?? []), tell]);
+        tell();
+      },
+      // A Media Session action (W3C Media Session, `setActionHandler`): the browser calls it only for the person's
+      // press on its own controls, so the handler set here is a person's act. When it fires, `pick()` names the entry
+      // and the declared choice it takes (`[ref, choice]`), applied as `tap @ref <choice>` is. `pick` null clears it.
+      // False where the browser has no such action.
+      mediaAction: (action, pick) => {
+        const ms = typeof navigator === "object" ? navigator.mediaSession : undefined;
+        if (!ms?.setActionHandler) return false;
+        try {
+          ms.setActionHandler(action, pick ? () => {
+            const [ref, choice] = pick() ?? [];
+            const entry = [...lists.values()].flat().find(e => e.ref === ref);
+            if (!entry) return say(`${extension}: media session ${action}: no entry`);
+            const done = up.choose(entry, choice);
+            if (done?.error) say(`${extension}: media session ${action}: ${done.error}`);
+          } : null);
+        } catch { return false; }
+        say(`${extension}: media session ${action} ${pick ? "set" : "cleared"}`);
+        return true;
+      } };
+    const impl = m.implementation?.(context) ?? null;
+    constructed.set(extension, impl);
+    if (clock.agent) await impl?.preferred?.(preferredOf(extension));
+    ready.set(extension, impl);
+    return impl;
+  });
   const implementation = row => route(row) === "substitute" ? null : instance(extensionOf(row));
   // `of`, spans, `played` and `changes` (spans.js).
   const sp = spans({ sibling, valueOf, route, extensionOf, say, raise: (key, args, from) => raise(key, args, from) });
@@ -571,7 +492,11 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
   // loaded with the page, under the agent too, so the controls follow the list from its first entry.
   const chosen = new Set([...byKey.values()].filter(r => r.sub.list?.tap?.choices && bound[extensionOf(r)]).map(extensionOf));
   if (chosen.size) setTimeout(() => { for (const extension of chosen) instance(extension); });
-  packageViews(views, chunk, instance);
+  if (Object.keys(views).length) {
+    const table = packageViews(views, chunk, instance, { say, viewId, target: "JS" });
+    (globalThis.exact ??= {}).packageViews = table;
+    After.push(table.report);
+  }
   // A package's `img` scheme (LLP 1133.019 D11 item 1): admitted as the runner's `modules/pictures.rs` admits it on
   // target `web` — the app declares one of its grant lines, an implementation is bound, and under the agent its
   // permission is granted and the app declares that permission's lines — then drawn by its implementation (pictures.js).

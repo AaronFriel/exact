@@ -4,9 +4,10 @@
 // Kotlin and Swift). A value is never printed: a key typed `env` holds a vendor key, and a wrong-typed value may be
 // one pasted in by mistake.
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { moduleInterfaces } from './typescript.mjs';
+import { moduleInterfaces, webImplementations } from './typescript.mjs';
+import { sourceInputChanges } from './__exact_env.mjs';
 
 const TYPES = new Set(['string', 'number', 'boolean', 'env']);
 const FIELDS = new Set(['type', 'required', 'missing', 'metadata']);
@@ -87,6 +88,29 @@ export function packageConfigs(app, target, { extensions, release = false, warn 
 
 /** [packageConfigs]' values by extension name. */
 export const packageConfig = (app, target, options) => new Map(packageConfigs(app, target, options).map((c) => [c.extension, c.values]));
+
+/** The entry of each bound extension's lazy web chunk, with the configuration its implementation reads. */
+export function webPackageEntries(app, extensions, release, warn = () => {}) {
+  const bound = webImplementations(app, extensions);
+  const configs = packageConfig(app, 'web', { extensions, release, warn });
+  return new Map(Object.keys(extensions).map(extension => {
+    const at = bound.get(extension);
+    if (!at) return [extension, 'export const implementation = null;\n'];
+    // Re-exports and declared exports alike resolve through the module's namespace.
+    const source = JSON.stringify(realpathSync(at));
+    return [extension, `export { implementation } from ${source};\nexport * from ${source};\nexport const config = ${JSON.stringify(configs.get(extension) ?? {})};\n`];
+  }));
+}
+
+/** Configuration and resolver choices can change without an implementation file changing. */
+export const webPackageBinding = entries => createHash('sha256').update(JSON.stringify([...entries])).digest('hex');
+
+export function webPackageBindingChanged(appDir, receipt) {
+  if (!receipt) return false;
+  try {
+    return sourceInputChanges(receipt).length > 0 || webPackageBinding(webPackageEntries(appDir, receipt.extensions, receipt.production)) !== receipt.binding;
+  } catch { return true; }
+}
 
 /** The targets whose native code reads its configuration. */
 const NATIVE = new Set(['android', 'ios', 'macos', 'tvos']);

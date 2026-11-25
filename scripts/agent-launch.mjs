@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { types as utilTypes } from 'node:util';
 import { filesystemLock } from './filesystem.mjs';
+import { webPackageBindingChanged } from '../js/bake/src/package-config.mjs';
 import { boundSettings, isSettingInput, settingInputs, sourceInputChanges } from '../js/bake/src/__exact_env.mjs';
 export { bakedSettingChanges, builtSettingLines } from '../js/bake/src/__exact_env.mjs';
 import { backendOriginSelection, literalBackendOrigin, selectBackendOrigin } from '../js/bake/src/typescript.mjs';
@@ -1207,8 +1208,7 @@ export function webChanges(dist, app) {
   if (built.inputs && !built.inputRoots) return { app: [], shared: [shown(marker)], all: [shown(marker)] };
   if (existsSync(resolve(app.dir,'app.ts')) && !(built.sourceInputs ?? appSourceInputs(app.dir))) return {app:[shown(resolve(app.dir,'app.ts'))],shared:[],all:[shown(resolve(app.dir,'app.ts'))]};
   const contract = built.reads?.contract;
-  // Candidates: what changed since the build read its inputs (`inputsAt`, as it started, less the file
-  // system's clock grain), else since its marker.
+  // Allow for the filesystem clock's grain when nominating inputs by time.
   const since = typeof built.inputsAt === 'number' ? built.inputsAt - 2000 : statSync(marker).mtimeMs;
   let inputRoots = built.inputRoots;
   // A root query that fails (Cargo's lock, a manifest) leaves the build unverified: the build says why.
@@ -1221,6 +1221,7 @@ export function webChanges(dist, app) {
   const changed = path => !hashedRead(path) && !byContractReceipt(path) && (!built.inputs || built.inputs[path] !== contentDigest(path));
   const { app: own, shared: roots } = webInputs(app, built.target === 'js', since, inputRoots, built.sourceInputs);
   const appChanges = own.filter(changed), shared = roots.filter(changed);
+  if (webPackageBindingChanged(app.dir, built.packageViews)) appChanges.push('web package view binding or configuration');
   if (built.inputs) for (const path of [...appModules(app.dir,built.sourceInputs).files.values()].map(shown)) if (changed(path) && !appChanges.includes(path)) (within(app.dir,resolve(ROOT,path)) ? appChanges : shared).push(path);
   for (const path of sourceInputChanges(built.sourceInputs ?? appSourceInputs(app.dir))) (within(app.dir,path) ? appChanges : shared).push(shown(path));
   if (contract) for (const path of changedContractReads(contract)) (within(app.dir, path) ? appChanges : shared).push(shown(path));
@@ -1229,7 +1230,6 @@ export function webChanges(dist, app) {
   for (const path of Object.keys(built.inputs ?? {})) if (!byContractReceipt(path) && !['EXACT_BACKEND_ORIGIN', 'PORT'].includes(path) && !isSettingInput(path) && built.inputs[path] !== null && !appChanges.includes(path) && !webInputPresent(app, path)) (within(app.dir, resolve(ROOT, path)) ? appChanges : shared).push(path);
   if ((built.inputs?.EXACT_BACKEND_ORIGIN ?? null) !== (process.env.EXACT_BACKEND_ORIGIN ?? null)) appChanges.push('EXACT_BACKEND_ORIGIN');
   if ((built.inputs?.PORT ?? null) !== (process.env.PORT ?? null)) appChanges.push('PORT');
-  // A setting whose value or source moved, one the build read and is no longer declared, or one declared since.
   const settings = settingInputs(app, process.env, appModules(app.dir, built.sourceInputs));
   for (const key of new Set([...Object.keys(settings), ...Object.keys(built.inputs ?? {}).filter(isSettingInput)])) if ((built.inputs?.[key] ?? null) !== (settings[key] ?? null)) appChanges.push(key);
   return { app: appChanges, shared, all: [...new Set([...appChanges, ...shared])] };
