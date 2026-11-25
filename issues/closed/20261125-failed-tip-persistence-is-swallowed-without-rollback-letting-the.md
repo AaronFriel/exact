@@ -1,6 +1,7 @@
 # Failed tip persistence is swallowed without rollback, letting the retry pass permanently consume an unpersisted paid IAP tip
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Deferred mutating in-memory tip count and tokens in Weatherlight deliverPurchases until writeJson resolves so failed writes cannot skip persistence and consume the tip on retry.
 **Systems:** Weatherlight in-app purchases delivery (`deliverPurchases`)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

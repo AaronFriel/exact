@@ -1,6 +1,7 @@
 # Concurrent `load(storage)` calls before initial read finishes overwrite newly created conversations and reset `serial`
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Re-checked if (loaded) return after awaiting storage.fs.readFile in Agents load(storage) so concurrent initial reads cannot overwrite newly created conversations or reset serial.
 **Systems:** Agents persistence initial load (`load`, `snapshot`, `command`, `pulse`)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

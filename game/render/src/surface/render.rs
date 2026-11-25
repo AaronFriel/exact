@@ -212,6 +212,51 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
     pub fn render_hooks(&self) -> &H {
         &self.hooks
     }
+    fn ensure_renderer(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        format: wgpu::TextureFormat,
+        seekable: bool,
+        already_released: bool,
+    ) {
+        if self.format == Some(format) && self.render.is_some() {
+            return;
+        }
+        if self.render.is_some() {
+            self.release_renderer();
+        } else if !already_released {
+            self.gpu_timing = None;
+            self.hook_clock.reset();
+            self.hooks.device_lost();
+            self.ready_work = None;
+        }
+        let samples = self
+            .sim
+            .as_ref()
+            .map_or(exact_game::SceneSamples::One, |sim| G::samples(sim.args()));
+        self.perf.pipeline_ready = crate::perf::timing().then_some(0.);
+        self.perf.pipeline_ready_seekable = seekable;
+        self.render = Some((
+            crate::renderer::RendererWithAssets::<ASSETS>::configured(
+                device,
+                queue,
+                format,
+                *self
+                    .samples
+                    .insert(crate::quality::samples(self.rung, samples)),
+                G::DEPTH_PREPASS,
+            )
+            .with_matte_models(G::MATTE_MODELS),
+            {
+                let mut feed = Feed::default();
+                feed.share_attachment_diagnostics(self.placed.attachments.diagnostics.clone());
+                feed
+            },
+        ));
+        self.format = Some(format);
+        self.dirty = true;
+    }
     /// `Surface::prepare_assets` under whatever pipeline timing is on.
     pub(super) fn prepare_now(
         &mut self,
@@ -233,6 +278,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         if !self.assets_dirty && self.format == Some(format) && !self.asset_work() {
             return;
         }
+        let released =
+            self.render.is_some() && self.format != Some(format) && self.release_renderer();
         let Some(sim) = &mut self.sim else { return };
         sim.refresh_presented();
         let mut textures = sim.take_textures();
@@ -244,35 +291,14 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
             return;
         }
         if self.format != Some(format) {
-            self.gpu_timing = None;
-            self.hook_clock.reset();
-            self.hooks.device_lost();
-            self.ready_work = None;
-            self.perf.pipeline_ready = crate::perf::timing().then_some(0.);
-            self.perf.pipeline_ready_seekable = if self.perf.rendering {
+            let seekable = if self.perf.rendering {
                 !self.perf.live
             } else {
                 self.seekable
             };
-            self.render = Some((
-                crate::renderer::RendererWithAssets::<ASSETS>::configured(
-                    device,
-                    queue,
-                    format,
-                    *self
-                        .samples
-                        .insert(crate::quality::samples(self.rung, G::samples(sim.args()))),
-                    G::DEPTH_PREPASS,
-                )
-                .with_matte_models(G::MATTE_MODELS),
-                {
-                    let mut feed = Feed::default();
-                    feed.share_attachment_diagnostics(self.placed.attachments.diagnostics.clone());
-                    feed
-                },
-            ));
-            self.format = Some(format);
+            self.ensure_renderer(device, queue, format, seekable, released);
         }
+        let sim = self.sim.as_mut().unwrap();
         let (renderer, _feed) = self.render.as_mut().unwrap();
         let live = sim.presentation_assets().map(str::to_owned).collect();
         // Under the live clock what the world does not present (`Sim::presents`:
@@ -509,32 +535,9 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         self.look.points = (frame.width, frame.height);
         self.look.held = Some(*frame);
         if self.format != Some(format) {
-            self.gpu_timing = None;
-            self.hook_clock.reset();
-            self.hooks.device_lost();
-            self.ready_work = None;
-            self.render = Some((
-                crate::renderer::RendererWithAssets::<ASSETS>::configured(
-                    device,
-                    queue,
-                    format,
-                    *self
-                        .samples
-                        .insert(crate::quality::samples(self.rung, G::samples(sim.args()))),
-                    G::DEPTH_PREPASS,
-                )
-                .with_matte_models(G::MATTE_MODELS),
-                {
-                    let mut feed = Feed::default();
-                    feed.share_attachment_diagnostics(self.placed.attachments.diagnostics.clone());
-                    feed
-                },
-            ));
-            self.format = Some(format);
-            self.dirty = true;
-            self.perf.pipeline_ready = crate::perf::timing().then_some(0.);
-            self.perf.pipeline_ready_seekable = frame.seekable;
+            self.ensure_renderer(device, queue, format, frame.seekable, false);
         }
+        let sim = self.sim.as_mut().unwrap();
         if ASSETS {
             if let Some((renderer, _)) = &mut self.render {
                 for (name, model) in &mut renderer.models.loaded {

@@ -1,6 +1,7 @@
 # Unbounded recursion stack overflow and wasm32 index truncation in columnar save decoder
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Enforced the 256-frame nesting bound in shape validation and replay, replaced unchecked u64-to-usize casts with usize::try_from, and claimed load budget with try_reserve_exact before allocating strings in data::columns.
 **Systems:** exact-game (data::columns, world::save, storage::raw)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -33,11 +33,12 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
     /// same world; a look frame's own renderer and a readback in flight go
     /// with it. The placed children's textures are the host's on the same
     /// device and stay. True when a live renderer was released.
-    fn release_renderer(&mut self) -> bool {
+    pub(super) fn release_renderer(&mut self) -> bool {
         self.look.retiered();
         if self.render.is_none() {
             return false;
         }
+        let device = self.device;
         let children: Vec<_> = self
             .placed
             .children
@@ -49,6 +50,7 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         // device invalidates them again.
         self.device_assets_invalidated = false;
         exact_gpu::Surface::device_lost(self);
+        self.device = device;
         self.device_assets_invalidated = false;
         for (child, texture) in self.placed.children.iter_mut().zip(children) {
             child.texture = texture;

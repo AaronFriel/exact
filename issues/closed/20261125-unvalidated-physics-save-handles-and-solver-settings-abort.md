@@ -1,6 +1,7 @@
 # Unvalidated physics save handles and solver settings abort release builds after load
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Validated saved physics entry uniqueness, handle/component correspondence, Rapier handle existence in Saved::decode, and gravity/solver settings in Physics::read.
 **Systems:** exact-game-physics (state, step, lib, types)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

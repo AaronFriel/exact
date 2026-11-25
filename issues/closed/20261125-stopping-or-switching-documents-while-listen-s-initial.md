@@ -1,6 +1,7 @@
 # Stopping or switching documents while Listen's initial `cancelSpeech` is in flight still starts speaking block 0 with Stop hidden
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Guarded Markdown queueFirst with listening and clearedRun == run and cleared cleared = none while incrementing run in stopListening so stopping or switching documents mid-cancel never starts speaking.
 **Systems:** Markdown reader speech synthesis (`listen`, `stopListening`, `openFile`)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

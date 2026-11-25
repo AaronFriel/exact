@@ -1,6 +1,7 @@
 # WorldSurface format change rebuilds RendererWithAssets without invalidating device assets, permanently losing GPU textures
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Released the live renderer through release_renderer (invalidating device assets while keeping self.device and placed children) before rebuilding RendererWithAssets on target format changes.
 **Systems:** exact-game-render (surface, surface::render), exact-game (sim::assets)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

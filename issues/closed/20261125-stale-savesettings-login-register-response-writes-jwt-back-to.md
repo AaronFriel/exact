@@ -1,6 +1,7 @@
 # Stale `saveSettings`/`login`/`register` response writes JWT back to store after `logout` or newer sign-in
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Added an authEpoch generation guard across signIn, logout, and currentUser 401 expiry in RealWorld so superseded auth responses cannot write back realworld.jwt or clear a newer session.
 **Systems:** RealWorld authentication and session store (`signIn`, `logout`, `SettingsPage`, `AuthPage`)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

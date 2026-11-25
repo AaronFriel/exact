@@ -1,6 +1,7 @@
 # Unvalidated Shadows::fixed_box in a loaded save aborts release builds on render
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Validated ShadowBox extents and finiteness during Data::read and set_field, and made Cascades::reach return None for invalid fixed_box values.
 **Systems:** exact-game (environment), exact-game-render (shadows, renderer::draw)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

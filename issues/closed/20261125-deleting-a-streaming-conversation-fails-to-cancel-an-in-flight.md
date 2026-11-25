@@ -1,6 +1,7 @@
 # Deleting a streaming conversation fails to cancel an in-flight `POST /turns` job and lets racing `pulse` generate titles for the deleted chat
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Cleared streaming state and aborted active jobs in command('delete') and guarded start, startOnDevice, pulse, pulseOnDevice, and name with conversation membership checks so deleted chats cancel late turns and skip title generation.
 **Systems:** Agents conversation lifecycle (`command`, `start`, `startOnDevice`, `pulse`, `pulseOnDevice`, `name`)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

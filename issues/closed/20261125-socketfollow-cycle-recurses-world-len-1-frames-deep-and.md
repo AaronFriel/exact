@@ -1,6 +1,7 @@
 # SocketFollow cycle recurses world.len() + 1 frames deep and overflows the call stack
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Bounded SocketFollow and Attachments resolution with a visited set and 64-hop depth cap, dropped row leases before recursing, and rejected SocketFollow and mixed Parent cycles during World::load.
 **Systems:** exact-game (scene, animation::sockets), exact-game-render (world::scene::Attachments)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

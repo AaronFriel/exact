@@ -772,7 +772,11 @@ impl World {
             crate::data::limits::reserve(r, &mut self.hierarchy.path, count)?;
             crate::data::limits::reserve(r, &mut self.hierarchy.broken, count)?;
         }
-        self.resolve_hierarchy(true)
+        self.resolve_hierarchy(true)?;
+        if let Some(attachments) = self.attachments {
+            (attachments.validate)(self, r)?;
+        }
+        Ok(())
     }
     fn resolve_hierarchy(&mut self, reject: bool) -> Result<(), crate::DataError> {
         if !self.hierarchy.ready() && self.storage::<Parent>().is_none_or(|s| s.is_empty()) {
@@ -891,51 +895,74 @@ impl World {
         self.current_global_at(e, std::panic::Location::caller())
     }
     pub(crate) fn current_global_at(&self, e: Entity, at: crate::storage::At) -> Option<Affine3A> {
-        self.current_global_depth_at(e, self.len() + 1, at)
+        let mut visited = Vec::new();
+        self.current_global_visited_at(e, &mut visited, at)
+            .ok()
+            .flatten()
     }
     #[track_caller]
-    pub(crate) fn current_global_depth(&self, e: Entity, remaining: usize) -> Option<Affine3A> {
-        self.current_global_depth_at(e, remaining, std::panic::Location::caller())
-    }
-    // Each link leases one row at a time, reported at the author's call.
-    fn current_global_depth_at(
+    pub(crate) fn current_global_visited(
         &self,
         e: Entity,
-        remaining: usize,
+        visited: &mut Vec<Entity>,
+    ) -> Result<Option<Affine3A>, ()> {
+        self.current_global_visited_at(e, visited, std::panic::Location::caller())
+    }
+    // Each link leases one row at a time, reported at the author's call.
+    fn current_global_visited_at(
+        &self,
+        e: Entity,
+        visited: &mut Vec<Entity>,
         caller: crate::storage::At,
-    ) -> Option<Affine3A> {
-        if remaining == 0 {
-            return None;
+    ) -> Result<Option<Affine3A>, ()> {
+        if let Some(attachments) = self.attachments {
+            match (attachments.pose)(self, e, visited) {
+                crate::world::AttachmentPose::Pose(pose) => return Ok(Some(pose)),
+                crate::world::AttachmentPose::Cycle => return Err(()),
+                crate::world::AttachmentPose::None => {}
+            }
         }
-        if let Some(pose) = self
-            .attachments
-            .and_then(|attachments| (attachments.pose)(self, e, remaining))
-        {
-            return Some(pose);
-        }
-        let mut pose = self.copied_at::<Transform>(e, caller)?.affine();
+        let Some(mut pose) = self
+            .copied_at::<Transform>(e, caller)
+            .map(Transform::affine)
+        else {
+            return Ok(None);
+        };
         let mut at = e;
-        for _ in 0..self.len() {
+        let mut slow = e;
+        let (mut steps, mut limit) = (0usize, 1usize);
+        loop {
             let Some(parent) = self
                 .copied_at::<Parent>(at, caller)
                 .map(|p| p.0)
                 .filter(|p| self.contains(*p))
             else {
-                return Some(pose);
+                return Ok(Some(pose));
             };
-            if let Some(parent_pose) = self
-                .attachments
-                .and_then(|attachments| (attachments.pose)(self, parent, remaining - 1))
-            {
-                return Some(parent_pose * pose);
+            if parent == slow {
+                return Err(()); // A runtime Parent cycle has not yet been repaired by propagate.
+            }
+            if let Some(attachments) = self.attachments {
+                match (attachments.pose)(self, parent, visited) {
+                    crate::world::AttachmentPose::Pose(parent_pose) => {
+                        return Ok(Some(parent_pose * pose));
+                    }
+                    crate::world::AttachmentPose::Cycle => return Err(()),
+                    crate::world::AttachmentPose::None => {}
+                }
             }
             pose = self
                 .copied_at::<Transform>(parent, caller)
                 .map_or(Affine3A::IDENTITY, |t| t.affine())
                 * pose;
             at = parent;
+            steps += 1;
+            if steps == limit {
+                slow = at;
+                limit = limit.saturating_mul(2);
+                steps = 0;
+            }
         }
-        None // A runtime cycle has not yet been repaired by propagate.
     }
     /// Set a discontinuous local pose with a distinct interpolation start.
     /// For a landing followed by movement within one tick, `previous` is the
