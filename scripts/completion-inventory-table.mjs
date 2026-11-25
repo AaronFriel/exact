@@ -638,7 +638,8 @@ export const classifications = [
   group("presence storage", ["durable operation"], "app/account secret generation and backend queue", "durable",
     "runner/src/presence.rs Backend serializes secret operations by name/generation; module presence installation adopts its occupancy. This class applies to backend storage, not a retired unlock continuation.", [
     ["apple:host/apple/src/presence_secrets.rs", "exact_on_presence_keychain"],
-    ["runner:runner/src/presence.rs", "Backend::invalidated#generation:1 Backend::moved#generation:1 Backend::protect#generation:1 Backend::unprotect#generation:1 Backend::write#generation:1 Backend::write#generation:2"],
+    ["painted:host/painted/src/host.rs", "Host::install_presence"],
+    ["runner:runner/src/presence.rs", "Backend::invalidated#generation:1 Backend::moved#generation:1 Backend::preview_snapshot_entries Backend::protect#generation:1 Backend::unprotect#generation:1 Backend::write#generation:1 Backend::write#generation:2"],
     ["runner:runner/src/runner/seams.rs", "Runner::install_presence Runner::presence_list"],
   ]),
   group("presentation helpers", ["one-shot"], "synchronous calculation or retained presentation resource; no runner completion", "UI-owned",
@@ -1100,7 +1101,7 @@ export const classifications = [
   ]),
   group("presence storage", ["durable operation"], "app-scoped secret vault/backend and secret generation", "durable",
     "host/painted/src/presence_secrets.rs backend/on_keystore select the app vault; system_support.rs SecretSession seeds and remembers secret records. Stored secret state is separate from a session-owned presence check.", [
-    ["painted:host/painted/src/presence_secrets.rs", "backend on_keystore"],
+    ["painted:host/painted/src/presence_secrets.rs", "backend on_keystore snapshot"],
     ["painted:host/painted/src/secret_files.rs", "EncryptedFiles::new"],
     ["painted:host/painted/src/system_support.rs", "SecretSession::new SecretSession::remember SecretSession::seed"],
   ]),

@@ -1,6 +1,7 @@
 # Removing the last presence policy skips vault teardown, permanently orphaning locked Keychain items and blocking Watch sync for that secret
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Tore down stale locked items, index entries, and exact.presence records when the last presence policy is removed across Apple (linked and stripped builds) and painted hosts, unblocking plain use and Watch sync.
 **Systems:** host/apple (presence_secrets, store, watch_sync); host/painted (presence_secrets)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

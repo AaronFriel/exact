@@ -229,7 +229,7 @@ impl<D: DataSource> Presenter<D> {
                     ..exact_runner::time::Launch::NONE
                 },
                 || {
-                    Host::boot_with(
+                    Host::boot_candidate(
                         plan,
                         validation,
                         Box::new(Measurer(text.clone())),
@@ -541,7 +541,7 @@ impl<D: DataSource> Presenter<D> {
                 ..exact_runner::time::Launch::NONE
             },
             || {
-                Host::boot_with(
+                Host::boot_candidate(
                     &candidate.plan,
                     data,
                     Box::new(Measurer(text.clone())),
@@ -579,6 +579,7 @@ impl<D: DataSource> Presenter<D> {
         // The reader's next drawing blesses the generation now counted.
         self.blessed = false;
         let faults = self.host.runner().faults().clone();
+        host.install_presence();
         self.host = host;
         self.host.runner_mut().share_faults(&faults);
         // The old executor lets go of everything, then says which uploads had

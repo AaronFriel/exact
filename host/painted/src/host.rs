@@ -230,6 +230,25 @@ impl<D: DataSource> Host<D> {
         let plan = Plan::decode(plan_bytes).map_err(HostError::Plan)?;
         Self::boot_decoded(
             plan, data, measurer, width, height, carried, delivery, launch, region, None, None,
+            true,
+        )
+    }
+
+    /// Boot a candidate or validation host without reconciling or pumping the
+    /// live presence vault; committed callers follow with [`Host::install_presence`].
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn boot_candidate(
+        plan_bytes: &[u8],
+        data: D,
+        measurer: Box<dyn TextMeasurer>,
+        width: f32,
+        height: f32,
+        carried: Option<&Carried>,
+        delivery: Option<exact_runner::Delivery>,
+    ) -> Result<(Host<D>, Option<String>), HostError> {
+        let plan = Plan::decode(plan_bytes).map_err(HostError::Plan)?;
+        Self::boot_decoded(
+            plan, data, measurer, width, height, carried, delivery, "/", None, None, None, false,
         )
     }
 
@@ -248,6 +267,7 @@ impl<D: DataSource> Host<D> {
         region: Option<crate::content_region::ContentRegionRegistration>,
         font_sync: Option<crate::text::Shared>,
         mut boot_images: Option<(&mut crate::image::Images, f32)>,
+        commit_presence: bool,
     ) -> Result<(Host<D>, Option<String>), HostError> {
         // @ref LLP 1075.003.000 §3.3 — whether the plan marks nodes for a hatch.
         let hatched = plan.bindings.iter().any(|b| {
@@ -280,12 +300,14 @@ impl<D: DataSource> Host<D> {
         // A named drive's secrets, read before the runner takes the source.
         // A carried reload keeps its memory store and does not touch the files.
         let (mut store_snapshot, unread_kept) = store_read(data.app_id(), carried.is_some());
-        // Locked secrets' backend, reconciled before boot (LLP 1133.010 D4).
-        let presence = crate::presence_secrets::backend(data.app_id(), data.grants());
-        presence
-            .iter()
-            .filter(|_| carried.is_none())
-            .for_each(|p| store_snapshot.extend(p.snapshot.clone()));
+        // Read-only presence occupancy for a cold boot; reconciliation and
+        // pending moves wait for commit (`install_presence`).
+        if carried.is_none() {
+            store_snapshot.extend(crate::presence_secrets::snapshot(
+                data.app_id(),
+                data.grants(),
+            ));
+        }
         #[cfg(target_os = "macos")]
         let boot_trace = exact_ink::device::apple::Trace::new(c"boot runner through first commit");
         let secret_session =
@@ -316,9 +338,6 @@ impl<D: DataSource> Host<D> {
         #[cfg(any(windows, target_os = "macos"))]
         crate::app::boot_phase(c"runner-ready");
         runner.forget_unread_kept(&unread_kept);
-        if let Some(p) = presence {
-            runner.install_presence(p.backend, p.keystore);
-        }
         if let Some(action) = region.and_then(|r| r.activate) {
             runner.act(action, Vec::new()).map_err(HostError::Runner)?;
         }
@@ -435,7 +454,22 @@ impl<D: DataSource> Host<D> {
             error = error.or(host.set_intrinsics(reports));
         }
         host.present();
+        if commit_presence {
+            host.install_presence();
+        }
         Ok((host, error))
+    }
+
+    /// Reconcile or tear down the presence vault and install its backend once
+    /// this host commits (LLP 1133.010 D4).
+    pub(crate) fn install_presence(&mut self) {
+        let (app_id, grants) = {
+            let data = self.runner.data_ref();
+            (data.app_id().to_owned(), data.grants().to_owned())
+        };
+        if let Some(p) = crate::presence_secrets::backend(&app_id, &grants) {
+            self.runner.install_presence(p.backend, p.keystore);
+        }
     }
 
     /// Tell the runner what this binary knows about its delivery (LLP 1030

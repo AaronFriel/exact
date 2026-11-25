@@ -90,8 +90,11 @@ impl<D: DataSource> Host<D> {
                     )
                 }
                 Err(e) => {
-                    return self
-                        .geometry_refused(format!("viewport geometry: {e:?}"), Some(previous))
+                    return self.geometry_refused(
+                        Batch::new(),
+                        format!("viewport geometry: {e:?}"),
+                        Some(previous),
+                    )
                 }
                 Ok(None) => {}
             }
@@ -102,14 +105,20 @@ impl<D: DataSource> Host<D> {
         self.finish(batch, error)
     }
 
-    pub(super) fn geometry_refused(&mut self, mut error: String, previous: Option<Env>) -> String {
+    /// Restore a refused environment while keeping any operations already
+    /// committed into `batch` (whose state `self.mirror` has already observed).
+    pub(super) fn geometry_refused(
+        &mut self,
+        mut batch: Batch,
+        mut error: String,
+        previous: Option<Env>,
+    ) -> String {
         if let Some(env) = previous {
             let kernel = self.runner.kernel_mut();
             let _ = kernel.set_env(env.clone());
             let _ = kernel.set_segments(env.cols, env.rows, env.segments);
         }
         // Rebuild dictionaries after the runner restores a refused environment.
-        let mut batch = Batch::new();
         for id in self.preorder() {
             self.update(id, &mut batch);
         }
@@ -138,7 +147,8 @@ impl<D: DataSource> Host<D> {
             Ok(receipt) => receipt,
             Err(e) => {
                 return self.geometry_refused(
-                    error.unwrap_or_else(|| format!("viewport: {e:?}")),
+                    batch,
+                    join_error(error, format!("viewport: {e:?}")),
                     previous,
                 )
             }
@@ -296,8 +306,8 @@ impl<D: DataSource> Host<D> {
         let (blocked, owed) = self.blocks_into(blocks, placements, owners);
         let error = error.or(blocked);
         let changed = self.environment_into(env, segments, &mut batch);
-        if let Err(error) = changed {
-            return self.geometry_refused(error, Some(previous));
+        if let Err(env_error) = changed {
+            return self.geometry_refused(batch, join_error(error, env_error), Some(previous));
         }
         match size {
             Some((width, height)) => {
@@ -316,8 +326,11 @@ impl<D: DataSource> Host<D> {
                         )
                     }
                     Err(e) => {
-                        return self
-                            .geometry_refused(format!("viewport geometry: {e:?}"), Some(previous))
+                        return self.geometry_refused(
+                            batch,
+                            join_error(error, format!("viewport geometry: {e:?}")),
+                            Some(previous),
+                        )
                     }
                     Ok(None) => {}
                 }
@@ -386,8 +399,19 @@ impl<D: DataSource> Host<D> {
                 self.finish(batch, error)
             }
             Ok(None) => self.finish(batch, None),
-            Err(e) => self.geometry_refused(format!("segments: {e:?}"), None),
+            Err(e) => self.geometry_refused(Batch::new(), format!("segments: {e:?}"), None),
         }
+    }
+}
+
+fn join_error(prior: Option<String>, next: String) -> String {
+    match prior {
+        Some(mut prior) => {
+            prior.push_str("; ");
+            prior.push_str(&next);
+            prior
+        }
+        None => next,
     }
 }
 

@@ -1,6 +1,7 @@
 # resize_at and set_view_at discard committed timer batches in geometry_refused, permanently desynchronizing presenter state
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Validated candidate viewport in Host::resize_at before settling timers, passed the accumulated batch into Host::geometry_refused instead of discarding it, and joined prior and viewport errors.
 **Systems:** host/apple (resize, fold, mirror/batch synchronization)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

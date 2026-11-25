@@ -611,6 +611,7 @@ impl<D: DataSource> Presenter<D> {
             region,
             Some(text.clone()),
             (painted_boot && !assets.is_selected()).then_some((&mut images, scale)),
+            false,
         )?;
         // @ref LLP 1115.000 D10.3 — a hairline is one device pixel of this.
         let error = error.or(host.set_display_scale(f64::from(scale)));
@@ -640,6 +641,7 @@ impl<D: DataSource> Presenter<D> {
         // Initial selected layout and asset metadata/integrity accepted.
         // Decoded pixels and their natural dimensions arrive together later.
         // Only now may the app's queued requests reach its executor.
+        host.install_presence();
         let start_executor = services.start_executor;
         let executor = host.executor_with(start_executor);
         if let Some(note) = executor.note() {

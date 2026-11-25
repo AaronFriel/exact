@@ -1,6 +1,7 @@
 # prepare_plan and prepare_module reconcile and pump the live presence Keychain vault before commit, including during disposable validation passes
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Switched uncommitted cold prepares to a read-only presence snapshot and deferred vault reconciliation, teardown, and install_presence to commit on Apple and painted hosts.
 **Systems:** host/apple (abi preparation, presence_secrets, store); host/painted (delivery validation, reload)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

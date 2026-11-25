@@ -826,14 +826,12 @@ impl<D: DataSource> Bridge<D> {
                     host.log(&format!("{why}; every request is refused"));
                 }
                 host.runner_mut().forget_unread_kept(&unread_kept);
-                if let Some((backend, keystore)) = presence {
-                    host.runner_mut().install_presence(backend, keystore);
-                }
                 self.output = batch.as_bytes().to_vec();
                 self.prepared = Some(PreparedHost {
                     host,
                     batch,
                     bindings,
+                    presence,
                     hooks,
                     module: false,
                     let_go: false,
@@ -875,6 +873,11 @@ impl<D: DataSource> Bridge<D> {
         let Some(mut candidate) = self.prepared.take() else {
             return self.prepare_error("no prepared plan");
         };
+        self.install_presence(
+            &mut candidate.host,
+            candidate.bindings.as_ref(),
+            candidate.presence,
+        );
         candidate.host.commit_boot();
         if let Some(live) = &self.host {
             candidate

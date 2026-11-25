@@ -215,6 +215,8 @@ pub struct IoLinks {
     pub preloads: fn() -> Option<Box<dyn crate::launch_preloads::LaunchWork>>,
     /// Bind the app's grants: [`crate::store::endowed`].
     pub endow: fn(&str, &str, bool) -> crate::store::Endowed,
+    /// Reconcile or tear down the presence vault on commit: [`crate::store::reconcile_presence`].
+    pub presence: PresenceLink,
     /// Read the stores only on an explicitly requested refresh.
     pub snapshot: StoreSnapshot,
     /// Start the executor: [`crate::executor::start_io`].
@@ -249,6 +251,14 @@ pub type AppFileWrite = fn(
 pub type StoreSnapshot =
     fn(Option<&ibex2::host::Bindings>, &str) -> Result<Vec<(String, Vec<u8>)>, String>;
 
+/// How [`IoLinks`] reconciles or tears down the presence vault when a boot or
+/// reload commits (LLP 1133.010 D4).
+pub type PresenceLink = fn(
+    Option<&ibex2::host::Bindings>,
+    &str,
+    &str,
+) -> Option<(exact_runner::presence::Backend, Option<String>)>;
+
 /// How [`IoLinks`] starts the executor: over the bindings, for the grants,
 /// waking the presenter through the hook.
 pub type StartIo = fn(
@@ -262,6 +272,7 @@ impl IoLinks {
     pub const LINKED: IoLinks = IoLinks {
         preloads: crate::launch_preloads::linked,
         endow: crate::store::endowed::<true>,
+        presence: crate::store::reconcile_presence::<true>,
         snapshot: crate::store::snapshot_for,
         start: crate::executor::start_io,
         write_file: crate::host::canvas_capture::write,
@@ -640,6 +651,11 @@ impl<D: DataSource> Links<D> {
                     } else {
                         crate::store::endowed::<false>
                     },
+                    presence: if uses.has(Capability::Presence) {
+                        crate::store::reconcile_presence::<true>
+                    } else {
+                        crate::store::reconcile_presence::<false>
+                    },
                     ..IoLinks::LINKED
                 })
             } else {
@@ -754,7 +770,16 @@ mod tests {
             let io = Links::<Empty>::of(linked).io.unwrap();
             let endowed = (io.endow)(grants, "com.example.link.presence", false);
             assert!(endowed.unbound.is_none(), "{:?}", endowed.unbound);
-            assert_eq!(endowed.presence.is_some(), linked.has(Capability::Presence));
+            assert!(
+                endowed.presence.is_none(),
+                "uncommitted endowment must not reconcile the presence vault"
+            );
+            let presence = (io.presence)(
+                endowed.bindings.as_ref(),
+                grants,
+                "com.example.link.presence",
+            );
+            assert_eq!(presence.is_some(), linked.has(Capability::Presence));
         }
         crate::store::PLATFORM.with(|p| *p.borrow_mut() = None);
     }
