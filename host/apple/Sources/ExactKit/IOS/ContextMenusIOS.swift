@@ -85,8 +85,13 @@ final class ContextMenuHost: NSObject, UIContextMenuInteractionDelegate, UIEditM
         var hiddenInk: CALayer?
         /// Whether the preview was tapped, and whether its press navigated.
         var committed = false, navigated = false
+        /// Whether UIKit shows the menu: from its display until it starts to close.
+        var shown = false
+        /// The source's incarnation when pressed: the node pool lends its view on.
+        let incarnation: UInt64
         init(source: NodeView, popover: NodeView?, name: String, point: CGPoint, inlineID: UInt32? = nil, linkURL: URL? = nil) {
             self.source = source; self.popover = popover; self.name = name; self.point = point; self.inlineID = inlineID; self.linkURL = linkURL
+            incarnation = source.incarnation
         }
     }
     private(set) var open: Open?
@@ -1329,6 +1334,7 @@ final class ContextMenuHost: NSObject, UIContextMenuInteractionDelegate, UIEditM
         track(animator)
         focusOwner = (configuration, interaction)
         menus?.focus.setAside()
+        if let owner = open, owner.configuration === configuration { owner.shown = true }
         if let owner = open, let pop = owner.popover { owner.toggled = true; presenter?.popoverEvents.changed(pop, open: true) }
     }
 
@@ -1337,6 +1343,7 @@ final class ContextMenuHost: NSObject, UIContextMenuInteractionDelegate, UIEditM
         let focus: () -> Void = { [weak self] in self?.restoreFocus(for: configuration) }
         if let animator { animator.addCompletion(focus) } else { focus() }
         guard let owner = open, owner.configuration === configuration else { return }
+        owner.shown = false
         if let pop = owner.popover, owner.toggled { owner.toggled = false; presenter?.popoverEvents.changed(pop, open: false) }
         // A run's picture lands without its padding, which would otherwise show
         // until the completion, about a second after the menu starts closing
@@ -1397,5 +1404,17 @@ final class ContextMenuHost: NSObject, UIContextMenuInteractionDelegate, UIEditM
                 "preview": owner.preview.map { Int($0.id) as Any } ?? NSNull(),
                 "phase": owner.committed ? "commit" : inTransition ? "transition" : "open"]
     }
+
+    /// Whether UIKit shows a menu from `node`'s view (its own, or an inline
+    /// run's or a link's inside it), opened for this incarnation of it.
+    func shows(_ node: NodeView) -> Bool {
+        guard let owner = open, owner.shown, owner.source === node, owner.incarnation == node.incarnation else { return false }
+        return owner.interaction?.view === node
+    }
+}
+
+extension MenuHost {
+    /// Whether UIKit shows a context menu from `node`'s view now (LLP 1094.000 D4).
+    package func showsContextMenu(of node: NodeView) -> Bool { context.shows(node) }
 }
 #endif

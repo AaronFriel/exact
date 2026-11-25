@@ -5667,6 +5667,18 @@ finger, and `"automatic"`, the default, is the platform's. iOS and tvOS set it a
 `preferredMenuElementOrder`; the web, the Mac and the other hosts always show the rows
 as written, so they have nothing to apply.
 
+#### Ask Siri
+
+On iOS 27, where the new Siri is available, UIKit adds its Ask Siri item to a
+context menu that a draggable node's own view opens, and Siri takes what the drag
+carries ([dragging out](recipes/drag-out.md)). So `draggable` on the node that names
+`contextPopover` brings it; `draggable` on an image inside that node does not. UIKit
+also adds it to a menu with a row titled as the system's Copy, in the device's
+language; what Siri takes from such a menu is not known. No attribute adds the item or
+removes it (LLP 1094.000 D4). The simulator never offers it: a drive shows it there
+with `prefer ask-siri available` under `--touch platform`, which presents UIKit's own
+menus.
+
 #### Tips
 
 `tip="<title>"` on an element is a tip that teaches it (LLP 1035.006.000), with

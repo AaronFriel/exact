@@ -632,6 +632,89 @@ final class DragOutIOSTests: XCTestCase {
         next(p, 10, 20, draggable: true)
         XCTAssertNil(try sources(p).dragInteraction(interaction, previewForCancelling: item, withDefault: fallback), "the view is another row's now")
     }
+
+    /// iOS 27's UIKit adds Ask Siri to the context menu of a view that also
+    /// holds a drag interaction (D4): a draggable card's menu offers it, a
+    /// plain card's does not. The simulator offers it only under `prefer
+    /// ask-siri available` (D10), set here as a drive sets it.
+    func testADraggableNodesMenuOffersAskSiri() throws {
+        if ExactEnv.agentPaints { throw XCTSkip("the agent paints the popover (LLP 1021 D4)") }
+        guard #available(iOS 27.0, *) else { throw XCTSkip("Ask Siri in a menu is iOS 27's") }
+        guard let scene = hostedWindowScene() else { throw missing("scene", "UIKit presents a context menu, and reads Siri's availability, in a scene's window") }
+        let session = ExactApp.shared.makeSession(label: "ask-siri")
+        defer { session.destroy() }
+        window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 400, height: 800)
+        window.rootViewController = UIViewController()
+        let view = ExactView(session: session)
+        XCTAssertNil(session.boot(plan: try fixturePlan("FIELDLESS"), size: window.bounds.size).error)
+        view.frame = window.bounds
+        window.rootViewController?.view.addSubview(view)
+        window.makeKeyAndVisible()
+        view.layoutIfNeeded()
+        let p = session.presenter
+        p.apply(wireBatch([
+            ["op": "create", "id": 100, "kind": "view"],
+            ["op": "create", "id": 101, "kind": "button", "handlers": ["press"],
+             "props": ["contextPopover": "m", "draggable": "true", "dataTransferText": "Mount Fuji"]],
+            ["op": "create", "id": 102, "kind": "button", "handlers": ["press"], "props": ["contextPopover": "m"]],
+            ["op": "create", "id": 103, "kind": "view", "props": ["id": "m", "popover": "auto"]],
+            ["op": "create", "id": 104, "kind": "button", "handlers": ["press"]],
+            ["op": "create", "id": 105, "kind": "text", "props": ["text": "Pin"]],
+            ["op": "children", "id": 104, "ids": [105]], ["op": "children", "id": 103, "ids": [104]],
+            ["op": "children", "id": 100, "ids": [101, 102, 103]], ["op": "roots", "ids": [100]],
+            ["op": "frame", "id": 100, "x": 0.0, "y": 0.0, "w": 400.0, "h": 800.0],
+            ["op": "frame", "id": 101, "x": 20.0, "y": 100.0, "w": 200.0, "h": 120.0],
+            ["op": "frame", "id": 102, "x": 20.0, "y": 400.0, "w": 200.0, "h": 120.0],
+        ]))
+        let agent = Agent(session: session)
+        if let refusal = agent.askSiriRefusal { throw missing("UIKit", refusal) }
+        XCTAssertEqual((agent.prefer(["page": ["ask-siri": "available"]])["page"] as? [String: Any])?["ask-siri"] as? String, "available")
+        defer { _ = agent.prefer(["page": ["ask-siri": "unavailable"]]) }
+        func labels() -> [String] {
+            var found: [String] = []
+            func visit(_ v: UIView) {
+                if let label = v as? UILabel, !label.isHidden, let text = label.text { found.append(text) }
+                v.subviews.forEach(visit)
+            }
+            visit(window)
+            return found
+        }
+        /// What UIKit shows when `id`'s menu opens, read once the popover's row
+        /// shows, by when UIKit has added whatever it adds; and how many items
+        /// the card's drag gives, at the card's centre, where the press was, and
+        /// at a point off the card, while the menu shows and once it has closed.
+        /// The test's requests stand in for UIKit's.
+        func open(_ id: UInt32) throws -> (rows: [String], shown: [Int], lent: Int, closed: [Int]) {
+            let card = try XCTUnwrap(p.views[id])
+            let interaction = try XCTUnwrap(card.interactions.compactMap { $0 as? UIContextMenuInteraction }.first)
+            let present = NSSelectorFromString("_presentMenuAtLocation:")
+            guard interaction.responds(to: present) else { throw missing("UIKit", "this UIKit has no -[UIContextMenuInteraction _presentMenuAtLocation:]") }
+            typealias Present = @convention(c) (AnyObject, Selector, CGPoint) -> Void
+            unsafeBitCast(interaction.method(for: present), to: Present.self)(interaction, present, CGPoint(x: card.bounds.midX, y: card.bounds.midY))
+            waitFor("\(id)'s menu to show its row", facts: { "\(labels())" }) { labels().contains("Pin") }
+            let centre = card.convert(CGPoint(x: card.bounds.midX, y: card.bounds.midY), to: window)
+            func items(at point: CGPoint) throws -> Int {
+                guard let drag = drags(card).first else { return 0 }
+                return try sources(p).dragInteraction(drag, itemsForBeginning: PointDragSession(at: point, in: window)).count
+            }
+            let rows = labels(), shown = [try items(at: centre), try items(at: .zero)]
+            // The view lent on to another node, as the pool's rebind does: the menu is not that node's.
+            let incarnation = card.incarnation
+            card.incarnation = NodePool.issue()
+            let lent = try items(at: .zero)
+            card.incarnation = incarnation
+            interaction.dismissMenu()
+            waitFor("\(id)'s menu to close") { !p.menus.showsContextMenu(of: card) && !labels().contains("Pin") }
+            return (rows, shown, lent, [try items(at: centre), try items(at: .zero)])
+        }
+        let draggable = try open(101), plain = try open(102)
+        XCTAssertTrue(draggable.rows.contains("Ask Siri"), "the draggable card's menu")
+        XCTAssertEqual(draggable.shown, [1, 1], "while its menu shows, its drag gives the card's text, at the card under the menu and off it")
+        XCTAssertEqual(draggable.lent, 0, "not once its view is another node's")
+        XCTAssertEqual(draggable.closed, [1, 0], "and once the menu has closed, only to a touch on the card")
+        XCTAssertFalse(plain.rows.contains("Ask Siri"), "a plain card's menu")
+    }
 }
 
 /// A drag session at one point of `window`, which a test hands the lift.
