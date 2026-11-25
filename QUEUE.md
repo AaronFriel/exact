@@ -3,7 +3,6 @@
 - A clipped table row registered as the content-region owner loses the outer grid in its derived layout. Put a 160-point-wide relative `tr` at top 11.3 with a `td` content branch. On c718a4b67 its paragraph projects to y=14.3 where ordinary layout places it at 132.5.
 - `cargo clippy -p exact-kernel --lib -- -D warnings` fails on main at f007d990e. The public `distance` and `sides` fields in `kernel/src/kernel/owner_update.rs` lack documentation.
 - In a parallel `cargo test -p exact-kernel --test it` on the shared Mac, `svg_scene::bounds::a_use_box_stops_at_the_expansion_limit` took 6.93 s against its five-second bound. The same binary passed alone in 2.19 s and in the full suite with four test threads.
-- Restore the four JS package-view seam tests that fail in `views.js` at `constructed.add(element)`. Run `bun test ./host/web-js/module-seam.test.mjs -t "a view validates|preferences cancel the camera clip"` (#1608 integration, parent ac85d318a).
 - Consider optional types for direct imports of a development package from `app.json`. In a production build, `manifest.development.packages.swatch?.web?.label` checks against an empty package map. Packages read the selected key through `context.config` (#1608).
 
 - When Exact supports a new macOS version, repeat the modifier shortcut measurement in a guest with real key events and another app frontmost (#1413).
