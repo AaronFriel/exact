@@ -62,6 +62,7 @@ pub(in crate::runner) struct Declared {
     /// The shortcut installations each compiled read could have made. A
     /// native event can identify its registrar only where these agree.
     shortcut_sites: Vec<Option<Box<desktop::Registration>>>,
+    held_shortcuts: std::collections::BTreeSet<u64>,
     /// Each keyed list, by its state name, oldest first.
     lists: BTreeMap<String, Vec<Listed>>,
     /// Pending presentations in reverse deadline order. The oldest due entry is last.
@@ -904,7 +905,7 @@ impl<D: DataSource> Runner<D> {
         let row = self.module_row(&entry.source);
         if self.substitute(&row)["list"]["tap"]["keep"] == true {
             let entry = entry.clone();
-            return self.tap_registration(&row, &entry);
+            return self.tap_registration(&row, &entry, choice);
         }
         if self.substitute(&row)["list"]["tap"]["as"] == "wake" {
             return self.tap_wake(&state, at);

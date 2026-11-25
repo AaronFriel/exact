@@ -23,6 +23,7 @@ use super::super::super::provenance::Cause;
 use super::super::super::{DataSource, Runner};
 use super::super::{Json, ModulesRow};
 use super::Listed;
+use crate::CallOrigin;
 use serde_json::json;
 
 /// ARIA's modifier names (`aria-keyshortcuts`).
@@ -241,6 +242,11 @@ impl<D: DataSource> Runner<D> {
                 self.next_ticket - 1
             }
         };
+        if !registered {
+            if let Some(old) = &listed {
+                self.end_shortcut_hold(row, old);
+            }
+        }
         let previous = listed.as_ref().and_then(|e| e.registered_by);
         let registered_by = registered.then(|| previous.unwrap_or_else(|| cause.unowned()));
         if registered && previous.is_none() {
@@ -332,7 +338,10 @@ impl<D: DataSource> Runner<D> {
             .filter(|m| self.plan.str(m.extension) == extension)
         {
             let sub = self.substitute(row);
-            if sub["shortcut"] != "register" || sub["list"]["tap"]["event"] != event {
+            let tap = &sub["list"]["tap"];
+            if sub["shortcut"] != "register"
+                || (tap["event"] != event && tap["releaseEvent"] != event)
+            {
                 continue;
             }
             if let Some(state) = sub["list"]["state"].as_str() {
@@ -421,18 +430,28 @@ impl<D: DataSource> Runner<D> {
                 e.fields.get("id") == Some(&a["id"]) && e.fields.get("keys") == Some(&a["keys"])
             })
         };
-        let removed: Vec<u64> = self.with_list(&extension, &state, |entries| {
-            let removed: Vec<u64> = entries
-                .iter()
-                .filter(|e| gone(e))
-                .map(|e| e.reference)
-                .collect();
-            entries.retain(|e| !gone(e));
+        let removed = self.with_list(&extension, &state, |entries| {
+            let removed: Vec<_> = entries.extract_if(.., |entry| gone(entry)).collect();
             let changed = !removed.is_empty();
             (removed, changed)
         });
-        for reference in removed {
+        for entry in removed {
+            let reference = entry.reference;
+            self.end_shortcut_hold(row, &entry);
             self.log(format!("{}: unregistered @{reference}", self.key(row)));
+        }
+    }
+
+    fn end_shortcut_hold(&mut self, row: &ModulesRow, entry: &Listed) {
+        if self
+            .extensions
+            .declared
+            .held_shortcuts
+            .contains(&entry.reference)
+        {
+            if let Err(reason) = self.tap_registration(row, entry, Some("up")) {
+                self.log(reason);
+            }
         }
     }
 
@@ -443,6 +462,7 @@ impl<D: DataSource> Runner<D> {
         &mut self,
         row: &ModulesRow,
         entry: &Listed,
+        edge: Option<&str>,
     ) -> Result<String, String> {
         if entry.fields.get("registered") != Some(&json!(true)) {
             return Err(format!(
@@ -455,12 +475,49 @@ impl<D: DataSource> Runner<D> {
                     .unwrap_or("unknown")
             ));
         }
-        self.activate_entry(
-            row,
-            &Json::Object(entry.fields.clone()),
-            entry.reference,
-            entry.registered_by,
-        )
+        let tap = &self.substitute(row)["list"]["tap"];
+        let edge = edge.filter(|_| tap["releaseEvent"].is_string());
+        let up = tap["releaseEvent"].as_str().filter(|_| {
+            tap["releaseTargets"]
+                .as_array()
+                .is_some_and(|ts| ts.iter().any(|t| t == self.host_target()))
+        });
+        let reference = entry.reference;
+        let held = self.extensions.declared.held_shortcuts.contains(&reference);
+        match edge {
+            Some("down" | "up") if up.is_none() => {
+                return Err("separate shortcut edges are unsupported here".into())
+            }
+            None | Some("down") if held => return Err(format!("@{reference} is already held")),
+            Some("up") if !held => return Err(format!("@{reference} is not held")),
+            None | Some("down" | "up") => (),
+            Some(_) => return Err("a shortcut tap takes down, up, or no choice".into()),
+        }
+        let fields = Json::Object(entry.fields.clone());
+        let mut result = String::new();
+        if edge != Some("up") {
+            result = self.activate_entry(row, &fields, reference, entry.registered_by)?;
+            if edge == Some("down") {
+                self.extensions.declared.held_shortcuts.insert(reference);
+                return Ok(result);
+            }
+        }
+        if let Some(up) = up {
+            let extension = self.plan.str(row.extension).to_owned();
+            self.queue_module_event(
+                &extension,
+                up,
+                super::entry_args(tap, &fields),
+                CallOrigin::App,
+                false,
+                entry.registered_by,
+            )?;
+            if edge == Some("up") {
+                self.extensions.declared.held_shortcuts.remove(&reference);
+                return Ok(json!({"ref":reference,"event":up,"delivery":"substituted"}).to_string());
+            }
+        }
+        Ok(result)
     }
 }
 

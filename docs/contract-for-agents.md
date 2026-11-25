@@ -2620,6 +2620,17 @@ the copy lasts until the next process launch, including after the caller cancels
 WebMCP takes JSON arguments with no file handoff, and AppFunctions' door is not built;
 a file face naming either is refused at build time. The call's existing time bounds stay the same.
 
+### Global shortcuts
+
+Import `globalShortcut`, `globalshortcut`, and `globalshortcutup` from
+`@exact/global-shortcuts` and declare the `device.global-shortcuts` grant.
+Keep the registration resource in the view. Bind the root’s press and
+release handlers to separate actions. Each receives the shortcut ID and
+can take a second argument of type `GlobalShortcutEvent` with `id` and
+`keys`. Check `globalShortcutStatus().releaseEvents` for hold actions.
+macOS delivers both events. Windows supports presses only. Linux currently
+has no global shortcut registration.
+
 ## Views, layout, and interaction
 
 For an attachment of any type, use `input type="file"` with no `accept` (or

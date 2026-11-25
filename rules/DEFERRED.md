@@ -549,6 +549,10 @@ shortcut, Excord on Windows and macOS, Agents' New Conversation. Take:
 waived: no doing-list item is in this area, and the move retires the
 clone's Carbon registration. Still refused: helper daemons, jump lists
 (quick-actions'), Linux cells until a desktop host.
+**Expanded (Charlie, 2026-11-24, "recs ok"; LLP 1133.025 D3).** Float
+can fade its window on a chord and restore it on `globalshortcutup`.
+The ruling admits release from Carbon and the desktop Linux GlobalShortcuts portal.
+Windows registers presses only.
 **Expanded (Daehyeon Mun, 2026-10-28, waived; LLP 1021 §5.3.3; built
 2026-10-28):** File ▸ Close Window's chord, `-exact-menu-keys="close-window=…"`
 on the root, for the T3 Code clone, whose original leaves Close Window without

@@ -16,15 +16,17 @@ use std::os::windows::fs::symlink_dir;
 use std::path::{Path, PathBuf};
 
 const APP: &str = r#"use loginItemStatus, registerLoginItem, unregisterLoginItem, LoginItemStatus from "@exact/login-item"
-use globalShortcut, checkGlobalShortcut, globalshortcut, GlobalShortcut, GlobalShortcutCheck from "@exact/global-shortcuts"
+use globalShortcut, checkGlobalShortcut, globalShortcutStatus, globalshortcut, globalshortcutup, GlobalShortcut, GlobalShortcutCheck, GlobalShortcutStatus from "@exact/global-shortcuts"
 use requestAttention from "@exact/dock"
 
 component App
   state chord = "Meta+Shift+2"
+  state lifts = 0
   state pressed = 0
   state heard = ""
   resource login = loginItemStatus() as shape LoginItemStatus
   resource snap = globalShortcut(id="snap", keys=chord) as shape GlobalShortcut
+  resource capabilities = globalShortcutStatus() as shape GlobalShortcutStatus
   mutation registered as shape LoginItemStatus
   mutation checked as shape GlobalShortcutCheck
   action enable
@@ -40,10 +42,14 @@ component App
   action press(id: string)
     pressed = pressed + 1
     heard = id
+  action lift(id: string)
+    lifts = lifts + 1
   action open
     focus()
   view
-    column globalshortcut=press
+    column globalshortcut=press globalshortcutup=lift
+      text testId="releases" `${capabilities.releaseEvents}`
+      text testId="lifts" `${lifts}`
       text testId="pressed" `${pressed}`
       text testId="snap" `${snap.registered}`
       button testId="tray" -exact-menu="status" aria-label="Snap" popovertarget="traymenu"
@@ -256,12 +262,42 @@ fn a_shortcut_is_listed_while_read_and_pressed_by_its_ref() {
     assert_eq!(text(&r, "pressed"), "1", "{}", logs(&r));
     assert_eq!(shortcuts(&r).len(), 1, "a press keeps the registration");
 
+    assert_eq!(text(&r, "releases"), "true");
+    assert_eq!(text(&r, "lifts"), "1");
+    op(
+        &mut r,
+        json!({"op":"tap","ticket":reference,"choice":"down"}),
+    )
+    .unwrap();
+    assert_eq!(text(&r, "pressed"), "2");
+    assert_eq!(text(&r, "lifts"), "1");
+    op(&mut r, json!({"op":"tap","ticket":reference,"choice":"up"})).unwrap();
+    assert_eq!(text(&r, "pressed"), "2");
+    assert_eq!(text(&r, "lifts"), "2");
+    op(
+        &mut r,
+        json!({"op":"tap","ticket":reference,"choice":"down"}),
+    )
+    .unwrap();
     act(&mut r, "rebind");
     let listed = shortcuts(&r);
     assert_eq!(listed.len(), 1, "{listed:?}");
     assert_eq!(listed[0]["keys"], "Control+Alt+K");
     assert!(op(&mut r, json!({ "op": "tap", "ticket": reference })).is_err());
     assert!(logs(&r).contains("unregistered"), "{}", logs(&r));
+    assert_eq!(text(&r, "lifts"), "3");
+
+    let mut windows = boot(&app, "windows");
+    let reference = shortcuts(&windows)[0]["ref"].as_u64().unwrap();
+    assert!(op(
+        &mut windows,
+        json!({"op":"tap","ticket":reference,"choice":"down"})
+    )
+    .is_err());
+    op(&mut windows, json!({"op":"tap","ticket":reference})).unwrap();
+    assert_eq!(text(&windows, "pressed"), "1");
+    assert_eq!(text(&windows, "lifts"), "0");
+    assert_eq!(text(&windows, "releases"), "false");
 }
 
 #[test]
