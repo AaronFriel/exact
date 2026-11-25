@@ -1,6 +1,7 @@
 # @exact/local-network uncancelled resolve timers, unguarded platform callbacks, and Apple async-later/sync-release ordering abort active operations and leak browsers
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Use per-waiter cancellable resolve timeouts, guard platform browse and resolve callbacks on active instance identity and generation, and dispatch LocalNetworkModule.later synchronously with a destroyed guard on Apple.
 **Systems:** @exact/local-network (Apple iOS/macOS/tvOS, Android)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

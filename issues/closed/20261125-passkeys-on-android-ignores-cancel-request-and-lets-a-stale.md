@@ -1,6 +1,7 @@
 # Passkeys on Android ignores cancel(request) and lets a stale conditional-get callback hang a replacement conditional get
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Guard Android Passkeys conditional-get callbacks on current entry identity and implement cancel(request) across Android Passkeys, Web Passkeys, and Apple LocalAuth.
 **Systems:** @exact/passkeys (Android, Web), @exact/local-auth (Apple)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

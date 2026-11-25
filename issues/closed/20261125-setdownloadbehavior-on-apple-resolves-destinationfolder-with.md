@@ -1,6 +1,7 @@
 # setDownloadBehavior on Apple resolves destinationFolder with context.file, rejecting every existing directory while admitting regular files
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Resolve setDownloadBehavior's destinationFolder with context.directory while keeping context.file for captureScreenshot's path on Apple.
 **Systems:** @exact/browser-automation (Apple iOS/macOS)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -1,6 +1,7 @@
 # retireBackgroundFetch on Apple passes a directory to context.file, leaking retired transfer files and returning stale bodies on ID reuse
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Resolve retired transfer directories via context.directory (guarded on non-empty id) in BackgroundTransferModule.later so retired bodies and .placed markers are removed on Apple.
 **Systems:** @exact/background-transfer (Apple iOS/macOS)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

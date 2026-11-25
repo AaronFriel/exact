@@ -61,15 +61,18 @@ class PasskeysModule(context: ExtensionContext) : ExactExtension(context) {
         private val MARK = "exact-lock:".toByteArray()
     }
 
+    private class Conditional(val pending: PendingGetCredentialRequest, val request: Int?, val reply: (JSONObject) -> Unit)
+
     private val manager by lazy { CredentialManager.create(context.application) }
-    /** A pending conditional `get`: the fields it is set on, and how it ends. */
-    private var conditional: Pair<PendingGetCredentialRequest, (JSONObject) -> Unit>? = null
+    /** A pending conditional `get`: the fields it is set on, its request id, and how it ends. */
+    private var conditional: Conditional? = null
     private val fields = LinkedHashSet<EditText>()
     /** No `*ProviderConfigurationException` on the last call (D4's `android.providerConfigured`). */
     private var configured = true
     /** Each registration's RP ID by credential id, for `dispose` (D11). */
     private val made = HashMap<String, String>()
-    private val signals = mutableSetOf<CancellationSignal>()
+    /** Active modal ceremonies by their send's request id, cancelled when let go or on session end. */
+    private val signals = mutableMapOf<CancellationSignal, Int?>()
 
     override fun later(name: String, args: JSONObject, reply: (JSONObject) -> Unit) = later(name, args, null, Cause.none, reply)
 
@@ -90,9 +93,14 @@ class PasskeysModule(context: ExtensionContext) : ExactExtension(context) {
 
     override fun webauthnField(view: EditText, present: Boolean) {
         if (present) fields.add(view) else fields.remove(view)
-        val pending = conditional?.first
+        val pending = conditional?.pending
         if (Build.VERSION.SDK_INT >= 35 && pending != null) view.pendingGetCredentialRequest = if (present) pending else null
         if (Build.VERSION.SDK_INT >= 35) context.changed("passkeys.getClientCapabilities")
+    }
+
+    override fun cancel(request: Int) {
+        signals.filterValues { it == request }.keys.forEach { it.cancel() }
+        if (conditional?.request == request) endConditional("the call was let go")
     }
 
     override fun dispose(ids: List<String>) {
@@ -106,7 +114,7 @@ class PasskeysModule(context: ExtensionContext) : ExactExtension(context) {
     }
 
     override fun destroy(done: () -> Unit) {
-        signals.toList().forEach { it.cancel() }
+        signals.keys.toList().forEach { it.cancel() }
         endConditional("the session ended")
         done()
     }
@@ -150,7 +158,7 @@ class PasskeysModule(context: ExtensionContext) : ExactExtension(context) {
         val json = options.toString()
         val ours = CreatePublicKeyCredentialRequest(json)
         val request = createRequest?.invoke(ours)?.let { if (it.requestJson == json) it else { context.log("passkeys: the create hatch changed the options' JSON, which the module owns; not used (LLP 1133.011 D5)"); ours } } ?: ours
-        val signal = CancellationSignal().also { signals.add(it) }
+        val signal = CancellationSignal().also { signals[it] = cause.request }
         val activity = context.activity!!
         manager.createCredentialAsync(activity, request, signal, activity.mainExecutor, object : CredentialManagerCallback<CreateCredentialResponse, CreateCredentialException> {
             override fun onResult(result: CreateCredentialResponse) {
@@ -198,12 +206,18 @@ class PasskeysModule(context: ExtensionContext) : ExactExtension(context) {
             }
         }
         if (conditionally && Build.VERSION.SDK_INT >= 35) {
-            val pending = PendingGetCredentialRequest(request) { result -> endConditional(null); answered(result) }
-            conditional = pending to reply
+            lateinit var entry: Conditional
+            val pending = PendingGetCredentialRequest(request) { result ->
+                if (conditional !== entry) return@PendingGetCredentialRequest
+                endConditional(null)
+                answered(result)
+            }
+            entry = Conditional(pending, cause.request, reply)
+            conditional = entry
             fields.forEach { it.pendingGetCredentialRequest = pending }
             return
         }
-        val signal = CancellationSignal().also { signals.add(it) }
+        val signal = CancellationSignal().also { signals[it] = cause.request }
         val activity = context.activity!!
         manager.getCredentialAsync(activity, request, signal, activity.mainExecutor, object : CredentialManagerCallback<GetCredentialResponse, GetCredentialException> {
             override fun onResult(result: GetCredentialResponse) { signals.remove(signal); answered(result) }
@@ -217,10 +231,10 @@ class PasskeysModule(context: ExtensionContext) : ExactExtension(context) {
 
     /** The pending conditional `get` ends: with `AbortError` and [why], or answered already (null). */
     private fun endConditional(why: String?) {
-        val (_, reply) = conditional ?: return
+        val current = conditional ?: return
         conditional = null
         if (Build.VERSION.SDK_INT >= 35) fields.forEach { it.pendingGetCredentialRequest = null }
-        if (why != null) reply(JSONObject().put("error", "AbortError").put("message", why))
+        if (why != null) current.reply(JSONObject().put("error", "AbortError").put("message", why))
     }
 
     private fun signal(request: SignalCredentialStateRequest, args: JSONObject, reply: (JSONObject) -> Unit) {

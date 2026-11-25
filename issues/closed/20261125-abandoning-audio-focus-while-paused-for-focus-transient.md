@@ -1,6 +1,7 @@
 # Abandoning audio focus while paused for "focus-transient" permanently bricks Android TTS and leaks audio focus
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Clear focus-transient in Android SpeechSynthesis whenever audio focus is abandoned, and clear queue-bound pause reasons (requested, interrupted, focus, focus-transient, route) in cancelAll on Android and Apple while keeping background.
 **Systems:** @exact/speech-synthesis (Android, Apple)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

@@ -1,6 +1,7 @@
 # Mid-flight GPU device_lost() permanently hangs pending asset loads in both model-viewer and shader
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Re-request pending assets (deduplicated) in ModelViewer::device_lost and Shader::device_lost so in-flight loads resume after Module::lose_device clears outstanding requests.
 **Systems:** @exact/model-viewer, @exact/shader (Rust GPU surfaces — all platforms)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

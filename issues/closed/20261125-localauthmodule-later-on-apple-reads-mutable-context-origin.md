@@ -1,6 +1,7 @@
 # LocalAuthModule.later on Apple reads mutable context.origin inside DispatchQueue.main.async, letting interleaved calls overwrite the origin check
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Handle LocalAuthModule.later synchronously on the main thread so context.origin and context.request are captured at entry before any interleaved call can overwrite them.
 **Systems:** @exact/local-auth (Apple iOS/macOS)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25

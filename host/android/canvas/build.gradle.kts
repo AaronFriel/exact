@@ -48,6 +48,7 @@ android {
             "../../../packages/media-capture/android", "../../../packages/media-capture/test",
             "../../../packages/motion/android", "../../../packages/motion/test",
             "../../../packages/local-auth/android", "../../../packages/local-auth/test",
+            "../../../packages/local-network/android", "../../../packages/local-network/test",
             "../../../packages/passkeys/android", "../../../packages/passkeys/test",
             "../../../packages/notifications/android", "../../../packages/notifications/test",
             "../../../packages/payments/android", "../../../packages/payments/test",
@@ -55,6 +56,7 @@ android {
             "../../../packages/push/android", "../../../packages/push/test/android",
             "../../../packages/recording/android", "../../../packages/recording/test",
             "../../../packages/speech-recognition/android", "../../../packages/speech-recognition/test",
+            "../../../packages/speech-synthesis/android", "../../../packages/speech-synthesis/test",
         ))
         if (testTranslation) getByName("test").kotlin.directories.addAll(listOf(
             "../../../packages/translation/android", "../../../packages/translation/test",

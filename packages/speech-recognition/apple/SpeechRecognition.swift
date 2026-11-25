@@ -519,6 +519,7 @@ final class Recognition: ExactTrackConsumer {
 
 @available(iOS 26, macOS 26, *)
 final class AnalyzerEngine: RecognitionEngine {
+    private enum Lifecycle { case running, stopped, aborted }
     private weak var r: Recognition?
     private var analyzer: SpeechAnalyzer?
     private var input: AsyncStream<AnalyzerInput>.Continuation?
@@ -526,6 +527,7 @@ final class AnalyzerEngine: RecognitionEngine {
     private var ready = false, aborted = false
     /// A stop that came while the analyzer started acts once it has one.
     private var stopped = false
+    private var setup: Task<Void, Never>?
     private let queue = DispatchQueue(label: "exact.speech-recognition.convert")
 
     /// The transcriber `word` names for `locale`, or nil when it supports no equivalent locale.
@@ -549,50 +551,100 @@ final class AnalyzerEngine: RecognitionEngine {
         self.r = r
         let locale = SpeechRecognitionModule.locale(args), interim = r.interimResults, alternatives = r.maxAlternatives > 1
         let phrases = (args["phrases"] as? [[String: Any]] ?? []).compactMap { $0["phrase"] as? String }
-        Task { [weak self] in
+        setup = Task { [weak self] in
+            if await Self.haltIfEnded(self) { return }
             guard let module = await Self.module(word, locale, interim: interim, alternatives: alternatives) else {
-                return await self?.end("language-not-supported", "no \(word) for \(locale.identifier)")
+                if await Self.haltIfEnded(self) { return }
+                await self?.end("language-not-supported", "no \(word) for \(locale.identifier)")
+                return
             }
+            if await Self.haltIfEnded(self) { return }
             guard await AssetInventory.status(forModules: [module]) == .installed else {
-                return await self?.end("language-not-supported", "the \(locale.identifier) model is not installed (installSpeechRecognition)")
+                if await Self.haltIfEnded(self) { return }
+                await self?.end("language-not-supported", "the \(locale.identifier) model is not installed (installSpeechRecognition)")
+                return
             }
+            if await Self.haltIfEnded(self) { return }
             guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [module]) else {
-                return await self?.end("language-not-supported", "no analyzer takes audio for the \(locale.identifier) \(word) model here")
+                if await Self.haltIfEnded(self) { return }
+                await self?.end("language-not-supported", "no analyzer takes audio for the \(locale.identifier) \(word) model here")
+                return
             }
+            if await Self.haltIfEnded(self) { return }
             let context = AnalysisContext()
             if !phrases.isEmpty { context.contextualStrings[.general] = phrases }
             do {
                 let analyzer: SpeechAnalyzer
                 if let file {
                     analyzer = try await SpeechAnalyzer(inputAudioFile: AVAudioFile(forReading: file), modules: [module], analysisContext: context, finishAfterFile: true)
-                    await self?.hold(analyzer)
+                    switch await self?.hold(analyzer) {
+                    case true: break
+                    case false: return
+                    case nil:
+                        await analyzer.cancelAndFinishNow()
+                        return
+                    }
                 } else {
                     let (stream, input) = AsyncStream.makeStream(of: AnalyzerInput.self)
                     analyzer = SpeechAnalyzer(modules: [module])
                     try await analyzer.setContext(context)
+                    if await Self.haltIfEnded(self) {
+                        input.finish()
+                        await analyzer.cancelAndFinishNow()
+                        return
+                    }
                     try await analyzer.start(inputSequence: stream)
-                    await self?.began(analyzer, input, format)
+                    switch await self?.began(analyzer, input, format) {
+                    case true: break
+                    case false: return
+                    case nil:
+                        input.finish()
+                        await analyzer.cancelAndFinishNow()
+                        return
+                    }
                 }
                 try await self?.results(module)
                 await self?.end(nil)
             } catch {
-                await self?.end(self?.aborted == true ? "aborted" : "audio-capture", "\(error)")
+                await self?.failed(error)
             }
         }
     }
 
-    @MainActor private func hold(_ analyzer: SpeechAnalyzer) {
-        self.analyzer = analyzer
-        if aborted { return abort() }
-        if stopped { stop() }
+    private static func haltIfEnded(_ engine: AnalyzerEngine?) async -> Bool {
+        guard !Task.isCancelled, let state = await engine?.lifecycle() else { return true }
+        switch state {
+        case .running: return false
+        case .stopped:
+            await engine?.end(nil)
+            return true
+        case .aborted:
+            return true
+        }
     }
 
-    @MainActor private func began(_ analyzer: SpeechAnalyzer, _ input: AsyncStream<AnalyzerInput>.Continuation, _ format: AVAudioFormat) {
+    @MainActor private func lifecycle() -> Lifecycle {
+        aborted ? .aborted : stopped ? .stopped : .running
+    }
+
+    @MainActor private func failed(_ error: Error) {
+        end(aborted ? "aborted" : "audio-capture", "\(error)")
+    }
+
+    @MainActor private func hold(_ analyzer: SpeechAnalyzer) -> Bool {
+        self.analyzer = analyzer
+        if aborted { abort(); return false }
+        if stopped { stop() }
+        return true
+    }
+
+    @MainActor private func began(_ analyzer: SpeechAnalyzer, _ input: AsyncStream<AnalyzerInput>.Continuation, _ format: AVAudioFormat) -> Bool {
         self.analyzer = analyzer; self.input = input
         ready = true
-        if aborted { return abort() }
-        if stopped { return stop() }
+        if aborted { abort(); return false }
+        if stopped { stop(); return true }
         if let source { attach(source, format) } else { self.format = format }
+        return true
     }
     private var format: AVAudioFormat?
 
@@ -660,16 +712,19 @@ final class AnalyzerEngine: RecognitionEngine {
         stopped = true
         tap?.cancel(); tap = nil
         input?.finish()
-        let analyzer = analyzer
-        Task { try? await analyzer?.finalizeAndFinishThroughEndOfInput() }
+        if let analyzer {
+            Task { try? await analyzer.finalizeAndFinishThroughEndOfInput() }
+        }
     }
 
     func abort() {
         aborted = true
+        setup?.cancel(); setup = nil
         tap?.cancel(); tap = nil
         input?.finish()
-        let analyzer = analyzer
-        Task { await analyzer?.cancelAndFinishNow() }
+        if let analyzer {
+            Task { await analyzer.cancelAndFinishNow() }
+        }
     }
 }
 

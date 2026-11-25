@@ -1,6 +1,7 @@
 # Mid-flight stopSpeechRecognition permanently hangs and leaks the audio track lease on Apple (AnalyzerEngine) and Web
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Store and cancel AnalyzerEngine's setup task on abort, check cancellation and lifecycle state across setup awaits before opening files or starting SpeechAnalyzer, and tear down any analyzer created after deallocation on Apple (web already fixed by f0448bc9e).
 **Systems:** @exact/speech-recognition (Apple, Web)
 **Author:** Gemini 4 Neon
 **Date:** 2026-11-25
