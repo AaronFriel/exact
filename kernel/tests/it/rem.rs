@@ -155,22 +155,8 @@ fn scalar_viewport_lengths_resolve_on_resize_and_keep_inherited_fonts() {
 #[test]
 fn scalar_viewport_units_round_trip_and_follow_the_window_outside_a_smaller_sheet() {
     use exact_kernel::{wire, Env, ViewportUnit};
-    // A container unit is a box's length, not yet a scalar row's, which
-    // refuses each of them (LLP 1123 D16)
-    for unit in ViewportUnit::ALL.into_iter().filter(|u| u.is_container()) {
-        let text = format!("2{}", unit.name());
-        let mut style = exact_kernel::StyleProps::default();
-        assert!(
-            style
-                .set_dynamic(
-                    StyleId::FontSize,
-                    &exact_kernel::StyleValue::Text(text.as_str().into())
-                )
-                .is_err(),
-            "{text}"
-        );
-    }
-    for unit in ViewportUnit::ALL.into_iter().filter(|u| !u.is_container()) {
+    // With no query container, container units use the small viewport (LLP 1123 D16).
+    for unit in ViewportUnit::ALL {
         let text = format!("2{}", unit.name());
         let rows = [
             StyleId::FontSize,
@@ -206,8 +192,14 @@ fn scalar_viewport_units_round_trip_and_follow_the_window_outside_a_smaller_shee
             kernel
                 .compute_layout(1, Offer::definite(200.0, 300.0))
                 .unwrap();
-            let env = kernel.env();
-            let expected = f64::from(unit.basis(&env) / 100.0 * 2.0);
+            use ViewportUnit::*;
+            let basis = match unit {
+                Vw | Svw | Lvw | Dvw | Cqw | Cqi => w,
+                Vh | Svh | Lvh | Dvh | Cqh | Cqb => h,
+                Vmin | Cqmin => w.min(h),
+                Vmax | Cqmax => w.max(h),
+            };
+            let expected = f64::from(basis / 100.0 * 2.0);
             for id in rows {
                 let value = kernel.node(1).unwrap().style.get(id);
                 if id == StyleId::LineHeight {
