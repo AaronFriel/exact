@@ -95,17 +95,23 @@ pub(super) fn inline_use(
     let mut child_subst: BTreeMap<String, Expr> = BTreeMap::new();
     if c.props
         .iter()
-        .any(|p| !args.iter().any(|a| a.name == p.name))
+        .any(|p| p.default.is_none() && !args.iter().any(|a| a.name == p.name))
     {
         ctx.refuse("syntax-missing-prop", c.missing_props_message(args), *span);
     }
     for p in &c.props {
-        let Some(a) = args.iter().find(|a| a.name == p.name) else {
+        let found = args.iter().find(|a| a.name == p.name);
+        if found.is_none() && p.default.is_none() {
             child_subst.insert(p.name.clone(), absent(*span));
             continue;
         }
         // The argument is an expression in the parent's scope: substitute the parent's own substitutions first.
-        let value = subst_expr(&a.value, subst);
+        // A default is a literal: it names nothing for the scope to change.
+        let value = match (found, &p.default) {
+            (Some(a), _) => subst_expr(&a.value, subst),
+            (None, Some(d)) => d.clone(),
+            (None, None) => unreachable!(),
+        };
         // A `none` or `[]` in it is typed by the prop's declaration,
         // not left `?` for the child's reads to trip on.
         let value = match &p.ty {
@@ -208,6 +214,7 @@ pub(super) fn inline_use(
                 Param {
                     name: hidden.clone(),
                     ty: prop.ty.clone(),
+                    default: None,
                     span: prop.span,
                 },
                 child_subst[&prop.name].clone(),
@@ -256,6 +263,7 @@ pub(super) fn inline_use(
                 Param {
                     name: hidden,
                     ty: None,
+                    default: None,
                     span: prop.span,
                 },
                 arg,
@@ -372,14 +380,6 @@ pub(super) fn inline_use(
     }
     // Release per-use resolved expressions before expanding nested children.
     drop(derives);
-    if !children.is_empty() && !c.slot {
-        ctx.refuse(
-            "syntax-no-slot",
-            format!("`{name}` declares no `slot`, so nothing can be indented under it"),
-            children[0].span(),
-        );
-    }
-    // The fill is the use site's: inlined in this scope, at each
     let (named, children) = split_fills(children);
     for (fill, _) in &named {
         if !c.slots.contains(fill) {
@@ -390,10 +390,19 @@ pub(super) fn inline_use(
             );
         }
     }
+    if !children.is_empty() && !c.slot {
+        ctx.refuse(
+            "syntax-no-slot",
+            format!("`{name}` declares no `slot`, so nothing can be indented under it"),
+            children[0].span(),
+        );
+    }
+    // The fill is the use site's: inlined in this scope, at each
     // `children` node of the child's view that renders it.
     let fill = ((c.slot || !c.slots.is_empty()) && !ctx.discarded_slots.contains(name)).then(|| {
         Rc::new(Fill {
             nodes: children.clone(),
+            named: named.iter().cloned().collect(),
             subst: subst.map().clone(),
             value_only: subst.value_only.clone(),
             provides: ctx.provides.clone(),
@@ -402,7 +411,6 @@ pub(super) fn inline_use(
             path: ctx.path.clone(),
         })
     });
-            named: named.iter().cloned().collect(),
     // Rename only the view: declarations were lifted above.
     let renamed = rename_nodes(&c.view, &BTreeMap::new(), n, ctx.discarded_slots);
     let outer_fill = std::mem::replace(&mut ctx.fill, fill);
@@ -517,4 +525,27 @@ fn exceeds_site_budget(
         }
     }
     false
+}
+
+/// A use's body, split into its named fills (`slot "name"` and the nodes
+/// indented under it) and the nodes that fill the default slot.
+fn split_fills(body: &[Node]) -> (Vec<(String, Vec<Node>)>, Vec<Node>) {
+    let mut named = Vec::new();
+    let mut rest = Vec::new();
+    for node in body {
+        match node {
+            Node::Element {
+                tag,
+                positional,
+                attrs,
+                children,
+                ..
+            } if tag == "slot" && attrs.is_empty() && matches!(positional.as_slice(), [Expr::Str(..)]) => {
+                let Expr::Str(name, _) = &positional[0] else { unreachable!() };
+                named.push((name.clone(), children.clone()));
+            }
+            other => rest.push(other.clone()),
+        }
+    }
+    (named, rest)
 }

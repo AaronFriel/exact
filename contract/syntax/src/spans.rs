@@ -153,7 +153,7 @@ structs! {
     ResourceEach { item, list, key, span }
     Placeholder { source, args, span }
     MutationDecl { name, shape, mode, refreshes, then, span }
-    Param { name, ty, span }
+    Param { name, ty, default, span }
     Action { name, params, body, span }
     Task { name, kind, gate, key, timer, options, span }
     Attr { name, value, span, written }

@@ -1,0 +1,16 @@
+// Accept fixture: a prop's default. `name: type = literal` is what a use that
+// leaves the prop out passes; a use that names it passes its own.
+component App
+  view
+    column testId="root"
+      Chip(label="a")
+      Chip(label="b", tone="warn", count=3)
+
+component Chip
+  props
+    label: string
+    tone: string = "plain"
+    count: number = 0
+    note: option<string> = none
+  view
+    text `${label} ${tone} ${count}` testId=`chip-${label}`

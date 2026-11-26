@@ -295,7 +295,7 @@ a path; with none, the compiler writes it and its screen (a navigation root draw
 
 ```ebnf
 component     = "component" IDENT block(section) ;
-section       = "props" block(field)
+section       = "props" block(prop)
               | "inject" block(field)
               | "provide" block(provider)
               | "slot" [ STRING ] NL                 (* STRING names a slot; any number *)
@@ -308,6 +308,7 @@ members-block = "members" IDENT block(member) ;
 member        = "state" IDENT [ ":" type ] "=" expr [ "persist" ] NL
               | "derive" IDENT "=" expr NL
               | resource | mutation | action | task | sequence ;
+prop          = FIELD ":" type [ "=" literal ] NL ;   (* a default, never computed *)
 provider      = FIELD [ "=" expr ] NL ;
 resource      = "resource" IDENT "=" source-call
                 [ "for" IDENT "in" expr [ "key" "=" expr ] ]

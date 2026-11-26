@@ -495,7 +495,7 @@ impl Component {
         let missing = self
             .props
             .iter()
-            .filter(|prop| !args.iter().any(|arg| arg.name == prop.name))
+            .filter(|prop| prop.default.is_none() && !args.iter().any(|arg| arg.name == prop.name))
             .map(|prop| format!("`{}`", prop.name))
             .collect::<Vec<_>>()
             .join(", ");
@@ -624,6 +624,9 @@ pub struct Param {
     pub name: String,
     /// Type, when written (action parameters may omit it).
     pub ty: Option<TypeExpr>,
+    /// A prop's default, `name: type = literal`: what a use that leaves the
+    /// prop out passes. A literal (or `none`, or a list of literals) only.
+    pub default: Option<Expr>,
     /// Where.
     pub span: Span,
 }
@@ -890,6 +893,8 @@ pub enum Node {
     /// `children` — where a `slot` component's use puts the nodes indented
     /// under it (LLP 1017 P4b).
     Children {
+        /// The named slot it places (`children "name"`); `None` for the default one.
+        name: Option<String>,
         /// Where.
         span: Span,
     },

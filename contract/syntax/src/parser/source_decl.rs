@@ -20,6 +20,7 @@ impl Parser {
             params.push(Param {
                 name: pname,
                 ty: Some(ty),
+                default: None,
                 span: pspan,
             });
             if !self.eat_punct(",") {

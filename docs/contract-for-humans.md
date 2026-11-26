@@ -477,7 +477,10 @@ arguments, for fetching data. An estimate is a layout hint, not a data limit.
 ## Components, providers, and slots
 
 A component declares its public inputs under `props`. Every declared prop must be
-supplied exactly once, with a compatible type; props have no defaults. An action prop passes behavior
+supplied exactly once, with a compatible type, unless it declares a default:
+`tone: string = "plain"` is what a use that leaves `tone` out passes. A default is a
+literal (a number, string, boolean, `none` or a list of them) of the prop's type, so
+it names nothing a use site could change. An action prop passes behavior
 without giving a child access to its parent's state.
 
 ```contract

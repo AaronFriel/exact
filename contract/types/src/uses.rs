@@ -190,7 +190,26 @@ fn walk_use(
                 let target_c = &file.components[target];
                 let target_t = &types.components[target];
                 for (i, p) in target_c.props.iter().enumerate() {
-                    let Some(arg) = args.iter().find(|a| a.name == p.name) else {
+                    // A prop left out takes its default, checked against the
+                    // prop's type as an argument would be.
+                    let given = args.iter().find(|a| a.name == p.name);
+                    let (value, value_span) = match (given, &p.default) {
+                        (Some(a), _) => (Some(a), None),
+                        (None, Some(d)) => (None, Some(d)),
+                        (None, None) => (None, None),
+                    };
+                    if let (None, Some(d)) = (value, value_span) {
+                        let t = infer(d, scope, &types.shapes)?;
+                        if !checks::accepts_expr(&target_t.props[i], d, &t, scope, &types.shapes) {
+                            return err(
+                                "type-prop",
+                                format!("the default of `{}` expects `{}`, given `{t}`", p.name, target_t.props[i]),
+                                p.span,
+                            );
+                        }
+                        continue;
+                    }
+                    let Some(arg) = value else {
                         // At a use the root expands, a missing prop is expansion's refusal.
                         if !actions {
                             continue;

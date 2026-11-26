@@ -95,7 +95,19 @@ impl Parser {
                                 let (name, span) = p.ident()?;
                                 p.expect_punct(":")?;
                                 let ty = p.type_expr()?;
-                                // `disabled: bool = false`: the euxy port's default.
+                                // `disabled: bool = false`: a prop's default.
+                                let mut default = None;
+                                if w == "props" && p.at_punct("=") {
+                                    p.next();
+                                    let e = p.expr()?;
+                                    if !is_literal(&e) {
+                                        return p.err(
+                                            "syntax-prop-default",
+                                            format!("a prop's default is a literal: a number, string, boolean, `none` or a list of them; `{name}` cannot default to a computed value"),
+                                        );
+                                    }
+                                    default = Some(e);
+                                }
                                 if p.at_punct("=") {
                                     return p.err(
                                         "syntax-expected-newline",
@@ -109,6 +121,7 @@ impl Parser {
                                 Ok(Param {
                                     name,
                                     ty: Some(ty),
+                                    default,
                                     span,
                                 })
                             })?;
@@ -347,5 +360,16 @@ impl Parser {
             i += 1;
         }
         self.pos = i;
+    }
+}
+
+/// A literal a prop may default to: it names nothing, so the use site's scope
+/// cannot capture it.
+fn is_literal(e: &Expr) -> bool {
+    match e {
+        Expr::Number(..) | Expr::Str(..) | Expr::Bool(..) | Expr::None(..) => true,
+        Expr::Some(inner, _) => is_literal(inner),
+        Expr::List(items, _) => items.iter().all(is_literal),
+        _ => false,
     }
 }

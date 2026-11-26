@@ -83,6 +83,30 @@ fn named_slots_fill_their_own_places() {
 }
 
 #[test]
+fn a_prop_default_stands_for_an_argument_a_use_leaves_out() {
+    let r = boot("prop_default.contract");
+    let k = r.kernel();
+    let text_of = |id: &str| {
+        let node = k.node_by_key(k.find_by_test_id(id)[0]).unwrap();
+        node.props.iter().find_map(|(id, v)| match v {
+            PropValue::Str(s) if id.name() == "text" => Some(s.to_string()),
+            _ => None,
+        })
+    };
+    assert_eq!(text_of("chip-a").as_deref(), Some("a plain 0"));
+    assert_eq!(text_of("chip-b").as_deref(), Some("b warn 3"));
+    // A default is a literal of the prop's type; a prop without one is still required.
+    for (src, id) in [
+        ("component App\n  view\n    C()\ncomponent C\n  props\n    n: number = \"x\"\n  view\n    text \"c\"\n", "type-prop"),
+        ("component App\n  state k = 1\n  view\n    C()\ncomponent C\n  props\n    n: number = k\n  view\n    text \"c\"\n", "syntax-prop-default"),
+        ("component App\n  view\n    C()\ncomponent C\n  props\n    n: number\n    m: number = 1\n  view\n    text \"c\"\n", "syntax-missing-prop"),
+    ] {
+        let e = contract::compile(src).unwrap_err();
+        assert_eq!(e.id, id, "{e}");
+    }
+}
+
+#[test]
 fn a_provide_section_fills_an_inject_and_the_nearest_component_wins() {
     let r = boot("provide.contract");
     let k = r.kernel();

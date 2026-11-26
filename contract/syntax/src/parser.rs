@@ -696,6 +696,7 @@ impl Parser {
             params.push(Param {
                 name: pname,
                 ty: Some(ty),
+                default: None,
                 span: pspan,
             });
             if !self.eat_punct(",") {
@@ -937,6 +938,7 @@ impl Parser {
                 params.push(Param {
                     name: pname,
                     ty,
+                    default: None,
                     span: pspan,
                 });
                 if !self.eat_punct(",") {
@@ -1166,14 +1168,14 @@ impl Parser {
             }
             "children" => {
                 self.next();
-                self.newline()?;
-                Ok(Node::Children { name, span })
                 let name = if let TokenKind::Str(name) = self.peek_kind().clone() {
                     self.next();
                     Some(name)
                 } else {
                     None
                 };
+                self.newline()?;
+                Ok(Node::Children { name, span })
             }
             "if" => self.node_if(span),
             "for" => self.node_for(span),
