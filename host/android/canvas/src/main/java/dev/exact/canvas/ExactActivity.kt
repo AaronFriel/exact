@@ -958,6 +958,7 @@ open class ExactActivity : Activity() {
     /** This activity's reader lets go of the host: its hosted views and their surfaces go, and the owner stops
      * telling its view. Once: at [onDestroy], or sooner when the activity that replaces it is made first. */
     private fun release() {
+        Extensions.credentials.leaving(this)
         hatchReader?.takeIf { it.activity === this }?.activity = null
         requests.surfaces?.destroy()
         natives?.let { elements ->

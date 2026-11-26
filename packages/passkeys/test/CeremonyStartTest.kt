@@ -3,17 +3,21 @@ package exact.passkeys
 import android.app.Activity
 import android.os.CancellationSignal
 import android.widget.EditText
+import androidx.credentials.CreateCredentialResponse
 import androidx.credentials.CreatePublicKeyCredentialRequest
+import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.CredentialManager
+import androidx.credentials.CredentialManagerCallback
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.PublicKeyCredential
+import androidx.credentials.exceptions.CreateCredentialException
 import androidx.credentials.pendingGetCredentialRequest
-import java.lang.reflect.Proxy
-import dev.exact.canvas.Exact
 import dev.exact.canvas.Cause
+import dev.exact.canvas.Exact
 import dev.exact.canvas.ExtensionContext
 import dev.exact.canvas.ExtensionInvokeTest.Host
 import dev.exact.canvas.Extensions
+import java.lang.reflect.Proxy
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.*
@@ -138,6 +142,28 @@ class CeremonyStartTest {
         assertEquals(listOf("the call was let go"), replies.map { it.optString("message") })
     }
 
+    @Test @Config(sdk = [35]) fun registrationFinishingWithItsActivityIsDisposed() {
+        lateinit var callback: CredentialManagerCallback<CreateCredentialResponse, CreateCredentialException>
+        var disposals = 0
+        val manager = Proxy.newProxyInstance(CredentialManager::class.java.classLoader, arrayOf(CredentialManager::class.java)) { _, method, args ->
+            when (method.name) {
+                "createCredentialAsync" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    callback = args.filterIsInstance<CredentialManagerCallback<*, *>>().single() as
+                        CredentialManagerCallback<CreateCredentialResponse, CreateCredentialException>
+                }
+                "signalCredentialStateAsync" -> disposals++
+            }
+            null
+        } as CredentialManager
+        ReflectionHelpers.setField(module, "manager\$delegate", lazyOf(manager))
+        create(41)
+        activity.finish()
+        callback.onResult(CreatePublicKeyCredentialResponse(JSONObject().put("id", "Y3JlZA").toString()))
+        assertEquals(listOf("AbortError"), answers.map { it.optString("error") })
+        assertEquals(1, disposals)
+    }
+
     @Test fun cancelCancelsMatchingModalCancellationSignal() {
         val captured = ArrayList<CancellationSignal>()
         val fakeManager = Proxy.newProxyInstance(
@@ -153,17 +179,15 @@ class CeremonyStartTest {
 
         create(request = 41)
         module.later("get", JSONObject().put("publicKey", getOptions), null, Cause("app", request = 42)) { answers += it }
-        assertEquals(2, captured.size)
-        val (s41, s42) = captured
-        assertFalse(s41.isCanceled)
-        assertFalse(s42.isCanceled)
-
+        val s41 = captured.single()
         module.cancel(99)
         assertFalse(s41.isCanceled)
-        assertFalse(s42.isCanceled)
+        assertEquals(1, captured.size)
 
         module.cancel(41)
         assertTrue(s41.isCanceled)
+        assertEquals(2, captured.size)
+        val s42 = captured.last()
         assertFalse(s42.isCanceled)
 
         module.cancel(42)

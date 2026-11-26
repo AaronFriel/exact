@@ -1582,7 +1582,7 @@ reading. Nothing that isn't HTML is added by it.
   `credentials.get`, with `getIdentityCapabilities`, `preventSilentAccess`
   and the provider's button (`exact-sign-in-button`) from
   `@exact/sign-in`, for Sign in with Apple and Sign in with Google on the
-  web, iOS, macOS and Android, Apple on Android `later`. The provider's ID
+  web, iOS, macOS and Android, Apple on Android `later`. Android serves standalone Google requests; combining one with a passkey remains owed. The provider's ID
   token reaches data code alone, and the app's server verifies it; on the
   web each provider's page opens in a popup through the host's auth
   session and answers the app's server, and no provider's script runs in

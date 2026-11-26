@@ -4120,6 +4120,18 @@ recreation and expires after ten minutes, including device sleep, with 499. A la
 delivered while no activity is attached cancels with 499. A sign-in
 interrupted by process death must be started again.
 
+### Provider sign-in
+
+| Host | Apple | Google |
+| --- | --- | --- |
+| Web | Authorization popup | Authorization popup |
+| iOS and macOS | System sheet, alone or with a passkey, with a provisioned app | Unavailable |
+| Android | Unavailable | Standalone Credential Manager button and bottom sheet with Google Play services |
+
+Read `getIdentityCapabilities()` before showing a provider button. For
+the Android request options and sign-out behavior, see the
+[sign-in package](../packages/sign-in/README.md).
+
 ### Notifications
 
 `@exact/notifications` (LLP 1133.004) posts local notifications, hears their

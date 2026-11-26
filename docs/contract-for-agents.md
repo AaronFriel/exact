@@ -2139,8 +2139,10 @@ A newer credential ceremony ends a pending passive request with `AbortError`.
 Other credential sheets wait in session order, across passkeys and sign-in.
 Active identity requests and `silent` or `conditional` mediation cannot share
 the sheet. Google on Apple and `getCredentialState` remain unimplemented.
-Native capabilities report Google unavailable; use `@exact/oauth` through
-the system browser for Google.
+On Apple, use `@exact/oauth` through the system browser for Google.
+On Android, Credential Manager offers Google both actively and passively
+when Play services is enabled. A Google request runs alone.
+See the [Android sign-in options](../packages/sign-in/README.md).
 
 ### Convex live queries
 
