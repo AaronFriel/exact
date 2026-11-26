@@ -82,7 +82,11 @@ function everyRole() {
     refresh();
   }).finally(() => inflight.n--);
 }
-const STYLE = '@property --exact-tint{syntax:"<color>";inherits:false;initial-value:#000}:where(img[data-symbol-path]){--exact-tint:currentcolor}img[data-symbol-path]{background-color:var(--exact-tint)!important;mask-image:var(--exact-symbol-mask);mask-repeat:no-repeat;mask-position:var(--exact-symbol-position,center);mask-size:var(--exact-symbol-fit,contain);mask-origin:content-box;mask-clip:content-box}';
+// In forced colours the mask takes the parent's used foreground. Explicit inheritance
+// lets preserve-parent-color use that foreground while keeping the mask's background paint.
+// https://www.w3.org/TR/css-color-adjust-1/#forced-color-adjust-prop
+const STYLE = '@property --exact-tint{syntax:"<color>";inherits:false;initial-value:#000}:where(img[data-symbol-path]){--exact-tint:currentcolor}img[data-symbol-path]{background-color:var(--exact-tint)!important;mask-image:var(--exact-symbol-mask);mask-repeat:no-repeat;mask-position:var(--exact-symbol-position,center);mask-size:var(--exact-symbol-fit,contain);mask-origin:content-box;mask-clip:content-box}' +
+  '@media (forced-colors:active){img[data-symbol-path]{color:inherit!important;forced-color-adjust:preserve-parent-color;background-color:currentColor!important}}';
 /** `table`: role → [path, filled], for sources a binding names. */
 export function symbols(table) {
   Table = table;
@@ -116,6 +120,7 @@ export function symbols(table) {
     // listener, so observe its published marker rather than repeat its rule.
     addEventListener("resize", schedule);
     for (const query of ["(prefers-color-scheme: dark)", "(prefers-contrast: more)"]) matchMedia(query).addEventListener("change", schedule);
+    matchMedia("(forced-colors: active)").addEventListener("change", event => { if (!event.matches) schedule(); });
     new MutationObserver(schedule).observe(document.getElementById("exact-root"), {
       attributes: true, subtree: true, attributeFilter: ["data-exact-sidebar"],
     });

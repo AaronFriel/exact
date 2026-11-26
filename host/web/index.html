@@ -267,7 +267,9 @@
   #exact-root [data-exact-tab-navigation="hidden"], #exact-root :is([data-exact-tab-navigation="bar"], [data-exact-tab-navigation="bar"] > :where([data-exact-list-item])) > footer { display: none !important; }
   /* A tab's symbol is in its ink as the page lays it out now (the runtimes copy the title's at a commit, and a resize is none). */
   #exact-root :is([role="tablist"], [role="tablist"] > :where([data-exact-list-item])) > button[role="tab"][aria-controls] > img { color: inherit !important; }
-  #exact-root :is([role="tablist"][data-exact-sidebar-tabs], [role="tablist"][data-exact-sidebar-tabs] > :where([data-exact-list-item])) > button[role="tab"][aria-controls] > img { color: var(--exact-accent, AccentColor) !important; }
+  @media not (forced-colors: active) {
+    #exact-root :is([role="tablist"][data-exact-sidebar-tabs], [role="tablist"][data-exact-sidebar-tabs] > :where([data-exact-list-item])) > button[role="tab"][aria-controls] > img { color: var(--exact-accent, AccentColor) !important; }
+  }
   #exact-root [data-exact-split="list"] { inset-inline-end: auto !important; box-sizing: border-box !important; width: var(--exact-split, 320px) !important; }
   #exact-root [data-exact-split="detail"] { inset-inline-start: var(--exact-split-detail, var(--exact-split, 320px)) !important; }
   /* LLP 1116.006 D2: a split showing no detail fills the detail pane with one quiet line, centred, in the secondary
