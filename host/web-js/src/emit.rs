@@ -1171,7 +1171,8 @@ impl Em<'_> {
                 continue;
             }
             if b.kind == BindingKind::Prop
-                && (b.id == PropId::StatusBarStyle as u16
+                && (b.id == PropId::AppleMagnification as u16
+                    || b.id == PropId::StatusBarStyle as u16
                     || b.id == PropId::StatusBarAnimation as u16
                     || b.id == PropId::SystemBarsHidden as u16
                     || b.id == PropId::GlassInteractive as u16

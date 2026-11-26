@@ -1007,11 +1007,11 @@ pub fn props_of(node: &NodeFacts<'_>) -> SortedMap<String, String> {
             PropId::SeekforwardOffset => "seekforwardOffset",
 
             PropId::Sandbox => "sandbox",
-            // @ref LLP 1020.002 D1, §9 — not honoured on the web. The glue
-            // keeps `partition` on the element for the agent's tree, never as a
-            // DOM attribute; the Apple words do not reach the page.
+            // The agent reads the partition from the element. Apple words stay off the DOM
+            // (@ref LLP 1020.002 D1, §9).
             PropId::Partition => "partition",
             PropId::AppleAllowsBackForwardNavigationGestures
+            | PropId::AppleMagnification
             | PropId::AppleAllowsMagnification
             | PropId::AppleInactiveSchedulingPolicy => continue,
             PropId::SemanticTag => continue,

@@ -766,13 +766,13 @@ pub fn attr(name: &str) -> Option<AttrTarget> {
         "lang" => AttrTarget::Prop(p("lang")),
         "src" => AttrTarget::Prop(p("src")),
         "sandbox" => AttrTarget::Prop(p("sandbox")),
-        // @ref LLP 1020.002 D1, §9 — a top-level guest's own storage, and
-        // `WKWebView`'s words under the platform's key (`frames.rs`).
+        // A top-level guest’s storage and WebKit options (@ref LLP 1020.002 D1, §9).
         "partition" => AttrTarget::Prop(p("partition")),
         "apple.allowsBackForwardNavigationGestures" => {
             AttrTarget::Prop(p("appleAllowsBackForwardNavigationGestures"))
         }
         "apple.allowsMagnification" => AttrTarget::Prop(p("appleAllowsMagnification")),
+        "apple.magnification" => AttrTarget::Prop(p("appleMagnification")),
         "apple.inactiveSchedulingPolicy" => AttrTarget::Prop(p("appleInactiveSchedulingPolicy")),
         // The Popover API, by its own names (LLP 1021 D1): a container with `popover` is
         // hidden until its invoker — a `button` whose `popovertarget` names the container's

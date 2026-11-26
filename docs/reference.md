@@ -2731,20 +2731,69 @@ or `open({host, seed: 42, locale: "fr-CA", timeZone: "America/Toronto", epoch: "
 a test file writes them as launch lines (`epoch "2026-09-21T14:13:20Z"`, `time-zone "America/Toronto"`,
 [authored tests](contract-grammar.md#authored-tests)), which override the flags.
 
-On macOS, `scale` enlarges the pixels of an `iframe` after WebKit lays out its guest.
-Line breaks stay fixed, but enlarged text can look soft. Size the containing box to
-reserve space for the transformed frame.
+<a id="mac-iframe-magnification"></a>
+
+On macOS, `scale` enlarges an `iframe` after WebKit lays out the guest. Use it to
+keep line breaks during a transform. Size the parent to reserve the space. A
+composited layer grows soft. In a window with 2× backing scale, the inner edge of
+a fixed outline had two intermediate pixels at 2× enlargement and four at 4×.
 
 ```text
 box width=(320 * z) height=(200 * z) overflow="hidden"
   iframe "https://example.com/" width=320 height=200 scale=z transform-origin="0% 0%" border="none"
 ```
 
-For sharp text, `iframe "https://example.com/" width=320 height=200 zoom=z` enlarges
-the frame's own lengths and tells WebKit to render the page at that zoom. Line breaks
-can change even when the guest still reports a 320 × 200 CSS pixel viewport. On macOS,
-the time of the first displayed frame at the new size or zoom remains unknown to
-Exact. A WebKit snapshot completes when its image is ready, even in a hidden window.
+Use `iframe "https://example.com/" width=320 height=200 zoom=z` for sharp page zoom.
+The frame's own lengths grow by `z`. In a 320*z* × 200*z* point box on macOS 27.0.1,
+the layout viewport reported 320 CSS px at 1×, 2×, 2.74× and 4×. The outline had a
+one-device-pixel edge at every factor. WebKit lays text out again. A fluid paragraph
+took four lines at 1× and 2×, with a different last word on the first line at 2×.
+It took three lines at 2.74× and 4×. In the reporter's card the first line ended
+at “from” at 1× and “127.0.0.1.” at 2.74×. [Reproduction](https://github.com/expo/exact/issues/1276)
+
+Use `apple.magnification=z` for a sharp view of a fixed-width page, or to inspect
+detail in a WebKit-backed frame. It applies WebKit's pinch scale from the top left.
+PDFKit handles local PDFs separately. A sandboxed remote frame keeps its sandbox
+wrapper, and magnification applies to that wrapper. A directly loaded page
+stays top-level and lays out at the width of the box. At 1×, 2× and 4×, the
+layout viewport of a 320*z*-point box was 320, 640 and 1280 CSS px wide.
+The visual viewport stayed 320 CSS px wide. The fluid paragraph took four, two
+and one lines. The guest can read `visualViewport.scale`.
+
+To keep a page's 1× line breaks and draw its composited layers sharply, load an
+app-owned wrapper. The child below always lays out at 1440 × 900 CSS px.
+
+```text
+iframe "https://example.com/wrapper.html" width=(1440 * z) height=(900 * z) apple.magnification=z border="none"
+```
+
+```html
+<!doctype html>
+<style>
+  html, body { margin: 0; overflow: hidden; scrollbar-width: none }
+  iframe { display: block; width: 1440px; height: 900px; border: 0 }
+</style>
+<iframe src="/page.html"></iframe>
+<script>addEventListener("scroll", () => scrollTo(0, 0))</script>
+```
+
+The wrapper hides its own legacy scrollbars and returns to the origin if focusing
+content scrolls it. The child can see `window !== window.top` and must allow
+framing. In a Mac window the child kept all four lines and their endings at 1×,
+2× and 4×. The fixed outline went from solid to white in one device pixel at 2×
+and 4×. The reporter measured a ceiling of 8192 device pixels
+across one composited layer. On a 2× display a 1440 CSS-pixel-wide layer reaches
+that ceiling near 2.84× enlargement. [Canvas measurements](https://github.com/expo/exact/issues/1763)
+
+The Mac reapplies the authored factor after each main-frame load (including navigation
+and reload), each resize and each change of value. If `apple.allowsMagnification=true`,
+the person's pinch lasts until one of those events. Removing the value restores 1.
+The accepted range is 0.001 through 256 inclusive. A bad literal fails to build.
+A bad binding logs the refusal and leaves the view's last accepted factor in force.
+iOS and other hosts ignore the word.
+
+On macOS the first displayed frame after a resize or zoom remains unknown to Exact.
+A WebKit snapshot completes when its image is ready, even in a hidden window.
 [Apple’s snapshot API](https://developer.apple.com/documentation/webkit/wksnapshotconfiguration/afterscreenupdates)
 
 On the web (same-origin frames), macOS and iOS, `tap live at 40 80` presses

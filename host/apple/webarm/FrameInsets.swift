@@ -1,8 +1,44 @@
-// How much of a frame's guest lies under its owner's bars and band, and the range that moves
-// through (@ref LLP 1123 D15), as WebKit takes them on iOS.
+// WebKit's viewport insets (@ref LLP 1123 D15) and Mac pinch scale (@ref LLP 1020.002 §9).
 import WebKit
 
-#if os(iOS)
+#if os(macOS)
+import AppKit
+
+extension ExactWebView {
+    func pinInsets() {
+        func walk(_ v: NSView) {
+            if let s = v as? NSScrollView {
+                if s.automaticallyAdjustsContentInsets { s.automaticallyAdjustsContentInsets = false }
+                if s.contentInsets.top != 0 || s.contentInsets.left != 0 || s.contentInsets.bottom != 0 || s.contentInsets.right != 0 {
+                    s.contentInsets = NSEdgeInsetsZero
+                }
+            }
+            v.subviews.forEach(walk)
+        }
+        walk(self)
+    }
+
+    func configureMagnification(_ word: String?, id: UInt32) {
+        guard word != magnificationWord else { return }
+        magnificationWord = word
+        if let word {
+            guard let factor = Double(word), (0.001...256).contains(factor) else {
+                FileHandle.standardError.write(Data("exact: iframe \(id): apple.magnification needs a finite number from 0.001 through 256, got \(word)\n".utf8))
+                return
+            }
+            authoredMagnification = CGFloat(factor)
+            restoreMagnification()
+        } else if authoredMagnification != nil {
+            authoredMagnification = nil
+            setMagnification(1, centeredAt: .zero)
+        }
+    }
+
+    func restoreMagnification() {
+        if let authoredMagnification { setMagnification(authoredMagnification, centeredAt: .zero) }
+    }
+}
+#elseif os(iOS)
 import UIKit
 
 extension WebArm {

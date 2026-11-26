@@ -76,17 +76,12 @@ final class ExactWebView: WKWebView {
         super.layout()
         pinInsets()
     }
-    func pinInsets() {
-        func walk(_ v: NSView) {
-            if let s = v as? NSScrollView {
-                if s.automaticallyAdjustsContentInsets { s.automaticallyAdjustsContentInsets = false }
-                if s.contentInsets.top != 0 || s.contentInsets.left != 0 || s.contentInsets.bottom != 0 || s.contentInsets.right != 0 {
-                    s.contentInsets = NSEdgeInsetsZero
-                }
-            }
-            v.subviews.forEach(walk)
-        }
-        walk(self)
+    var magnificationWord: String?
+    var authoredMagnification: CGFloat?
+    override func setFrameSize(_ newSize: NSSize) {
+        let previous = frame.size
+        super.setFrameSize(newSize)
+        if frame.size != previous { restoreMagnification() }
     }
 }
 #else
@@ -548,6 +543,7 @@ final class WebArm: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         applyInsets(to: web, said: said)
         #endif
         #if os(macOS)
+        (web as? ExactWebView)?.configureMagnification(options["magnification"] as? String, id: id)
         if said("allowsMagnification") { web.allowsMagnification = options["allowsMagnification"] as? Bool ?? false }
         #endif
         // Never on the template's shared preferences: a policy said after the
@@ -1236,6 +1232,9 @@ final class WebArm: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         serving = false
         recovering = false
+        #if os(macOS)
+        (webView as? ExactWebView)?.restoreMagnification()
+        #endif
         guard direct, !invalidated else { return }
         if isBlank(navigation) { blank = nil; return }
         // A direct guest's document loaded: the iframe's `load`.
@@ -1411,7 +1410,7 @@ private func json(_ bytes: UnsafePointer<UInt8>?, _ length: UInt32) -> [String: 
 }
 
 /// `{partition, agent, zoom, allowsBackForwardNavigationGestures,
-/// allowsMagnification, inactiveSchedulingPolicy}`: before the first
+/// allowsMagnification, magnification, inactiveSchedulingPolicy}`: before the first
 /// `exact_web_platform_view`, and again when any changes (a new partition
 /// makes a new web view, which that call then returns).
 @_cdecl("exact_web_configure")

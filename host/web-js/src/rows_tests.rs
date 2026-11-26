@@ -54,6 +54,15 @@ fn data_names_added_by_attribute_and_canvas_writers_are_reserved() {
 }
 
 #[test]
+fn the_page_ignores_literal_and_bound_mac_magnification() {
+    let source = "component App\n  state z = 2\n  view\n    column\n      iframe apple.magnification=z\n      iframe apple.magnification=4\n";
+    let js = crate::emit::emit(&contract::compile(source).unwrap(), false, false)
+        .unwrap()
+        .js;
+    assert!(!js.contains("appleMagnification"), "{js}");
+}
+
+#[test]
 fn a_literal_data_frame_is_shown_by_its_sandbox() {
     // A literal opaque sandbox decides here; a bound one, in rt.js `P`,
     // which is handed the source (no attribute until then); a

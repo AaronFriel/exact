@@ -834,7 +834,12 @@ pub(super) fn props_for(node: &NodeRef<'_>) -> exact_kernel::SortedMap<&'static 
             PropValue::Str(s) => s.to_string(),
             PropValue::Bool(b) => b.to_string(),
             PropValue::Int(i) => i.to_string(),
-            PropValue::Float(f) if matches!(id, PropId::Datetime | PropId::Start | PropId::End) => {
+            PropValue::Float(f)
+                if matches!(
+                    id,
+                    PropId::Datetime | PropId::Start | PropId::End | PropId::AppleMagnification
+                ) =>
+            {
                 f.to_string()
             }
             PropValue::Float(f) => style::num(*f as f32),

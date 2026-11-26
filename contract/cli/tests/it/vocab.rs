@@ -503,6 +503,7 @@ fn contextual_attributes_are_refused_elsewhere() {
             "view",
             "apple.allowsMagnification=true",
         ),
+        ("apple.magnification", "view", "apple.magnification=2"),
         (
             "apple.inactiveSchedulingPolicy",
             "view",

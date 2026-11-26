@@ -1272,6 +1272,10 @@ reading. Nothing that isn't HTML is added by it.
   a permission broker, author-facing `srcdoc`, a bridge in a partitioned page's
   world, a picture of any element but an `iframe`, cookie import, and LLP
   1020.002 §13's other uses.
+- **Mac iframe magnification (panel, 2026-11-25, AS1; AR4's promise of a 1x layout withdrawn after measurement).**
+  The design canvas sets WebKit's pinch scale with `apple.magnification` (LLP 1020.002 §9).
+  A directly loaded guest lays out at the box's width. The app can preserve an
+  embeddable page's layout with a fixed-size child frame in its own wrapper.
 - **Expanded (Charlie, 2026-11-24, "recs ok"; LLP 1020.002 D9):** script
   results carry the document's realm and host-supplied origin. An evaluation
   can target that realm. The execution world checks its document token before

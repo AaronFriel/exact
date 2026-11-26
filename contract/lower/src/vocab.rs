@@ -205,6 +205,7 @@ pub const CONTEXTUAL: &[(&str, &str)] = &[
     ("userpromptopened", "`iframe`"),
     ("apple.allowsBackForwardNavigationGestures", "`iframe`"),
     ("apple.allowsMagnification", "`iframe`"),
+    ("apple.magnification", "`iframe`"),
     ("apple.inactiveSchedulingPolicy", "`iframe`"),
 ];
 

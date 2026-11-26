@@ -1719,6 +1719,11 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   XML file comes as `application/octet-stream`: read its bytes to show it. Android
   gives no files: its page sees the paths. (LLP 1020.001 D7, 2026-10-29.)
 
+- **A magnified Mac iframe still lays out at its box's width.** For a sharp canvas
+  preview with the original line breaks, load your own wrapper with a fixed-size
+  HTML iframe and set `apple.magnification` on the outer Exact frame. The child
+  must allow framing. [Sizing and wrapper example](reference.md#mac-iframe-magnification)
+
 - **A browser tab's title comes after its load.** On Apple a partitioned
   `iframe`'s `navigatesuccess` usually carries the old or an empty `title`: WebKit
   reports the new one a moment later, as its own `currententrychange`. Show the last
