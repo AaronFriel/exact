@@ -718,8 +718,11 @@ impl Kernel {
                 Some("a root is laid out in its offer")
             } else if self.arena.in_paragraph(slot) {
                 Some("an inline run or image has no box of its own")
-            } else if self.region.is_some() && !self.arena.top_layer_slots.contains(slot) {
-                Some("only a top-layer block while a content region is registered")
+            } else if self.region.is_some()
+                && !self.arena.top_layer_slots.contains(slot)
+                && self.arena.props(slot).str(crate::PropId::SemanticTag) != Some("dialog")
+            {
+                Some("only a top-layer or dialog block while a content region is registered")
             } else {
                 None
             };
