@@ -503,7 +503,9 @@ fn hidden_by(arena: &NodeArena, slot: u32, itself: bool, authored: bool) -> bool
 }
 
 pub(crate) fn closed_dialog(arena: &NodeArena, slot: u32) -> bool {
-    !arena.is_root(slot)
+    // A root takes no block: measuring it lays it out in its offer
+    let measured_root = arena.is_root(slot) && arena.alert_state.measured_dialogs.contains(slot);
+    !measured_root
         && !arena.blocks.holds(slot)
         && arena.props(slot).str(crate::PropId::SemanticTag) == Some("dialog")
 }
@@ -926,7 +928,7 @@ impl Kernel {
 
     /// `slot`'s block root styled again, as its block or what is above it
     /// now says.
-    fn restyle_block(&mut self, slot: u32) {
+    pub(super) fn restyle_block(&mut self, slot: u32) {
         let buried = replaced_above(&self.arena, slot);
         if let Some(held) = self.arena.blocks.held_mut(slot) {
             held.buried = buried;

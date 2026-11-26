@@ -2268,7 +2268,6 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - iPad directory inference (LLP 1127 D19). A list with `grid-template-columns="repeat(auto-fill, minmax(160px, 1fr))"` has one column at 200 points and several at 800. Both report zero width before the first layout. Decide at the width the person will see.
 - iPad directory inference (LLP 1127 D19). Distinguish a dashboard's short list below its statistics from a settings directory with a heading, search and two buttons above its scrolling list. The initial tree does not give their laid-out sizes.
 - Preserve Shift on modified printable keys in the terminal decoder. With a button declaring `Meta+Shift+O`, the terminal drive `key Meta+Shift+O` misses it. A button declaring `Meta+O` takes the same press (#1617).
-- A standalone dialog used as a kernel layout root still has a frame while closed. Attach a dialog with explicit dimensions as the root and request layout before presenting it.
 - Compare held modifiers as a set in Windows reserved-shortcut diagnostics. A Windows app warns for `Control+Escape` but misses `Control+Control+Escape`, which the host matches the same way (#1617).
 - Run `cargo test -p contract --bin contract --test it vocab::`. The vocabulary card panics on an empty row at `contract/cli/src/vocab/card.rs:46`, and the function table lacks a row for `formatShortcut`.
 - Decide whether comparing disjoint enum types should warn. A function taking `x: enum<"pen", "text">` and `y: enum<"copy", "save">` compiles `x == y`.

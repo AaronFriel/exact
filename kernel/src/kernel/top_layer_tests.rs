@@ -156,6 +156,38 @@ fn a_dialog_returns_its_native_sheet_block_to_the_viewport() {
 }
 
 #[test]
+fn a_closed_dialog_that_is_a_layout_root_has_no_box() {
+    let mut k = Kernel::with_monospace();
+    k.apply(
+        0,
+        1,
+        &[
+            Op::CreateView {
+                id: 1,
+                node_type: NodeType::View,
+            },
+            style(1, &[(StyleId::Width, n(300.)), (StyleId::Height, n(200.))]),
+            Op::SetProp {
+                id: 1,
+                prop: PropId::SemanticTag,
+                value: "dialog".into(),
+            },
+            Op::AttachRoot { id: 1 },
+        ],
+    )
+    .unwrap();
+    let size = |k: &Kernel| (frame(k, 1).width, frame(k, 1).height);
+    k.compute_layout(1, OFFER).unwrap();
+    assert_eq!(size(&k), (0., 0.));
+    assert!(k.measure_dialog(1, true));
+    k.compute_layout(1, OFFER).unwrap();
+    assert_eq!(size(&k), (300., 200.));
+    assert!(k.measure_dialog(1, false));
+    k.compute_layout(1, OFFER).unwrap();
+    assert_eq!(size(&k), (0., 0.));
+}
+
+#[test]
 fn a_content_region_allows_a_plain_dialogs_native_sheet_block() {
     for measured in [false, true] {
         let mut k = page(
