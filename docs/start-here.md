@@ -68,6 +68,13 @@ an untouched starter is replaced, but an edited or manually emptied file needs
 `--force`. To try another app, create it with `new <path>` and invoke that app's
 `<path>/exact.mjs pattern <name>` (`pattern --help` shows an example).
 Your shell commands have no such help, so keep one directory.
+
+`test` discovers `*.test.contract` beside the app. To run a file in a subfolder,
+use `bun exact.mjs test macos tests/board.test.contract`. It uses this app's program.
+The standalone compiler, `contract test tests/board.test.contract`, looks for
+`board.contract` beside the test, then `app.contract` beside it, then `app.contract`
+beside the nearest enclosing `app.json`. Pass `--app <directory>` to select the app.
+
 |`bun exact.mjs …`|What it does|
 |---|---|
 |`contract build app.contract --json --errors-only`|A CI gate: `[]` and exit zero mean no errors (omit `--errors-only` for every unaccepted lowering warning); it rewrites the types `app.ts` imports and type-checks it.|

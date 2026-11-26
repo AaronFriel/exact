@@ -762,7 +762,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
   const backends = url ? [] : loopbackOrigins(resolve(webDist));
   const compiler = contractTool({ targetDir: process.env.CARGO_TARGET_DIR });
   if (!compiler) throw new Error('cannot compile the authored tests without the Contract compiler');
-  const c = spawnSync(compiler.cmd, [...compiler.pre, 'test', resolve(file)], { cwd: ROOT, env: compiler.env, encoding: 'utf8' });
+  const c = spawnSync(compiler.cmd, [...compiler.pre, 'test', resolve(file), '--app', selected.dir], { cwd: ROOT, env: compiler.env, encoding: 'utf8' });
   if (c.status !== 0) throw new Error(c.stderr?.trim() || c.error?.message || 'contract test compiler failed');
   // Native runs use the origin their build selected (LLP 1142 D13), else the scaffold's declared one, else the grants
   // app.ts names as the build evaluates them, when no web admission file exists.

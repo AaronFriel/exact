@@ -498,3 +498,82 @@ fn suggestion_values_bound_fn_dags_derive_dags_and_long_derive_chains_on_small_s
         .join()
         .unwrap();
 }
+
+#[test]
+fn authored_tests_use_the_selected_program_or_the_closest_fixture_or_app() {
+    use super::diagnostics::App;
+    use std::process::Command;
+
+    let app = App::new("test-program");
+    let program = |name| {
+        format!("component Fresh\n  state {name} = false\n  state also = false\n  action like\n    {name} = not {name}\n    also = not also\n  view\n    column\n      button press=like testId=\"like\"\n        text \"Like\"\n")
+    };
+    let script = |name| {
+        format!("test \"a state equals another\"\n  tap \"like\"\n  expect state {name} == state also\n")
+    };
+    let run = |path: &str, args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_contract"))
+            .arg("test")
+            .arg(path)
+            .args(args)
+            .current_dir(&app.0)
+            .output()
+            .unwrap()
+    };
+    let ok = |path, args: &[&str]| {
+        let out = run(path, args);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let result: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(result["tests"][0]["steps"].as_array().unwrap().len(), 2);
+    };
+    app.write(
+        "plain.test.contract",
+        "test \"standalone\"\n  stored liked true\n  expect state liked == true\n",
+    );
+    ok("plain.test.contract", &[]);
+    app.write("tests/pair.test.contract", &script("liked"));
+    let miss = run("tests/pair.test.contract", &[]);
+    let error = String::from_utf8_lossy(&miss.stderr);
+    assert!(!miss.status.success());
+    for looked_for in ["pair.contract", "app.contract", "app.json", "tests"] {
+        assert!(error.contains(looked_for), "{error}");
+    }
+    let manifest = r#"{"app":{"id":"org.example.lookup","name":"Lookup"}}"#;
+    app.write("app.json", manifest);
+    app.write("app.contract", &program("liked"));
+    for path in [
+        "beside.test.contract",
+        "tests/pair.test.contract",
+        "tests/deeper/pair.test.contract",
+    ] {
+        app.write(path, &script("liked"));
+        ok(path, &[]);
+    }
+    app.write("fixture.contract", &program("fixture"));
+    app.write("fixture.test.contract", &script("fixture"));
+    ok("fixture.test.contract", &[]);
+    app.write("fixture.test.contract", &script("liked"));
+    ok("fixture.test.contract", &["--app", "."]);
+    app.write("inner/app.json", manifest);
+    app.write("inner/tests/suite.test.contract", &script("liked"));
+    let miss = run("inner/tests/suite.test.contract", &[]);
+    let error = String::from_utf8_lossy(&miss.stderr);
+    assert!(!miss.status.success());
+    assert!(
+        error.contains("app.json") && error.contains("app.contract") && error.contains("inner"),
+        "{error}"
+    );
+    app.write("inner/app.contract", &program("inner"));
+    app.write(
+        "inner/tests/suite.test.contract",
+        &format!(
+            "always \"inner app\"\n  expect state inner == true\n{}",
+            script("inner")
+        ),
+    );
+    ok("inner/tests/suite.test.contract", &[]);
+}
