@@ -5,7 +5,7 @@ import { committedCanvas } from './request-send.js';
 import { releaseAsset as rel } from './elements.js';
 import { liveById, sheetLeaves, inertAncestor } from './navigation.js';
 import { startDecoration, decorationPiece } from './editor.js';
-import { Owner, onEnd, effect, say, inflight, data, journal, After, Before, Finishes, Hosts, Probes, Media } from './rt.js';
+import { Owner, onEnd, effect, eq, say, inflight, data, journal, After, Before, Finishes, Hosts, Probes, Media } from './rt.js';
 import { clock, advance } from './clock.js';
 import { Views, Ids, viewId, Hooks } from './tree.js';
 import { OnHooks } from './events.js';
@@ -16,7 +16,7 @@ import { replaced } from './focus.js';
  * host's own `gpu-glue.js` over `gpu.js`, fetched after the first painted
  * frame, only when a canvas is on the page (a loaded capability). */
 let Gpu = null;
-export function gs(e, name, values) {
+function gpuBinding(e, name) {
   const id = viewId(e);
   e.exactSurfaceName = name;
   onEnd(() => {
@@ -26,8 +26,7 @@ export function gs(e, name, values) {
       say(`gpu: ${err.message}`);
     }
   });
-  effect(() => {
-    const v = values();
+  return v => {
     const x = (globalThis.exact ??= {});
     // Published after the commit applied, as the runner publishes surface
     // inputs: the canvas is in the document by then.
@@ -81,6 +80,51 @@ export function gs(e, name, values) {
         .catch(err => say(`gpu: ${err.message}`))
         .finally(() => inflight.n--);
     }
+  };
+}
+export function gs(e, name, values) {
+  const bind = gpuBinding(e, name);
+  effect(() => bind(values()));
+}
+
+/** A transition on the canvas's pseudo-element reports a change even when only the CSSOM changed. */
+export function gsc(e, name, values, colors) {
+  if (globalThis.__exactRender) return;
+  const bind = gpuBinding(e, name);
+  e.setAttribute("data-x-gpu-colors", "");
+  const slots = colors.map(([slot, css], i) => {
+    const property = `--x-gpu-color-${i}`;
+    e.style.setProperty(property, `color(from ${css} srgb-linear r g b / alpha)`);
+    return [slot, property];
+  });
+  const linear = text => {
+    const parts = /^color\(srgb-linear ([^)]*)\)$/.exec(text.trim());
+    if (!parts) return null;
+    const rgba = parts[1].split(/[ /]+/).map(v => v === "none" ? 0 : Math.fround(Number(v)));
+    if (rgba.length === 3) rgba.push(1);
+    return rgba;
+  };
+  let base, frame, previous;
+  const update = () => {
+    frame = null;
+    if (!e.isConnected) return;
+    const style = getComputedStyle(e), args = Array.isArray(base) ? [...base] : {...base};
+    const forced = style.forcedColorAdjust === "none" ? null : linear(style.getPropertyValue("--x-gpu-forced"));
+    for (const [slot, property] of slots) {
+      const text = style.getPropertyValue(property), rgba = linear(text);
+      if (!rgba) { previous = undefined; say(`gpu: could not resolve colour slot ${slot} as linear sRGB (${text})`); return; }
+      args[slot] = {color: forced?.[3] ? [forced[0], forced[1], forced[2], rgba[3]] : rgba};
+    }
+    const inputs = Object.values(args).map(value => value?.color ?? value);
+    if (!eq(previous, inputs)) { previous = inputs; bind(args); }
+  };
+  const schedule = () => { if (frame == null) frame = requestAnimationFrame(update); };
+  const transitioned = event => { if (event.target === e && event.pseudoElement === "::before") schedule(); };
+  e.addEventListener("transitionend", transitioned);
+  effect(() => { base = values(); schedule(); });
+  onEnd(() => {
+    e.removeEventListener("transitionend", transitioned);
+    if (frame != null) cancelAnimationFrame(frame);
   });
 }
 /** A Canvas 2D surface (LLP 1056): its arguments, drawn by the data

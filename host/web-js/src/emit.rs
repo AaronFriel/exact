@@ -769,6 +769,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         js
     };
     let mut css = fonts.css.clone();
+    surfaces::color_observer_css(&mut css, plan);
     // @ref LLP 1095 D4 — the theme's reach into the host's own sheet.
     css.push_str(&(exact_kernel::style::roles::theme_css() + &crate::base_scale::css(plan)));
     css.push_str("#exact-root#exact-root{");

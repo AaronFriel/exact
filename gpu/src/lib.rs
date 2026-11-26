@@ -66,7 +66,7 @@ pub mod haptics;
 pub mod json;
 pub mod shaders;
 mod target;
-pub use target::ColorSpace;
+pub use target::{ColorSpace, ColorTarget};
 pub mod tier;
 pub use tier::{set_thread_tier, set_tier, tier, GpuTier};
 #[cfg(not(target_arch = "wasm32"))]
@@ -402,6 +402,9 @@ pub trait Surface {
     /// Every native readback reports sRGB before capture, including after
     /// detachment, then restores any P3 presentation grant after capture.
     fn color_space_granted(&mut self, _space: ColorSpace) {}
+    /// The current destination for a bound colour. Called before preparing or rendering
+    /// for a window, hardware buffer or native readback.
+    fn color_target(&mut self, _target: ColorTarget) {}
     /// Every output pixel of this instance has alpha one under its current
     /// clear/background policy. Evaluated after binding, never by surface type.
     /// Allows a host to present a full-window canvas beneath its UI. On Android
@@ -672,6 +675,8 @@ struct Instance {
     bound: bool,
     /// The inputs its last accepted bind gave its surface ([`Module::bind_changed_json`]).
     inputs: Vec<Value>,
+    has_color_inputs: bool,
+    destination: ColorTarget,
     dirty: bool,
     input_dirty: bool,
     #[cfg(exact_android_draw_trace)]
@@ -816,7 +821,10 @@ impl Module {
                 };
             inst.surface
                 .device_ready(gpu.device.features(), gpu.device.limits());
-            inst.report_color_space();
+            if let Err(e) = inst.report_color_space() {
+                self.error = e.0;
+                continue;
+            }
             inst.surface.prepare_assets(&gpu.device, &gpu.queue, format);
             inst.invalidate();
         }
@@ -936,12 +944,23 @@ impl Module {
     ) -> Option<u32> {
         self.next += 1;
         let id = self.next;
+        let destination = presentation.as_ref().map_or_else(
+            || {
+                ColorTarget::readback(if surface.srgb_target() {
+                    wgpu::TextureFormat::Rgba8UnormSrgb
+                } else {
+                    wgpu::TextureFormat::Rgba8Unorm
+                })
+            },
+            |(_, config)| ColorTarget::of(config),
+        );
         surface.clock(self.seekable);
         surface.reduced_motion(self.reduced_motion);
         if let Some(gpu) = &self.gpu {
             surface.device_ready(gpu.device.features(), gpu.device.limits());
-            surface.color_space_granted(target::granted(presentation.as_ref().map(|(_, c)| c)));
+            surface.color_space_granted(destination.space);
         }
+        surface.color_target(destination);
         let (presentation, config) = presentation.map_or((None, None), |(target, config)| {
             (Some(SurfaceRef::new(target)), Some(config))
         });
@@ -972,6 +991,8 @@ impl Module {
                 answered: BTreeSet::new(),
                 bound: false,
                 inputs: Vec::new(),
+                has_color_inputs: false,
+                destination,
                 dirty: false,
                 input_dirty: false,
                 #[cfg(exact_android_draw_trace)]
@@ -1119,6 +1140,10 @@ impl Module {
     /// New inputs for a canvas; a refusal is reported and the surface keeps
     /// its last accepted inputs.
     pub fn bind(&mut self, id: u32, inputs: &[Value], at_ms: Option<f64>) -> bool {
+        self.bind_inputs(id, inputs, at_ms, false)
+    }
+
+    fn bind_inputs(&mut self, id: u32, inputs: &[Value], at_ms: Option<f64>, tagged: bool) -> bool {
         self.settle(id);
         self.check_device();
         let Some(inst) = self.instances.get_mut(&id) else {
@@ -1128,6 +1153,8 @@ impl Module {
             Ok(()) => {
                 inst.drain();
                 inst.bound = true;
+                inst.has_color_inputs =
+                    tagged && binding::has_color(inputs, inst.surface.rest_arguments());
                 inst.inputs = inputs.to_vec();
                 inst.invalidate();
                 #[cfg(windows)]

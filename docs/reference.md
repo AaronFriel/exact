@@ -7020,6 +7020,16 @@ logged once. `bun exact.mjs forma gen swift .` writes the names
 (`.exact/forma/forma.swift`, never committed), which a module's build
 compiles in. `apps/forma-host` is the sample.
 
+A GPU canvas reads the same design with `surface=board(color("surface.board"))`.
+Its explicit token arguments follow its own place, including a scheme or mode
+pinned on an ancestor. A change in the complete resolved inputs causes one
+bind and frame request, including after an ancestor pin changes on its own or
+a live design value edit. Apple system colours use the reported light or dark
+palette for the session's current contrast and app tint, with the kernel's
+fallback until a colour is reported. A changed palette rebinds affected
+surfaces. A native view's own contrast override, elevation and local tint are
+outside that palette.
+
 **Whose window.** `window.window` is nil unless the embedder set
 `session.hatchesOwnWindow`, and `app.application` unless it set
 `session.hatchesOwnProcess`. The standalone iOS app sets both; the standalone
@@ -7145,6 +7155,47 @@ An authored GPU module passes a static `&[exact_gpu::grants::Requirements]` as t
 second argument to `exact_gpu::module!`. See [the GPU module recipe](recipes/gpu-module.md)
 for a declaration and [package GPU surfaces](contract-for-agents.md#a-packages-gpu-surfaces)
 for packaging. Packages declare `exactGpu: "0.4"` and depend on `exact-gpu = "0.4"`.
+
+A GPU surface reads a `color("surface.board")` argument in `bind` with
+`exact_gpu::json::color(&inputs[0], "fill")?`. The result is four finite
+`f32` components: straight linear sRGB (D65) and alpha in [0, 1].
+RGB may extend below zero or above one. Keep the `ColorTarget` from
+`Surface::color_target`. Use `target.fragment(rgba)` for a shader constant
+written with replacement blending and `target.clear(rgba)` for a clear.
+Both convert to the attachment's primaries, transfer and alpha association.
+A change of attachment format, colour space or alpha mode rebinds colour
+inputs even when their RGBA is unchanged. A straight linear-sRGB working
+texture can use the input directly. For transparency leave `Surface::opaque()`
+false. On an opaque-only target the helper writes straight colour at full alpha.
+
+The opaque board matched its sibling in light, dark and after an ancestor pin
+changed on macOS Metal, Chrome WebGPU, the iOS 27.2 simulator, the painted
+Linux host running on macOS and Android API 35 and 36 emulators.
+
+These measurements use one half-alpha swatch, `color(display-p3 .6 .4 .3 / .5)`,
+over white. RGB values are from sRGB captures.
+
+| Host and target | GPU | Sibling |
+| --- | --- | --- |
+| macOS 27.2.1 Metal SDR | (208, 177, 163) | (208, 177, 163) |
+| macOS 27.0.1 agent window, 8-bit Metal row | (208, 178, 164) | (209, 178, 164) |
+| macOS 27.0.1 agent window, float-request row | (209, 177, 164) | (209, 178, 164) |
+| Chrome, half-float or 8-bit with sRGB display primaries | (208, 177, 163) | (208, 177, 163) |
+| Chrome, 8-bit Display P3 on an sRGB destination | (207, 177, 162) | (208, 177, 163) |
+| Android API 35 and 36, host GPU, premultiplied sRGB RGBA8 | (208, 177, 163) | (208, 177, 163) |
+| iOS 27.2 simulator display, 8-bit P3 shader | (208, 177, 162) | (208, 177, 163) |
+| iOS 27.2 simulator display, float-request row | (208, 177, 163) | (208, 177, 163) |
+| iOS 27.2 and 26.5 simulator displays, literal P3 clear | (208, 177, 162) | (208, 177, 163) |
+
+The painted Linux capture also matched its translucent sibling. The Android
+float request also received RGBA8. The measured one-step differences apply
+to this swatch. On iOS the same literal clear gave the same
+display pixels before and after colour inputs. The 27.2 display spatially
+dithered the float row’s opaque border. A plain UIKit app drawing the same
+solid clear into a half-float Metal layer reproduced that variation.
+The 27.2 agent window capture
+on the parent gave (183, 138, 118) for that clear. HDR displays, Windows
+presentation and physical mobile devices remain unverified.
 
 A surface opts into raw input with `Surface::wants_input`. On macOS the canvas
 also dispatches Contract pointer, wheel and context menu events. [GPU module recipe](recipes/gpu-module.md)
