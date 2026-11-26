@@ -653,14 +653,13 @@ fn style_value(
                 Some(StyleValue::Number(numeric_literal(expr).unwrap()))
             }
             Expr::Str(s, _) => Some(
-                // Enum keywords stay text, including `auto` (as in the runner).
+                // A keyword row's `auto` stays text (as in the runner): an
+                // enum's, or one of a row of keyword bits (`-exact-safe-area`).
                 // Other codecs retain their existing dimension/keyword handling.
                 // A keyword is ASCII case-insensitive, as the runner reads it.
                 if s.trim_matches(['\t', '\n', '\u{c}', '\r', ' '])
                     .eq_ignore_ascii_case("auto")
-                    && !rows
-                        .iter()
-                        .all(|row| row.codec() == exact_kernel::StyleCodec::Enum)
+                    && !rows.iter().all(|row| !row.enum_names().is_empty())
                 {
                     StyleValue::Auto
                 } else if let Some(pct) = s.strip_suffix('%').and_then(|p| p.parse::<f64>().ok()) {
