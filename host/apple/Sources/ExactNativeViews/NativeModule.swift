@@ -1338,7 +1338,7 @@ final class NativeViews: NativeModuleHosting {
 
     /// The platform views whose tag answers snapshots: hidden while the
     /// capture draws their pictures instead (Metal- and remote-layer views).
-    var snapshotViews: [NativePlatformView] { entries.values.filter(\.snapshotBit).compactMap(\.view) }
+    var snapshotViews: [UInt32: NativePlatformView] { entries.filter { $0.value.snapshotBit }.compactMapValues(\.view) }
 
     /// One tokened snapshot per snapshot-bit instance on screen, for this capture.
     func snapshots() -> [UInt32: NativeImage] {

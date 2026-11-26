@@ -104,7 +104,7 @@ package protocol NativeModuleHosting: AnyObject {
     func laidOut(_ owner: NodeView)
     func release(_ owner: NodeView)
     func recycleFar(hide: CGFloat, release: CGFloat, _ distance: (NodeView) -> CGFloat?) -> [NodeView]
-    var snapshotViews: [NativePlatformView] { get }
+    var snapshotViews: [UInt32: NativePlatformView] { get }
     func snapshots() -> [UInt32: NativeImage]
     func decorate(_ tree: [String: Any]) -> [String: Any]
     #if canImport(UIKit)
@@ -186,7 +186,7 @@ final class NoNativeModule: NativeModuleHosting {
     func laidOut(_ owner: NodeView) {}
     func release(_ owner: NodeView) {}
     func recycleFar(hide: CGFloat, release: CGFloat, _ distance: (NodeView) -> CGFloat?) -> [NodeView] { [] }
-    var snapshotViews: [NativePlatformView] { [] }
+    var snapshotViews: [UInt32: NativePlatformView] { [:] }
     func snapshots() -> [UInt32: NativeImage] { [:] }
     func decorate(_ tree: [String: Any]) -> [String: Any] { tree }
     #if canImport(UIKit)

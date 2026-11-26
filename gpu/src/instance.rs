@@ -29,6 +29,7 @@ impl Instance {
             #[cfg(not(target_arch = "wasm32"))]
             {
                 self.readback = None;
+                self.sampled = None;
             }
             self.seen.store(false, Ordering::Release);
             #[cfg(target_os = "android")]

@@ -71,6 +71,9 @@ final class CanvasesHost {
         var wants = false
         /// The box (points and scale) its last render drew at.
         var drawnBox: SIMD3<Float>?
+        var offscreenBox: SIMD3<Float>?
+        var offscreenPending = false
+        var presentedAt: Double?
         var performance = false
         var wantsInput = false
         var logCursor = 0
@@ -458,9 +461,8 @@ final class CanvasesHost {
     /// and nothing wants a frame until the window is seen again, when the
     /// delegate asks `Frames` to run.
     var visible: Bool {
-        guard let viewport = session?.presenter.viewport else { return false }
-        // An unmounted view wants no frames (LLP 1031 D3).
-        return !NSApplication.shared.isHidden && (viewport.window?.screenOcclusionState.contains(.visible) ?? false)
+        guard let window = session?.presenter.viewport.window else { return false }
+        return !NSApplication.shared.isHidden && window.isVisible && window.screenOcclusionState.contains(.visible)
     }
 
     /// Whether any surface has something to render — or an edit is under a
@@ -492,11 +494,17 @@ final class CanvasesHost {
             if ExactEnv.agentMode {
                 for e in Array(entries.values) where !visible || e.waiting || e.starvedUntil > CACurrentMediaTime() {
                     if let outer = e.view.canvasAbove, outer.overlay != nil, entries[outer.id]?.through == true { continue }
-                    if readback(view: e.view) != nil { e.waiting = false }
+                    if e.module?.renderOffscreen == nil {
+                        if readback(view: e.view) != nil { e.waiting = false }
+                        continue
+                    }
+                    if let metal = e.view.canvasMetal, settleOffscreen(e, box: box(metal), now: now), let m = e.module {
+                        readPlacements(m, e)
+                    }
                 }
             }
             for e in Array(entries.values) { messages(e) }
-            guard entries.values.contains(where: { $0.view.needsCapture }) else { return }
+            guard entries.values.contains(where: { $0.view.needsCapture || $0.offscreenPending }) else { return }
         }
     }
 
@@ -525,7 +533,7 @@ final class CanvasesHost {
             // twice on the turn a batch already captured.
             if e.through, !e.view.paintedThisTurn, let overlay = e.view.overlay, CanvasesHost.editing(under: overlay) { capture(m, e) }
             m.syncDynamicRange(e.id, view: e.view, layer: e.view.canvasMetal?.layer)
-            guard live(e.view.id) === e, let metal = e.view.canvasMetal, e.wants || m.dirty(e.id) != 0 || e.resized(box(metal)) else { continue }
+            guard live(e.view.id) === e, let metal = e.view.canvasMetal, e.offscreenBox != nil || e.wants && (!settling || e.presentedAt != now) || m.dirty(e.id) != 0 || e.resized(box(metal)) else { continue }
             let wall = CACurrentMediaTime()
             if wall < e.starvedUntil { more = true; continue }
             // Under its frame-rate cap (`Surface::max_fps`), a canvas skips the frames before its deadline.
@@ -543,7 +551,7 @@ final class CanvasesHost {
             rendered += 1
             // A render that drew nothing, as without its drawable, draws when one lands (`renderStarved`)
             e.waiting = (m.presentationFlags?(e.id) ?? 0) & 4 == 0 && !(m.drew.map { $0(e.id) != 0 } ?? (m.starved?(e.id) != 1))
-            if !e.waiting { drawn += 1 }
+            if !e.waiting { e.presentedAt = now; e.offscreenPending = false; e.offscreenBox = nil; drawn += 1 }
             more = more || e.wants
             readPlacements(m, e)
             messages(e)
@@ -580,7 +588,7 @@ final class CanvasesHost {
             rendered += 1
             // A render that drew nothing, as without its drawable, draws when one lands (`renderStarved`)
             e.waiting = (m.presentationFlags?(e.id) ?? 0) & 4 == 0 && !(m.drew.map { $0(e.id) != 0 } ?? (m.starved?(e.id) != 1))
-            if !e.waiting { drawn += 1 }
+            if !e.waiting { e.presentedAt = now; e.offscreenPending = false; e.offscreenBox = nil; drawn += 1 }
             readPlacements(m, e)
             messages(e)
         }

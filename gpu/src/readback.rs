@@ -5,8 +5,7 @@ use crate::*;
 pub(crate) struct Readback {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
-    buffer: wgpu::Buffer,
-    row: u32,
+    rows: Option<Rows>,
 }
 
 impl Readback {
@@ -26,7 +25,35 @@ impl Readback {
             view_formats: &[],
         });
         let view = texture.create_view(&Default::default());
-        let row = (width * 4).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
+        Self {
+            texture,
+            view,
+            rows: None,
+        }
+    }
+}
+
+/// A copy scheduled before presentation. Only a pixel read maps the buffer.
+#[derive(Clone)]
+pub(crate) struct Rows {
+    buffer: wgpu::Buffer,
+    width: u32,
+    height: u32,
+    format: wgpu::TextureFormat,
+    row: u32,
+    sample_flags: u32,
+}
+
+impl Rows {
+    fn stride(format: wgpu::TextureFormat) -> u32 {
+        format
+            .block_copy_size(None)
+            .expect("an uncompressed color target")
+    }
+
+    fn new(gpu: &Gpu, width: u32, height: u32, format: wgpu::TextureFormat) -> Self {
+        let stride = Self::stride(format);
+        let row = (width * stride).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
             * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
         let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("canvas readback staging"),
@@ -35,16 +62,18 @@ impl Readback {
             mapped_at_creation: false,
         });
         Self {
-            texture,
-            view,
+            width,
+            height,
+            format,
             buffer,
             row,
+            sample_flags: 0,
         }
     }
 
-    fn copy(&self, encoder: &mut wgpu::CommandEncoder) {
+    fn copy(&self, encoder: &mut wgpu::CommandEncoder, texture: &wgpu::Texture) {
         encoder.copy_texture_to_buffer(
-            self.texture.as_image_copy(),
+            texture.as_image_copy(),
             wgpu::TexelCopyBufferInfo {
                 buffer: &self.buffer,
                 layout: wgpu::TexelCopyBufferLayout {
@@ -53,7 +82,7 @@ impl Readback {
                     rows_per_image: None,
                 },
             },
-            self.texture.size(),
+            texture.size(),
         );
     }
 
@@ -73,9 +102,9 @@ impl Readback {
             let mapped = slice
                 .get_mapped_range()
                 .map_err(|e| format!("map: {e:?}"))?;
-            let width = self.texture.width() as usize * 4;
+            let width = (self.width * Self::stride(self.format)) as usize;
             let bgra = matches!(
-                self.texture.format(),
+                self.format,
                 wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
             );
             for (dst, src) in out
@@ -96,12 +125,62 @@ impl Readback {
         self.buffer.unmap();
         result
     }
+
+    pub(crate) fn capture(
+        previous: Option<&Rows>,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        texture: &wgpu::Texture,
+    ) -> Self {
+        let (w, h, format) = (texture.width(), texture.height(), texture.format());
+        let rows = previous
+            .filter(|s| (s.width, s.height, s.format) == (w, h, format))
+            .cloned()
+            .unwrap_or_else(|| Self::new(gpu, w, h, format));
+        rows.copy(encoder, texture);
+        rows
+    }
+    /// The compositor interprets these bytes using the configuration of this frame.
+    pub(crate) fn presented(mut self, primaries: ColorSpace, opaque: bool) -> Self {
+        self.sample_flags = u32::from(self.format == wgpu::TextureFormat::Rgba16Float)
+            | (u32::from(primaries == ColorSpace::DisplayP3) << 1)
+            | (u32::from(opaque) << 2);
+        self
+    }
 }
 
 impl Module {
+    pub(crate) fn sampled_frame(&mut self, id: u32) -> Option<([u32; 3], Vec<u8>)> {
+        self.settle(id);
+        let inst = self.instances.get(&id)?;
+        if inst.bound && inst.surface.is_empty() {
+            return Some(([1, 1, 0], vec![0; 4]));
+        }
+        let rows = inst.sampled.as_ref()?;
+        let mut bytes =
+            vec![0; (rows.width * Rows::stride(rows.format)) as usize * rows.height as usize];
+        let result = rows.read(self.gpu.as_ref()?, &mut bytes);
+        let size = [rows.width, rows.height, rows.sample_flags];
+        if let Err(error) = result {
+            return self.fail(error);
+        }
+        Some((size, bytes))
+    }
+
     /// Render and capture directly into caller-owned RGBA bytes, reusing GPU
     /// storage until the size, format, or device changes, or the surface clears.
     pub fn readback_into(&mut self, id: u32, frame: &Frame, out: &mut [u8]) -> Option<bool> {
+        self.render_readback(id, frame, Some(out))
+    }
+
+    // Without a drawable, an agent frame is presented to its offscreen target.
+    // Keep its negotiated format, primaries and headroom for the sample.
+    pub(crate) fn render_readback(
+        &mut self,
+        id: u32,
+        frame: &Frame,
+        out: Option<&mut [u8]>,
+    ) -> Option<bool> {
         if let Some(error) = self.refused_instance(id) {
             return self.fail(error);
         }
@@ -115,6 +194,11 @@ impl Module {
             return None;
         }
         self.flush();
+        let scale = if out.is_none() {
+            frame.scale * self.render_scale(id)
+        } else {
+            frame.scale
+        };
         let gpu = self.gpu.as_ref()?;
         let Some(inst) = self.instances.get_mut(&id) else {
             self.error = "no such canvas".into();
@@ -127,34 +211,44 @@ impl Module {
             .config
             .as_ref()
             .map_or_else(|| inst.offscreen_format(), crate::view_format);
-        if !matches!(
-            format,
-            wgpu::TextureFormat::Rgba8Unorm
-                | wgpu::TextureFormat::Rgba8UnormSrgb
-                | wgpu::TextureFormat::Bgra8Unorm
-                | wgpu::TextureFormat::Bgra8UnormSrgb
-        ) {
+        if out.is_some()
+            && !matches!(
+                format,
+                wgpu::TextureFormat::Rgba8Unorm
+                    | wgpu::TextureFormat::Rgba8UnormSrgb
+                    | wgpu::TextureFormat::Bgra8Unorm
+                    | wgpu::TextureFormat::Bgra8UnormSrgb
+            )
+        {
             self.error = format!("{format:?} is not an RGBA8 or BGRA8 format");
             return None;
         }
+        let present = out.is_none();
         let frame = Frame {
+            scale,
             seekable: self.seekable,
             period_ms: self.period_ms,
             children_generation: inst.children_generation,
             shader_generation: shaders::shader_generation(),
-            headroom: 1.,
+            headroom: if out.is_none() && inst.hdr {
+                inst.headroom
+            } else {
+                1.
+            },
             ..*frame
         };
         let (width, height) = frame.pixels();
         let len = (width as usize)
             .checked_mul(height as usize)?
             .checked_mul(4)?;
-        if out.len() < len {
+        if let Some(out) = out.as_ref().filter(|out| out.len() < len) {
             self.error = format!("readback: {} bytes for {} pixels", out.len(), len / 4);
             return None;
         }
         if inst.surface.is_empty() {
-            out[..len].fill(0);
+            if let Some(out) = out {
+                out[..len].fill(0);
+            }
             inst.input_dirty = false;
             inst.dirty = false;
             inst.drain();
@@ -163,7 +257,16 @@ impl Module {
         // The host composes these untagged RGBA8 bytes as sRGB, even when
         // this surface normally draws into a Display P3 swapchain.
         let presentation_space = target::granted(inst.config.as_ref());
-        inst.surface.color_space_granted(ColorSpace::Srgb);
+        // A hidden window can bind different alpha before its next drawable is configured.
+        let opaque = if present && inst.config.is_some() {
+            target::alpha_mode(inst.surface.opaque(), &inst.alpha_modes)
+                == wgpu::CompositeAlphaMode::Opaque
+        } else {
+            inst.surface.opaque()
+        };
+        if out.is_some() {
+            inst.surface.color_space_granted(ColorSpace::Srgb);
+        }
         inst.surface.prepare_assets(&gpu.device, &gpu.queue, format);
         if inst.readback.as_ref().is_none_or(|r| {
             r.texture.width() != width
@@ -172,7 +275,7 @@ impl Module {
         }) {
             inst.readback = Some(Readback::new(gpu, width, height, format));
         }
-        let target = inst.readback.as_ref().unwrap();
+        let target = inst.readback.as_mut().unwrap();
         let mut recording = crate::frame::Recording::begin(&gpu.device);
         let wants = inst.surface.render(
             &frame,
@@ -182,15 +285,37 @@ impl Module {
             &target.view,
             format,
         );
-        target.copy(&mut recording.encoder);
+        let failure = inst.surface.take_error();
+        let ready = inst.surface.frame_presentable();
+        let sampled = if present {
+            (ready && failure.is_none()).then(|| {
+                Rows::capture(
+                    inst.sampled.as_ref(),
+                    gpu,
+                    &mut recording.encoder,
+                    &target.texture,
+                )
+                .presented(presentation_space, opaque)
+            })
+        } else {
+            target.rows = Some(Rows::capture(
+                target.rows.as_ref(),
+                gpu,
+                &mut recording.encoder,
+                &target.texture,
+            ));
+            None
+        };
         let commands = match recording.finish() {
             Ok(commands) => commands,
             Err(e) => {
-                if presentation_space != ColorSpace::Srgb {
+                if out.is_some() && presentation_space != ColorSpace::Srgb {
                     inst.surface.color_space_granted(presentation_space);
                 }
                 inst.drain();
-                self.error = inst.surface.take_error().map_or(e, |SurfaceError(own)| own);
+                self.error = failure
+                    .or_else(|| inst.surface.take_error())
+                    .map_or(e, |SurfaceError(own)| own);
                 return None;
             }
         };
@@ -202,19 +327,32 @@ impl Module {
         inst.surface.submitted();
         #[cfg(any(target_os = "macos", target_os = "ios", target_os = "tvos"))]
         self.pipeline_cache.save_metal();
-        let result = target.read(gpu, &mut out[..len]);
-        if presentation_space != ColorSpace::Srgb {
+        let result = match out {
+            Some(out) => inst
+                .readback
+                .as_ref()
+                .unwrap()
+                .rows
+                .as_ref()
+                .unwrap()
+                .read(gpu, &mut out[..len]),
+            None => Ok(()),
+        };
+        if !present && presentation_space != ColorSpace::Srgb {
             inst.surface.color_space_granted(presentation_space);
         }
         inst.drain();
-        if let Some(SurfaceError(e)) = inst.surface.take_error() {
+        if let Some(SurfaceError(e)) = failure.or_else(|| inst.surface.take_error()) {
             self.error = e;
             return None;
         }
         match result {
             Ok(()) => {
+                if let Some(sampled) = sampled {
+                    inst.sampled = Some(sampled);
+                }
                 inst.input_dirty = inst.surface.input_pending();
-                inst.dirty = false;
+                inst.dirty = present && !ready;
                 // A canvas with no target of its own is shown by its host
                 // composing these pixels (Linux's display baseline), and a
                 // seekable agent drive falls back to readback when its window
@@ -227,7 +365,7 @@ impl Module {
                     inst.presented.now();
                 }
                 let wants = wants || (!self.seekable && !inst.surface.frame_ready());
-                Some(wants)
+                Some(wants || present && !ready)
             }
             Err(e) => {
                 self.error = e;
@@ -235,6 +373,48 @@ impl Module {
             }
         }
     }
+}
+
+/// Enable copies of presented drawables for canvases this agent host creates.
+pub fn enable_frame_samples() {
+    native::with(|m| m.frame_samples = true);
+}
+
+/// Render an offscreen presentation, or the caller's nested-canvas capture.
+pub fn capture(
+    id: u32,
+    width: f32,
+    height: f32,
+    scale: f32,
+    now_ms: f64,
+    out: Option<&mut [u8]>,
+) -> u32 {
+    let frame = Frame {
+        width,
+        height,
+        scale,
+        now_ms,
+        children_generation: 0,
+        seekable: false,
+        period_ms: 0.0,
+        shader_generation: 0,
+        headroom: 1.0,
+    };
+    match native::with(|m| m.render_readback(id, &frame, out)).flatten() {
+        Some(true) => 2,
+        Some(false) => 0,
+        None if native::with(|m| m.instances.contains_key(&id) && m.gpu().is_none())
+            .unwrap_or(false) =>
+        {
+            3
+        }
+        None => 1,
+    }
+}
+
+/// Pixel dimensions and tightly packed top-down RGBA rows in the configured layer's color space.
+pub fn sampled_frame(id: u32) -> Option<([u32; 3], Vec<u8>)> {
+    native::with(|m| m.sampled_frame(id)).flatten()
 }
 
 #[cfg(test)]

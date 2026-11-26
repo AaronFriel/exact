@@ -59,6 +59,9 @@ impl Module {
             return self.fail("the adapter cannot present to this target");
         };
         let caps = target.get_capabilities(&gpu.adapter);
+        if self.frame_samples && caps.usages.contains(wgpu::TextureUsages::COPY_SRC) {
+            config.usage |= wgpu::TextureUsages::COPY_SRC;
+        }
         let surface = factory();
         let hdr = configure(&*surface, &gpu.adapter, &caps, &mut config);
         config.present_mode = wgpu::PresentMode::AutoVsync;
@@ -124,6 +127,9 @@ impl Module {
                 .is_some();
         };
         let caps = target.get_capabilities(&gpu.adapter);
+        if self.frame_samples && caps.usages.contains(wgpu::TextureUsages::COPY_SRC) {
+            config.usage |= wgpu::TextureUsages::COPY_SRC;
+        }
         config.present_mode = wgpu::PresentMode::AutoVsync;
         config.desired_maximum_frame_latency = FRAME_LATENCY;
         let features = gpu.device.features();

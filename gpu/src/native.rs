@@ -18,7 +18,7 @@ thread_local! {
     static ERROR: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
-fn with<T>(f: impl FnOnce(&mut Module) -> T) -> Option<T> {
+pub(crate) fn with<T>(f: impl FnOnce(&mut Module) -> T) -> Option<T> {
     MODULE.with(|m| m.borrow_mut().as_mut().map(f))
 }
 
@@ -599,24 +599,10 @@ pub unsafe fn texture_from_metal(id: u32, width: u32, height: u32, raw: *mut c_v
 /// 1014, nested canvases). 0 on success, 2 on success when the surface wants
 /// another frame, 1 on failure, 3 when the device is unavailable.
 pub fn readback(id: u32, width: f32, height: f32, scale: f32, now_ms: f64, out: &mut [u8]) -> u32 {
-    let frame = Frame {
-        width,
-        height,
-        scale,
-        now_ms,
-        children_generation: 0,
-        seekable: false,
-        period_ms: 0.0,
-        shader_generation: 0,
-        headroom: 1.0,
-    };
-    match with(|m| m.readback_into(id, &frame, out)).flatten() {
-        Some(true) => 2,
-        Some(false) => 0,
-        None if with(|m| m.instances.contains_key(&id) && m.gpu().is_none()).unwrap_or(false) => 3,
-        None => 1,
-    }
+    capture(id, width, height, scale, now_ms, Some(out))
 }
+
+pub use crate::readback::{capture, enable_frame_samples, sampled_frame};
 
 /// Current instance policy: bit 0 promises alpha one; bit 1 requests SDR;
 /// bit 2 discards the retained picture.
@@ -1364,6 +1350,27 @@ macro_rules! module {
         /// Remake each canvas's renderer at the told tier, keeping its world.
         #[no_mangle]
         pub extern "C" fn gpu_retier() { $crate::native::retier(); }
+
+        /// Retain presented pixels for an Apple agent drive. Called before creating its canvases.
+        #[no_mangle]
+        pub extern "C" fn gpu_enable_frame_samples() { $crate::native::enable_frame_samples(); }
+
+        /// Present to the agent's offscreen target while the window has no drawable.
+        #[no_mangle]
+        pub extern "C" fn gpu_render_offscreen(id: u32, w: f32, h: f32, scale: f32, at: f64) -> u32 {
+            $crate::native::capture(id, w, h, scale, at, None)
+        }
+
+        /// Copy the settled frame into gpu_out_ptr. Zero means no readable frame.
+        /// # Safety
+        /// `size` receives width, height and flags (bit 0: RGBA16F, 1: P3, 2: opaque).
+        #[no_mangle]
+        pub unsafe extern "C" fn gpu_sample_frame(id: u32, size: *mut [u32; 3]) -> usize {
+            let Some(size) = (unsafe { size.as_mut() }) else { return 0 };
+            let Some((dimensions, pixels)) = $crate::native::sampled_frame(id) else { return 0 };
+            *size = dimensions;
+            EXACT_GPU_OUT.with(|b| { *b.borrow_mut() = pixels; b.borrow().len() })
+        }
 
         /// Output address, valid until the next carry, published, agent, messages or error call.
         #[no_mangle]

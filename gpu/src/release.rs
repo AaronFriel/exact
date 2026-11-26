@@ -45,6 +45,7 @@ impl Instance {
         let retired = {
             self.scratch = None;
             self.readback = None;
+            self.sampled = None;
             self.acquire.retire()
         };
         #[cfg(target_arch = "wasm32")]

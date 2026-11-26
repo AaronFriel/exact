@@ -589,6 +589,7 @@ pub struct Module {
     next: u32,
     error: String,
     seekable: bool,
+    frame_samples: bool,
     reduced_motion: bool,
     period_ms: f64,
     /// The host's last display callback and the device's thermal state ([`pace`]).
@@ -662,6 +663,8 @@ struct Instance {
     acquire: acquire::Acquire,
     #[cfg(not(target_arch = "wasm32"))]
     readback: Option<readback::Readback>,
+    #[cfg(not(target_arch = "wasm32"))]
+    sampled: Option<readback::Rows>,
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "tvos"))]
     layer: Option<usize>,
     outstanding: BTreeSet<String>,
@@ -743,6 +746,7 @@ impl Module {
             next: 0,
             error: String::new(),
             seekable: false,
+            frame_samples: false,
             reduced_motion: false,
             period_ms: 0.0,
             host: Default::default(),
@@ -761,6 +765,7 @@ impl Module {
         #[cfg(not(target_arch = "wasm32"))]
         for inst in self.instances.values_mut() {
             inst.readback = None;
+            inst.sampled = None;
             inst.scratch = None;
         }
         // A frame recorded on another device is never submitted on this one.
@@ -959,6 +964,8 @@ impl Module {
                 acquire: Default::default(),
                 #[cfg(not(target_arch = "wasm32"))]
                 readback: None,
+                #[cfg(not(target_arch = "wasm32"))]
+                sampled: None,
                 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "tvos"))]
                 layer: None,
                 outstanding: BTreeSet::new(),

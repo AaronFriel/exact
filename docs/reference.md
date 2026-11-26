@@ -2881,6 +2881,18 @@ platform tool.
 
 ### Inspect work and native presentation
 
+On macOS, iOS and tvOS, `sample <x> <y> [<x> <y>…]` settles the page at
+the current clock and reads the backing pixel under each viewport point.
+It returns unpremultiplied, extended linear sRGB. A GPU canvas contributes
+its presented frame. An iframe or a snapshot-capable native view supplies
+its guest picture. Other Metal and OpenGL layers need a snapshot from
+their owner. Video contributes the displayed frame when the player makes
+it readable. Playing or protected video can withhold its frame, and a
+live camera preview exposes no displayed buffer. If a point needs missing
+pixels, the reply names the node and the reason. An opaque cover can still
+be sampled. On iOS 27 the layer renderer clips native extended-range
+gradients and omits layer shadows.
+
 On iOS and the JS web target, `check` and `verify` count the part of
 `-exact-hit-slop` that accepts a press. A clip cuts that region, and a front
 control takes the overlap. A `target` finding gives both the tap area and the drawn box.

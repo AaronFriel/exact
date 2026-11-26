@@ -161,6 +161,9 @@ final class CanvasesHost {
         var wants = false
         /// The box (points and scale) its last render drew at.
         var drawnBox: SIMD3<Float>?
+        var offscreenBox: SIMD3<Float>?
+        var offscreenPending = false
+        var presentedAt: Double?
         /// The tick that last judged this canvas on screen and rendered it
         /// (`CanvasesHost.ticks`): a starved render draws that tick's frame.
         var shownTick = 0
@@ -637,7 +640,7 @@ final class CanvasesHost {
     /// without focus (`PageFacts.hidden`) — and still draws.
     var visible: Bool {
         // A backgrounded app, or an unmounted view (LLP 1031 D3), wants no frames.
-        !AppBackground.now && session?.presenter.viewport.window != nil
+        !AppBackground.now && session?.presenter.viewport.window?.isHidden == false
     }
 
     /// Whether any surface has something to render — or an edit is under a
@@ -664,8 +667,16 @@ final class CanvasesHost {
         for _ in 0..<3 {
             captureIfNeeded()
             _ = tick(now: now)
+            if ExactEnv.agentMode {
+                for e in Array(entries.values) where !visible || e.view.window?.isHidden == true || e.waiting {
+                    if let outer = e.view.canvasAbove, entries[outer.id]?.through == true { continue }
+                    if let metal = e.view.canvasMetal, settleOffscreen(e, box: box(metal), now: now), let m = e.module {
+                        readPlacements(m, e)
+                    }
+                }
+            }
             for e in Array(entries.values) { messages(e) }
-            guard entries.values.contains(where: { $0.view.needsCapture }) else { return }
+            guard entries.values.contains(where: { $0.view.needsCapture || $0.offscreenPending }) else { return }
         }
     }
 
@@ -726,7 +737,7 @@ final class CanvasesHost {
                 continue
             }
             m.syncDynamicRange(e.id, view: e.view, layer: e.view.canvasMetal?.metalLayer)
-            guard live(e.view.id) === e, let metal = e.view.canvasMetal, e.wants || m.dirty(e.id) != 0 || e.resized(box(metal)) else { continue }
+            guard live(e.view.id) === e, let metal = e.view.canvasMetal, e.offscreenBox != nil || e.wants && (!settling || e.presentedAt != now) || m.dirty(e.id) != 0 || e.resized(box(metal)) else { continue }
             // D4: a canvas renders when the host judges it on screen. A
             // virtualized list keeps rows mounted past the viewport; their
             // canvases keep what they want (and their dirty inputs) and render
@@ -773,7 +784,7 @@ final class CanvasesHost {
         // A render that went without a drawable recorded nothing: no frame
         // to submit for it, and its tick's frame is still to draw.
         let drew = m.drew.map { $0(e.id) != 0 } ?? (m.starved?(e.id) != 1)
-        if drew { recorded(m); e.drawnTick = tick; drawn += 1 }
+        if drew { e.presentedAt = now; e.offscreenPending = false; e.offscreenBox = nil; recorded(m); e.drawnTick = tick; drawn += 1 }
         e.waiting = (m.presentationFlags?(e.id) ?? 0) & 4 == 0 && !drew
         // A module that cannot say when a first frame is shown (`gpu_seen`):
         // the frame just recorded is presented by this tick's flush.

@@ -325,6 +325,8 @@ impl Module {
             scratch.as_ref().unwrap_or(&view),
             format,
         );
+        #[cfg(not(target_arch = "wasm32"))]
+        let sampleable = self.frame_samples && config.usage.contains(wgpu::TextureUsages::COPY_SRC);
         inst.drain();
         let mut failure = inst.surface.take_error();
         let ready = cfg!(target_arch = "wasm32") || inst.surface.frame_presentable();
@@ -339,6 +341,19 @@ impl Module {
         {
             s.copy(&mut recording.encoder, &view);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        let sampled = (sampleable && ready && failure.is_none()).then(|| {
+            crate::readback::Rows::capture(
+                inst.sampled.as_ref(),
+                gpu,
+                &mut recording.encoder,
+                &texture.texture,
+            )
+            .presented(
+                crate::target::granted(inst.config.as_ref()),
+                alpha == wgpu::CompositeAlphaMode::Opaque,
+            )
+        });
         let commands = match recording.finish() {
             Ok(commands) => Some(commands),
             Err(e) => {
@@ -346,6 +361,10 @@ impl Module {
                 None
             }
         };
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(rows) = sampled.filter(|_| commands.is_some()) {
+            inst.sampled = Some(rows);
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(s) = inst.scratch.as_mut().filter(|_| retry) {
             s.continues = !ready && failure.is_none();
@@ -972,6 +991,9 @@ mod scene_tests {
         fn bind(&mut self, _: &[Value], _: Option<f64>) -> Result<(), SurfaceError> {
             Ok(())
         }
+        fn render_scale(&self) -> f32 {
+            0.5
+        }
         fn is_empty(&self) -> bool {
             self.0
         }
@@ -982,7 +1004,7 @@ mod scene_tests {
             _: &wgpu::Queue,
             encoder: &mut wgpu::CommandEncoder,
             target: &wgpu::TextureView,
-            _: wgpu::TextureFormat,
+            format: wgpu::TextureFormat,
         ) -> bool {
             if !self.0 {
                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -991,7 +1013,18 @@ mod scene_tests {
                         resolve_target: None,
                         depth_slice: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                            load: wgpu::LoadOp::Clear(
+                                if format == wgpu::TextureFormat::Rgba16Float {
+                                    wgpu::Color {
+                                        r: 1.5,
+                                        g: -0.25,
+                                        b: 0.375,
+                                        a: 1.,
+                                    }
+                                } else {
+                                    wgpu::Color::GREEN
+                                },
+                            ),
                             store: wgpu::StoreOp::Store,
                         },
                     })],
@@ -1080,6 +1113,7 @@ mod scene_tests {
         };
         let mut m = Module::new(&REGISTRY);
         m.set_seekable(true);
+        m.frame_samples = true;
         m.set_gpu(gpu);
         // SAFETY: a new CAMetalLayer retained past the module.
         let layer: objc2::rc::Retained<objc2::runtime::AnyObject> =
@@ -1103,7 +1137,7 @@ mod scene_tests {
         let frame = Frame {
             width: 8.,
             height: 8.,
-            scale: 1.,
+            scale: 2.,
             now_ms: 0.,
             seekable: true,
             period_ms: 0.,
@@ -1119,9 +1153,33 @@ mod scene_tests {
         assert_eq!(m.take_error(), "");
         assert!(m.has_device(id));
         assert_eq!(m.render(id, &frame), Some(false));
+        let (size, bytes) = m.sampled_frame(id).expect("the presented pixels");
+        assert_eq!(&size[..2], [8, 8]);
+        assert!(bytes.chunks_exact(4).all(|p| p == [0, 255, 0, 255]));
         assert!(m.flush());
         assert!(m.sync());
         assert_eq!(m.take_error(), "");
+        let config = m.instances.get_mut(&id).unwrap().config.as_mut().unwrap();
+        config.alpha_mode = wgpu::CompositeAlphaMode::Opaque;
+        config.format = wgpu::TextureFormat::Rgba16Float;
+        config.view_formats.clear();
+        assert_eq!(m.render_readback(id, &frame, None), Some(false));
+        let (info, bytes) = m
+            .sampled_frame(id)
+            .expect("the offscreen extended-range frame");
+        assert_eq!(&info[..2], [8, 8]);
+        assert_eq!(
+            info[2], 1,
+            "an offscreen frame takes the bound surface's alpha policy"
+        );
+        let expected = [0x3e00u16, 0xb400, 0x3600, 0x3c00]
+            .map(u16::to_le_bytes)
+            .concat();
+        assert!(bytes.chunks_exact(8).all(|p| p == expected));
+
+        m.instances.get_mut(&id).unwrap().surface = Box::new(Layer(true));
+        assert_eq!(m.render_readback(id, &frame, None), Some(false));
+        assert_eq!(m.sampled_frame(id), Some(([1, 1, 0], vec![0; 4])));
         drop(m);
         drop(layer);
     }

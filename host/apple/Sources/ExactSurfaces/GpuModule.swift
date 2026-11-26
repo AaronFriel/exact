@@ -128,6 +128,9 @@ final class GpuModule {
     typealias TextureMetalFn = @convention(c) (UInt32, UInt32, UInt32, UnsafeMutableRawPointer?) -> UInt32
     typealias SyncFn = @convention(c) () -> UInt32
     typealias WantsFn = @convention(c) (UInt32) -> UInt32
+    typealias SampleFrameFn = @convention(c) (UInt32, UnsafeMutablePointer<UInt32>) -> Int
+    var sampleFrame: SampleFrameFn?
+    var renderOffscreen: RenderFn?
     typealias ReadbackFn = @convention(c) (UInt32, Float, Float, Float, Double, UnsafeMutablePointer<UInt8>?, Int) -> UInt32
     typealias ChildFn = @convention(c) (UInt32, UInt32, UnsafePointer<UInt8>?, Int, Float, Float, Float, Float, UInt32, UInt32, UnsafePointer<UInt8>?, Int) -> UInt32
     typealias CountFn = @convention(c) (UInt32, UInt32) -> UInt32
@@ -394,6 +397,9 @@ final class GpuModule {
         module.due = sym("gpu_due", DueFn.self)
         module.maxFps = sym("gpu_max_fps", WantsFn.self)
         module.presentationFlags = sym("gpu_presentation_flags", WantsFn.self)
+        if ExactEnv.agentMode { sym("gpu_enable_frame_samples", RetierFn.self)?() }
+        module.sampleFrame = sym("gpu_sample_frame", SampleFrameFn.self)
+        module.renderOffscreen = sym("gpu_render_offscreen", RenderFn.self)
         module.bindAt = sym("gpu_bind_at", BindAtFn.self)
         module.canvasSize = sym("gpu_size", SizeFn.self)
         module.wantsPads = sym("gpu_wants_pads", WantsFn.self)

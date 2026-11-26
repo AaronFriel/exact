@@ -110,6 +110,7 @@ package protocol Canvases: AnyObject {
     var lifecycleNeedsRetry: Bool { get }
     // The agent's seams (LLP 1046.001).
     func waitUntilReady() -> Bool
+    func sampledFrame(of view: NodeView) -> CGImage?
     func decorate(_ request: [String: Any], _ reply: [String: Any]) -> [String: Any]
     func worlds(_ request: [String: Any]) -> [[String: Any]]
     func restoreReply(_ reply: [String: Any]) -> [String: Any]
@@ -251,6 +252,7 @@ final class NoCanvases: Canvases {
     func lifecycleFrame() {}
     var lifecycleNeedsRetry: Bool { false }
     func waitUntilReady() -> Bool { true }
+    func sampledFrame(of view: NodeView) -> CGImage? { nil }
     func decorate(_ request: [String: Any], _ reply: [String: Any]) -> [String: Any] { reply }
     func worlds(_ request: [String: Any]) -> [[String: Any]] { [] }
     func restoreReply(_ reply: [String: Any]) -> [String: Any] { reply }
