@@ -738,6 +738,8 @@ impl Workers {
                     .spawn(move || {
                         #[cfg(target_os = "android")]
                         crate::android::background_priority();
+                        #[cfg(windows)]
+                        let _wic = super::jpeg_decode::Worker::enter();
                         owner.run()
                     })
                     .expect("PNG worker");
