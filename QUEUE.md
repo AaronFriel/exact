@@ -1614,6 +1614,11 @@ sits on that list carries the trade it would take.
 
 ## Cheap, any time
 
+- On macOS, run `RUST_TEST_THREADS=1 cargo test -p exact-executor --lib`. The URLSession fixture sometimes counts two connections for six sequential reads. The two `lane_tests::platform_reads` tests passed in isolation.
+- Run `cargo test -p exact-runner --lib geometry::modal_tests`. Seven modal and popover geometry cases miss descendants in hit tests or selectors. One backdrop probe returns `upper` where `upper-child` was expected.
+- Run `cargo test -p exact-runner --lib a_data_send_carries_the_grants_it_was_admitted_under`. The handler sees an empty authority on a send admitted with `net.fetch https://source.test`.
+- Run `cargo test -p exact-runner --test it layout_reports_resolved_and_skipped_paragraphs`. The inspected text node omits the expected `flow_skipped` reason after layout.
+
 - Clarify the guide’s missing-key warning for Android release builds. Unset a `"required": "release"` key under development trust. An ordinary build warns, and `android --release` refuses the same missing value.
 
 - Include a target whose slop alone enters the viewport in web spacing checks. Put a 16 px button at `left: -16px` with 12 px right slop and a 16 px neighbor at `left: 14px`. Both take taps in the viewport, but only the neighbor is observed. A 0×0 control with 22 px slop is also absent from the iOS and web item lists.
