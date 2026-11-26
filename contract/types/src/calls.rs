@@ -123,7 +123,10 @@ fn arg_types(
         if !checks::accepts_expr(pt, arg, &t, scope, shapes) {
             return err(
                 "type-argument",
-                format!("`{callee}` expects `{pt}`, given `{t}`"),
+                format!(
+                    "`{callee}` expects `{pt}`, given `{t}`{}",
+                    super::enums::rejection(pt, arg)
+                ),
                 arg.span(),
             );
         }

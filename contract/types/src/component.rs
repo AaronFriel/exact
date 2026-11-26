@@ -775,8 +775,9 @@ fn refine_params_from_view(
                                     return err(
                                         "type-argument",
                                         format!(
-                                            "`{name}` expects `{}`, given `{t}`",
-                                            ct.actions[ai][i]
+                                            "`{name}` expects `{}`, given `{t}`{}",
+                                            ct.actions[ai][i],
+                                            super::enums::rejection(&ct.actions[ai][i], arg)
                                         ),
                                         arg.span(),
                                     );
@@ -1182,7 +1183,8 @@ pub(crate) fn action_call(
             return err(
                 "type-argument",
                 format!(
-                    "`{name}` expects `{pt}`, given `{t}`{}",
+                    "`{name}` expects `{pt}`, given `{t}`{}{}",
+                    super::enums::rejection(pt, arg),
                     crate::shadows::note(name, Some(scope.component()), shapes)
                 ),
                 arg.span(),
