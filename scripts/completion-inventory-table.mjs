@@ -1026,8 +1026,8 @@ export const classifications = [
       "ContentRegionState::refusal ContentRegionState::text_snapshot ContentRegionState::work_counts"],
     ["painted:host/painted/src/text.rs",
       "Paragraph::baselines Paragraph::ellipsized Paragraph::ink_capacity_bytes Paragraph::layout_runs Paragraph::line_bottoms Paragraph::lines Paragraph::paint_glyphs " +
-      "Paragraph::run_backgrounds Paragraph::runs Run::from_kernel Run::from_style Spec::collapse_white_space Spec::from_request Spec::is_empty Spec::markdown " +
-      "Spec::shown TextEngine::declared_face_id TextEngine::face_count TextEngine::glyph_runs TextEngine::handoff_residency TextEngine::install_plan " +
+      "Paragraph::run_backgrounds Paragraph::runs Run::from_kernel Run::from_style Spec::collapse_white_space Spec::from_request Spec::is_empty " +
+      "TextEngine::declared_face_id TextEngine::face_count TextEngine::glyph_runs TextEngine::handoff_residency TextEngine::install_plan " +
       "TextEngine::install_runtime TextEngine::measure TextEngine::new TextEngine::normal_line_height TextEngine::paint TextEngine::paragraph TextEngine::residency " +
       "TextEngine::resolved_face_id TextEngine::shared TextEngine::shared_for_plan"],
     ["painted:host/painted/src/text/cache.rs",
