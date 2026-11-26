@@ -984,6 +984,8 @@ pub fn props_of(node: &NodeFacts<'_>) -> SortedMap<String, String> {
             // keeps `partition` on the element for the agent's tree, never as a
             // DOM attribute; the Apple words do not reach the page.
             PropId::Partition => "partition",
+            // The page resolves it to the frame's source (the glue keeps it on the element, as `partition`).
+            PropId::Library => "library",
             PropId::AppleAllowsBackForwardNavigationGestures
             | PropId::AppleAllowsMagnification
             | PropId::AppleInactiveSchedulingPolicy => continue,

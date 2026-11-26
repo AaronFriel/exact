@@ -745,6 +745,8 @@ pub fn attr(name: &str) -> Option<AttrTarget> {
         // @ref LLP 1020.002 D1, §9 — a top-level guest's own storage, and
         // `WKWebView`'s words under the platform's key (`frames.rs`).
         "partition" => AttrTarget::Prop(p("partition")),
+        // A frame whose source is a library component, named here and resolved by the page.
+        "library" => AttrTarget::Prop(p("library")),
         "apple.allowsBackForwardNavigationGestures" => {
             AttrTarget::Prop(p("appleAllowsBackForwardNavigationGestures"))
         }

@@ -40,8 +40,15 @@ component App
       button press=bump testId="bump"
         text "bump"
 `;
+// A consumer that names a library component; the page's registry chooses its source at run time.
+const consumer = `component App
+  view
+    column testId="consumer-root"
+      iframe library="ui/badge" sandbox="allow-scripts" id="guest" testId="guest"
+`;
 const apps = {
   themed,
+  consumer,
   alpha: view('Alpha'),
   beta: view('Beta'),
   // Everything a view can do to its page that a Contract can spell: the title, a name the page owns, and focus.
@@ -64,7 +71,9 @@ for (const [name, src] of Object.entries(apps)) {
 }
 const types = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json' };
 const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch(request) {
-  const url = new URL(request.url), m = /^\/v\/(\w+)\/(.+)$/.exec(url.pathname), plain = /^\/u\/(.*)$/.exec(url.pathname);
+  const url = new URL(request.url), guest = /^\/lib\/(\w+)$/.exec(url.pathname);
+  if (guest) return new Response(`<!doctype html><title>${guest[1]}</title><p>${guest[1]}</p>`, { headers: { 'content-type': 'text/html' } });
+  const m = /^\/v\/(\w+)\/(.+)$/.exec(url.pathname), plain = /^\/u\/(.*)$/.exec(url.pathname);
   if (plain) { const f = resolve(scratch, 'hostile', 'plain', plain[1] || 'index.html'); return existsSync(f) ? new Response(extname(f) === '.html' ? readFileSync(f, 'utf8').replace('<base href="/">', '<base href="/u/">') : Bun.file(f), { headers: { 'content-type': types[extname(f)] ?? 'application/octet-stream' } }) : new Response('Not found', { status: 404 }); }
   if (url.pathname === '/') return new Response(`<!doctype html><meta charset="utf-8"><title>PAGE TITLE</title>
     <style>.c1,.c2,.c3,.c4,.c5,.c6,.c7,.c8{display:none !important} #exact-root{outline:5px solid red} #label,#btn,#field{display:none}</style>
@@ -121,6 +130,29 @@ test('a value the page owns reaches a mounted view through refresh, without a re
   expect(await label()).toBe('dark 1');
   await p.evaluate(() => { window.themed.refresh('pageTone'); });
   await p.waitForFunction(() => document.getElementById('a').shadowRoot.querySelector('[data-testid="label"]').textContent === 'light 1');
+  await p.close();
+});
+
+test('an iframe library resolves from the page registry and is replaced without rebuilding the consumer', async () => {
+  const p = await browser.newPage();
+  await p.goto(`http://127.0.0.1:${server.port}/`);
+  const origin = `http://127.0.0.1:${server.port}`;
+  await p.evaluate(async origin => {
+    const { mount } = await import(`${origin}/v/alpha/scoped-mount.mjs`);
+    window.registry = { 'ui/badge': `${origin}/lib/one` };
+    window.consumer = await mount(document.getElementById('a'), { base: `${origin}/v/consumer/`, scope: 'consumer', mode: 'open', globals: { exactLibrary: async name => window.registry[name] } });
+  }, origin);
+  const guest = () => p.evaluate(() => document.getElementById('a').shadowRoot.querySelector('iframe')?.getAttribute('src'));
+  await p.waitForFunction(o => document.getElementById('a').shadowRoot.querySelector('iframe')?.getAttribute('src') === `${o}/lib/one`, origin);
+  // The registry changes; the frame keeps its guest until the page says so, then shows the replacement.
+  await p.evaluate(origin => { window.registry['ui/badge'] = `${origin}/lib/two`; }, origin);
+  await new Promise(r => setTimeout(r, 200));
+  expect(await guest()).toBe(`${origin}/lib/one`);
+  await p.evaluate(() => window.consumer.refreshLibraries());
+  await p.waitForFunction(o => document.getElementById('a').shadowRoot.querySelector('iframe')?.getAttribute('src') === `${o}/lib/two`, origin);
+  // A name the registry lacks shows nothing.
+  await p.evaluate(() => { delete window.registry['ui/badge']; window.consumer.refreshLibraries(); });
+  await p.waitForFunction(() => document.getElementById('a').shadowRoot.querySelector('iframe')?.getAttribute('src') === 'about:blank');
   await p.close();
 });
 

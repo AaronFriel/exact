@@ -337,3 +337,26 @@ fn a_guests_requests_are_held_for_the_agent_on_its_frame() {
     .contains("\"answered\":\"value\""));
     assert_eq!(r.device_holds().len(), 1);
 }
+
+/// An `iframe` may name a library component the page resolves at run time; the guest stays sandboxed and has no source of its own.
+#[test]
+fn a_library_frame_is_a_sandboxed_guest_the_page_names() {
+    let refused = |view: &str| {
+        contract::compile(&format!("component A\n  view\n    {view}\n"))
+            .unwrap_err()
+            .id
+    };
+    contract::compile("component A\n  view\n    iframe library=\"ui/badge\" sandbox=\"allow-scripts\" testId=\"badge\"\n").unwrap();
+    // A name from state is as replaceable as a literal one.
+    contract::compile("component A\n  state n = \"ui/badge\"\n  view\n    iframe library=n sandbox=\"allow-scripts\"\n").unwrap();
+    assert_eq!(refused("iframe library=\"ui/badge\""), "lower-iframe-library-sandbox");
+    assert_eq!(
+        refused("iframe library=\"ui/badge\" sandbox=\"allow-scripts allow-same-origin\""),
+        "lower-iframe-library-sandbox"
+    );
+    assert_eq!(
+        refused("iframe library=\"ui/badge\" src=\"https://a.test\" sandbox=\"\""),
+        "lower-iframe-library-src"
+    );
+    assert_eq!(refused("column library=\"ui/badge\""), "lower-attr-tag");
+}

@@ -489,7 +489,7 @@ export function applyProps(el, set, clear, adopting = false) {
       } else {
         el.removeAttribute(name);
       }
-    } else if (el instanceof HTMLIFrameElement && (name === "src" && appFrameSource(el, value) || /^(partition|appleAllowsBackForwardNavigationGestures|appleAllowsMagnification|appleInactiveSchedulingPolicy)$/i.test(name) && (el["$" + name] = value, true))) {} else {
+    } else if (el instanceof HTMLIFrameElement && (name === "src" && appFrameSource(el, value) || /^(partition|library|appleAllowsBackForwardNavigationGestures|appleAllowsMagnification|appleInactiveSchedulingPolicy)$/i.test(name) && (el["$" + name] = value, true))) {} else {
       const app = (name === "src" || name === "poster") && (el[`exactApp-${name}`] = value.startsWith("app:/") ? value : null), v = app ? appSource(el, name, value) : name === "src" && !(el instanceof HTMLIFrameElement) && value.startsWith("data:") && value.length > DATA_LIMIT ? (log(`image refused: a data: source is over ${DATA_LIMIT} bytes`), "") : name === "src" || name === "href" || name === "poster" ? localAssetURL(value) : value, same = el.getAttribute(name) === v;
       // setting what is there reloads an adopted iframe or video
       if (el instanceof HTMLIFrameElement && name === "src") {

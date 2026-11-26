@@ -9,8 +9,9 @@ use crate::{err, LowerError};
 use contract_syntax::{Attr, Expr};
 
 /// What only an `iframe` takes.
-const FRAME_ONLY: [&str; 12] = [
+const FRAME_ONLY: [&str; 13] = [
     "partition",
+    "library",
     "zoom",
     "currententrychange",
     "navigatesuccess",
@@ -60,6 +61,27 @@ pub(crate) fn check(tag: &str, positional: &[Expr], attrs: &[Attr]) -> Result<()
                     format!("`apple.inactiveSchedulingPolicy` is `WKPreferences.InactiveSchedulingPolicy`'s: \"suspend\", \"throttle\" or \"none\", not {v:?}"),
                     a.span,
                 );
+            }
+        }
+    }
+    if let Some(l) = attrs.iter().find(|a| a.name == "library") {
+        // A library component is a guest the page chose by name at run time: it is sandboxed, never framed at the app's origin.
+        if let Some(a) = attrs.iter().find(|a| a.name == "src") {
+            return err("lower-iframe-library-src", "an `iframe` with a `library` takes its source from the page's registry: drop `src`", a.span);
+        }
+        if let Some(e) = positional.first() {
+            return err("lower-iframe-library-src", "an `iframe` with a `library` takes its source from the page's registry: drop the source argument", e.span());
+        }
+        match attrs.iter().find(|a| a.name == "sandbox") {
+            None => {
+                return err("lower-iframe-library-sandbox", "an `iframe` with a `library` needs a `sandbox`: its guest is code the page chose by name", l.span);
+            }
+            Some(a) => {
+                if let Expr::Str(v, _) = &a.value {
+                    if v.split_ascii_whitespace().any(|w| w == "allow-same-origin") {
+                        return err("lower-iframe-library-sandbox", "an `iframe` with a `library` takes no `allow-same-origin`: its guest keeps its own origin", a.span);
+                    }
+                }
             }
         }
     }

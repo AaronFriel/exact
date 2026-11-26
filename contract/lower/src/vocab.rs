@@ -123,6 +123,7 @@ pub const CONTEXTUAL: &[(&str, &str)] = &[
     ("start", "`progress` with `end`"),
     ("end", "`progress` with `start`"),
     ("sandbox", "`iframe`"),
+    ("library", "`iframe`"),
     ("src", "`iframe` or `video`"),
     ("load", "`iframe`, `image` or a native module"),
     ("message", "`iframe`, `canvas` or a native module"),

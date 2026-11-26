@@ -27,6 +27,7 @@ export function h(p, tag, cls, attrs, text, ns) {
     const e = adopt(p, tag, cls, attrs);
     if (tag === 'video' || tag === 'audio') Media.media(e, attrs);
     if (tag === 'iframe') frame(e, attrs?.['data-app-src']);
+    if (tag === 'iframe' && attrs?.library != null) library(e, attrs.library);
     if (tag === 'button') oneActivation(e);
     return e;
   }
@@ -52,6 +53,7 @@ export function h(p, tag, cls, attrs, text, ns) {
   if (Paint) e.$paintFacts = bits;
   if (text !== 0) e.textContent = text;
   if (tag === 'iframe') frame(e, attrs?.['data-app-src']);
+  if (tag === 'iframe' && attrs?.library != null) library(e, attrs.library);
   if (tag === 'button') oneActivation(e);
   p.append(owner ? listItem(e, owner) : e);
   // an `audio` is the same media host (LLP 1042 §8)
@@ -132,7 +134,7 @@ const BOOL =
   // An iframe's partition and Apple words, kept on the element, never DOM attributes (a browser has neither,
   // LLP 1020.002 Q4).
   NOT_DOM =
-    /^(partition|appleAllowsBackForwardNavigationGestures|appleAllowsMagnification|appleInactiveSchedulingPolicy)$/i;
+    /^(partition|library|appleAllowsBackForwardNavigationGestures|appleAllowsMagnification|appleInactiveSchedulingPolicy)$/i;
 /** A loaded piece's own handling of a prop (symbols.js's `src`): true when handled. */
 export const PropHooks = {};
 // Which field composes, for a piece loaded later (LLP 1114.007).
@@ -199,6 +201,35 @@ const navigable = (v, e) => {
       .toLowerCase()
       .split(/[\t\n\f\r ]+/)
       .includes('allow-same-origin');
+// An iframe's `library` (a name the page's registry resolves): `globalThis.exactLibrary(name)` answers the guest's source, or a
+// promise of it, when the frame mounts and again when the page calls `exact.refreshLibraries()` (the registry changed), so a
+// consumer is replaced without being recompiled. A name the registry does not know, or a source navigation would refuse, shows
+// about:blank. The guest stays a sandboxed frame (the compiler refuses `allow-same-origin` beside a `library`).
+const Libraries = new Set();
+function library(e, name) {
+  e.$library = name;
+  const token = (e.$libraryToken = (e.$libraryToken ?? 0) + 1);
+  if (name == null) return void Libraries.delete(e);
+  Libraries.add(e);
+  const show = u => {
+    if (e.$libraryToken !== token) return;
+    const s = typeof u === 'string' && navigable(u, e) ? u : 'about:blank';
+    if (e.getAttribute('src') !== s) e.setAttribute('src', s);
+    commitGuestOrigin(e);
+  };
+  let u;
+  try {
+    u = globalThis.exactLibrary?.(name);
+  } catch {
+    u = null;
+  }
+  if (u?.then) u.then(show, () => show(null));
+  else show(u);
+}
+(globalThis.exact ??= {}).refreshLibraries = () => {
+  for (const e of Libraries) if (e.isConnected) library(e, e.$library);
+    else Libraries.delete(e);
+};
 function frame(e, v) {
   commitGuestOrigin(e);
   // an app file, or a page of the app's origin whose query may name one (LLP 1020.001 D7; picker-glue.js decides)
@@ -269,6 +300,7 @@ export function P(e, name, f) {
     // no material, cleared as the runner clears it (bridge.rs `prop_value`)
     if (name === 'backgroundMaterial' && v === 'none') v = null;
     if (PropHooks[name]?.(e, v)) return;
+    if (name === 'library' && e.localName === 'iframe') return void library(e, v);
     if (NOT_DOM.test(name)) return void (e['$' + name] = v);
     // media.js: `paused`, `volume`, `currentTime` … are the glue's; an `app:/` source its own
     if (e.$media && Media.mediaProp(e, name, v)) return;

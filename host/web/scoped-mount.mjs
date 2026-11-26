@@ -28,6 +28,8 @@ export async function mount(host, { base, scope, css, mode = 'closed', focus = f
     // `refresh(source)`: the page's value behind that source changed (a `globals` function it reads); every resource of this
     // view that reads the source is asked again, and the view keeps its state.
     refresh(source) { registry.get(scope)?.own?.get('exact')?.refreshSource?.(String(source)); },
+    // `refreshLibraries()`: the page's `exactLibrary` registry changed; every `iframe library=…` of this view resolves again.
+    refreshLibraries() { registry.get(scope)?.own?.get('exact')?.refreshLibraries?.(); },
     unmount() { registry.delete(scope); root.remove(); },
   };
 }

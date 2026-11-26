@@ -1861,6 +1861,12 @@
       "name": "accessibilityAutocomplete",
       "kind": "str",
       "_comment": "ARIA `aria-autocomplete` on a text field: `none`, `inline`, `list` or `both`, what the widget does to complete input (WAI-ARIA 1.2 §6.6). The DOM attribute on the web; AppKit and UIKit have no such property on a view, so the Apple hosts expose none."
+    },
+    {
+      "id": 311,
+      "name": "library",
+      "kind": "str",
+      "_comment": "On an iframe: the name of a component library entry whose source the page resolves when the frame mounts and again when the page says its registry changed, so a consumer is replaced without being recompiled. The guest is an ordinary sandboxed frame; the name is never a DOM attribute."
     }
   ],
   "_enums": "Wire discriminant is the 0-based index. An unknown discriminant is a typed decode rejection, never a fallback. refused: keywords the wire carries and the compiler refuses an author, because no presenter builds them (LLP 1043.000 §3 D1); `contract vocab` lists the others. No wire reads it, so it is outside the digest.",
