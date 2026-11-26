@@ -6,7 +6,7 @@ import { hostFixtureFile, glueCase, glueNode, glueDeclarations } from '../web/te
 import { test, expect } from 'bun:test';
 import { suiteBrowser } from '../../scripts/agent-launch.mjs';
 import { builtFile } from './content-names.mjs';
-import { engagement } from '../web/engagement.js';
+import { engagement, whenRendered } from '../web/engagement.js';
 import { agentParameters } from '../web/navigation/agent-parameters.js';
 
 test('relaunch reloads the browser document and keeps committed storage', async () => {
@@ -227,9 +227,9 @@ test.each([false, true])('a saved scheme waits beneath a grid copy pin (wasm: %s
   const command = glueCase(source('../web/wasm/commit.js'), 'command');
   const boot = glueDeclarations(source('../web/wasm/boot.js'), ['bootNow', 'reportColors']);
   const client = glueNode(source('./dev.mjs'), n => n.type === 'VariableDeclarator' && n.id.name === 'client' && n.init);
-  // The client writes its replacement boundary and the page's engagement tracker into the script (dev.mjs).
   const boundary = glueNode(source('./dev.mjs'), n => n.type === 'FunctionDeclaration' && n.id.name === 'replacementBoundary' && n);
-  const script = new Function('INSPECT_EVENTS', 'replacementBoundary', 'engagement', 'agentParameters', `return (${client})(0, null)`)([], boundary, engagement, agentParameters)
+  const script = new Function('INSPECT_EVENTS', 'replacementBoundary', 'engagement', 'agentParameters', 'whenRendered',
+    `return (${client})(0, null, {epoch: 'fixture'})`)([], boundary, engagement, agentParameters, whenRendered)
     .replace(/^<script>|<\/script>$/g, '');
   const pin = glueNode(wasm ? source('../web/dev.js') : script, n => n.type === 'VariableDeclarator' && n.id.name === 'pin' && n.init);
   const server = Bun.serve({ port: 0, fetch(request) {

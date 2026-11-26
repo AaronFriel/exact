@@ -138,7 +138,7 @@ fn reads_answer_on_the_clones_design() {
     let dir = app("reads", CLONE);
     let mut s = Serve::start(&dir, &[]);
     let (hello, _) = s.ask(json!({"method": "hello", "client": "test"}));
-    assert_eq!(hello["ok"]["protocol"], "forma/1.19");
+    assert_eq!(hello["ok"]["protocol"], "forma/1.20");
     for protocol in ["tamber/1", "tamber/1.18"] {
         let (reply, events) = s.ask(json!({"method": "hello", "protocol": protocol}));
         assert_eq!(
@@ -509,7 +509,7 @@ fn requests_are_typed_bounded_and_attributed() {
         assert!(v["error"].is_object(), "{v}");
     }
     let (hello, _) = s.ask(json!({"method": "hello"}));
-    assert_eq!(hello["ok"]["protocol"], "forma/1.19");
+    assert_eq!(hello["ok"]["protocol"], "forma/1.20");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

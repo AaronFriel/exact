@@ -665,7 +665,7 @@ writeFileSync(resolve(gen, 'main.js'), [
   "const start = () => {",
   "  const state = app();",
   ...(launchWeb.length ? ["  marks.mounted();"] : []),
-  ...(devReload ? ["  finishDev();"] : []),
+  ...(devReload ? ["  finishDev(); globalThis.__exactDevFirstCommit?.();"] : []),
   `  globalThis.exact = Object.assign(globalThis.exact ?? {}, { ready: true, journal, clock, views: Views, viewId, After${production ? '' : ', advance, commit, data, state, inflight, heldAsks, heldReplies, resources: Resources, mutations: Mutations, writes: writeRecords'} });`,
   // A development page counts its work and samples its frames (LLP 1079); the agent adapter, only when the agent drives it,
   // else its passive reads, which the dev loop's attach bridge loads once a person allows an agent (LLP 1012.000 D2).

@@ -133,6 +133,7 @@ function reportRefused(r) {
   if (!maybe(r.plan, v => text(v, 1024)) || !maybe(r.design, v => text(v, 1024))) return '`plan` and `design` are strings, or null';
   if (!maybe(r.planDigest, v => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v))) return '`planDigest` is a SHA-256 in hex, or null';
   if (r.kind === 'status') {
+    if (r.rendered !== undefined && !(Number.isSafeInteger(r.rendered) && r.rendered >= 0)) return '`rendered` is a nonnegative build sequence';
     if (!maybe(r.scheme, v => text(v, 32)) || !maybe(r.contrast, v => text(v, 32))) return '`scheme` and `contrast` are strings, or null';
     if (!maybe(r.mode, v => object(v) && Object.keys(v).length <= 64 && Object.entries(v).every(([a, x]) => a.length <= 64 && text(x, 64)))) return '`mode` is {axis: value}, or null';
     if (!maybe(r.rootFontSize, Number.isFinite) || !maybe(r.revision, v => Number.isSafeInteger(v) && v >= 0)) return '`rootFontSize` is a number and `revision` a whole number, or null';
@@ -446,6 +447,15 @@ export function buildChannel({ send = () => {}, log = () => {}, selected = null,
       // design the build runs now: a design still waiting is told first.
       if (r.kind !== 'status' && toldLater.has(b.id)) tellStatus(b, true);
       if (r.kind === 'status') {
+        if (r.rendered !== undefined) {
+          const current = s.sources?.sequence?.();
+          if (r.rendered !== current) {
+            // A status in flight at publication still describes the old page. Keep its facts
+            // until this registration has reported the current build.
+            if (current !== undefined && b.status?.rendered === current) return { status: 204, body: null };
+            delete r.rendered;
+          }
+        }
         // A late report (older than the status kept) cannot rewind it; a
         // revision this registration was never sent (an earlier run's, a
         // report queued before it registered) acknowledges nothing.
@@ -458,7 +468,7 @@ export function buildChannel({ send = () => {}, log = () => {}, selected = null,
         // status stays at that revision, gone once it moves on.
         if (b.unsupported && b.unsupported.revision === undefined) b.unsupported.revision = at;
         else if (b.unsupported && b.unsupported.revision !== at) b.unsupported = null;
-        b.status = { scheme: r.scheme ?? null, contrast: r.contrast ?? null, mode: r.mode ?? null, rootFontSize: r.rootFontSize ?? null, revision: at, location: r.location ?? null, app: r.app ?? null };
+        b.status = { ...(r.rendered === undefined ? {} : { rendered: r.rendered }), scheme: r.scheme ?? null, contrast: r.contrast ?? null, mode: r.mode ?? null, rootFontSize: r.rootFontSize ?? null, revision: at, location: r.location ?? null, app: r.app ?? null };
         if (typeof r.plan === 'string') b.plan = r.plan;
         // (Said unknown, null, it is unknown: such a build is sent every plan's outline.)
         const was = b.planDigest;

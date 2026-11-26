@@ -786,7 +786,7 @@ for (const [loop, flags] of [['the JS loop', []]]) {
     const { base, stop } = await devLoop(flags);
     try {
       const hello = await helloOf(base);
-      expect(hello.protocol).toBe('forma/1.19');
+      expect(hello.protocol).toBe('forma/1.20');
       expect(Object.keys(hello.files)).toContain('app.forma');
       // The loop's own origin, which the design tool frames, and the page's
       // header that lets only the tool (and itself) frame it.

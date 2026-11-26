@@ -6,7 +6,7 @@ import { same, sameShape } from './dev-inline.mjs';
 import { designPath } from '../../scripts/forma-design-path.mjs';
 import { streamFrame } from '../../scripts/forma-builds.mjs';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { availableParallelism, tmpdir } from 'node:os';
@@ -69,6 +69,7 @@ async function sharedFile(root, rest) {
   return null;
 }
 function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, queue, onIdle, onBuilt, channel = () => null, client, tableTool = () => null, compiler = () => null, design: designNow = () => null, env = process.env, log = console.log, idleMs = 60_000 }) {
+  const epoch = randomBytes(12).toString('hex');
   const controls = frame ? base + '/__dev' : base;
   const source = resolve(cache, 'source'), live = resolve(cache, 'live'), stage = resolve(cache, 'stage'), dist = resolve(cache, 'dist');
   const clients = new Set(), maps = new Map(), tables = new Map(), procs = new Set();
@@ -280,9 +281,9 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, qu
   function stream(req, res) {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
     res.write(':\n\n');
-    const opened = channel()?.open((frame) => res.write(json(frame)), { map: digest => maps.get(digest),
+    const opened = channel()?.open((frame) => res.write(json(frame)), { map: digest => maps.get(digest), sequence: () => seq,
       ...(frame ? { design: () => shownDesign === committed && committed ? { digest: committed.digest, source: committedSource } : null } : {}) }) ?? null;
-    res.write(json({ ...(failed ? { error: failed } : {}), reload: seq, revision: null, ...(opened?.nonce ? { nonce: opened.nonce } : {}) }));
+    res.write(`id: ${epoch}\n` + json({ ...(failed ? { error: failed } : {}), reload: seq, revision: null, ...(opened?.nonce ? { nonce: opened.nonce } : {}) }));
     if (snapshot) res.write(json(notice()));
     clients.add(res);
     if (frame && built && clients.size === 1) onBuilt?.();
@@ -302,7 +303,7 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, qu
     const found = await sharedFile(app.dir, rest);
     if (found) {
       requestedAssets.add(found.route.slice(1));
-      send(req, res, found, found.route.endsWith('.html') ? found.body.toString() + client(seq) : found.body);
+      send(req, res, found, found.route.endsWith('.html') ? found.body.toString() + client(seq, epoch, false) : found.body);
       return true;
     }
     res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return true;
@@ -357,7 +358,7 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, qu
         body = readFileSync(found.path).toString();
         const mount = `<base href="${base}/">`;
         if (!frame) body = body.includes('<base href="/">') ? body.replace('<base href="/">', mount) : /<head[^>]*>/.test(body) ? body.replace(/<head[^>]*>/, (h) => `${h}${mount}`) : body.replace(/^(<!doctype[^>]*>)?/i, (d) => `${d}${mount}`);
-        body += client(seq);
+        body += client(seq, epoch);
       }
       send(req, res, found, body);
       return true;
@@ -555,7 +556,7 @@ export function frameLoops(options) {
         const cache = mkdtempSync(resolve(folder, 'frame-'));
         const loop = previewLoop({ ...options, frame: entry,
           onBuilt: () => { if (preview || pendingPreview) void replay(loop); }, base, label: name, cache, inputs, queue,
-          client: seq => options.client(seq, base + '/__dev'),
+          client: (seq, epoch, numbered = true) => options.client(seq, base + '/__dev', epoch, numbered),
           onIdle: stopped => {
             loops.delete(name);
             void stopped.then(() => rmSync(cache, { recursive: true, force: true }));

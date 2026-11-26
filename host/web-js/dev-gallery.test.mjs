@@ -14,7 +14,9 @@ import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rm
 import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { drivable } from '../../scripts/coverage.mjs';
 import { suiteBrowser } from '../../scripts/agent-launch.mjs';
+import { whenRendered } from '../web/engagement.js';
 import { frameBuildQueue, galleryCache } from './dev-gallery.mjs';
 import { FRAME_ANCESTORS } from '../../scripts/forma-server.mjs';
 import { fileURLToPath } from 'node:url';
@@ -38,14 +40,14 @@ function copy(id) {
   return dir;
 }
 
-async function devLoop(dir, env = {}) {
+async function devLoop(dir, env = {}, args = []) {
   const listener = createServer();
   await new Promise((ok) => listener.listen(0, '127.0.0.1', ok));
   const port = listener.address().port;
   await new Promise((ok) => listener.close(ok));
   // The build's lock and kept generations go beside its dist (serve.mjs `replaceBuild`): the dist sits in a directory of its own.
   const dist = join(mkdtempSync(join(tmpdir(), 'exact-dev-gallery-')), 'dist');
-  const dev = spawnOwned(process.execPath, [resolve(ROOT, 'host/web/dev.mjs'), '--app', dir, '--port', String(port)], { cwd: ROOT, env: { ...process.env, EXACT_WEB_DIST: dist, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const dev = spawnOwned(process.execPath, [resolve(ROOT, 'host/web/dev.mjs'), '--app', dir, '--port', String(port), ...args], { cwd: ROOT, env: { ...process.env, EXACT_WEB_DIST: dist, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   dev.stderr.on('data', (d) => { out = (out + d).slice(-20000); });
   await new Promise((ok, fail) => {
@@ -599,3 +601,198 @@ test('a streamless request advances while a connected frame keeps asking to buil
   await until(() => calls.includes('waiting'));
   expect(calls.slice(0, 2)).toEqual(['editing', 'waiting']);
 });
+
+async function listedBuilds(base) {
+  const { token } = await (await fetch(base + '/__forma/token')).json();
+  return async () => (await (await fetch(base + '/__forma', {
+    method: 'POST', headers: { 'x-exact-forma-token': token }, body: '{"method":"hello"}',
+  })).json()).ok.builds;
+}
+
+for (const gallery of [true, false]) test(`${gallery ? 'real gallery' : 'numbered wasm'} pages report their rendered build`, async () => {
+  const engines = await drivable(['chromium', 'webkit']);
+  if (!engines.length) return;
+  const dir = gallery ? copy(`test.render-gallery-${process.pid}`) : 'theme-fixture';
+  const loop = gallery ? await devLoop(dir) : await devLoop(dir, {
+    EXACT_TEST_TIMING: '1', EXACT_DEV_LISTEN_DELAY_MS: 'generation',
+  }, ['--wasm']);
+  try {
+    const list = await listedBuilds(loop.base), path = gallery ? '/__dev/gallery/' : '/';
+    for (const engine of engines) {
+      const browser = await suiteBrowser(engine);
+      let connect;
+      try {
+        const page = await browser.newPage();
+        if (!gallery) {
+          const waiting = new Promise(resolve => { connect = resolve; });
+          await page.route(/\/__dev$/, async route => { await waiting; await route.continue(); });
+        }
+        const registration = page.waitForRequest(req => req.url().endsWith('/__dev/report') && req.postDataJSON()?.kind === 'register', { timeout: 90_000 });
+        await page.goto(loop.base + path);
+        if (connect) {
+          await page.waitForFunction(() => document.getElementById('exact-root')?.dataset.bootMs !== undefined);
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          connect();
+        }
+        const { id } = (await registration).postDataJSON();
+        await until(async () => (await list()).some(row => row.id === id && row.status?.location === path && row.status.rendered === 1 && row.planDigest && (gallery ? row.page === 'gallery' : row.host === 'web' && row.plan)), 90_000);
+      } finally { connect?.(); await browser.close(); }
+    }
+  } finally {
+    await loop.stop();
+    if (gallery) rmSync(dirname(dir), { recursive: true, force: true });
+  }
+}, 900_000);
+
+for (const engine of await drivable(['chromium', 'webkit'])) test(`${engine}: the app and two frames report only builds rendered in their own viewports`, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-frame-render-'));
+  mkdirSync(join(dir, 'frames'));
+  writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Render', app: { name: 'Render', id: 'test.frame-render' } }));
+  writeFileSync(join(dir, 'app.forma'), 'forma canvas\n\ntheme\n  ink = #123456\n');
+  const entry = text => `component App\n  view\n    text "${text}" color="ink" testId="words"\n`;
+  for (const name of ['app', 'frames/a', 'frames/b']) writeFileSync(join(dir, name + '.contract'), entry(name));
+  const parent = createServer((_, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<!doctype html><body></body>'); });
+  await new Promise(ok => parent.listen(0, '127.0.0.1', ok));
+  const port = parent.address().port;
+  let browser, loop;
+  try {
+    loop = await devLoop(dir, { EXACT_TOOL_PORT: String(port) });
+    const list = await listedBuilds(loop.base);
+    const paths = ['/', '/__dev/frames/a/', '/__dev/frames/b/'];
+    const rows = async () => { const all = await list(); return paths.map(path => all.find(row => row.status?.location === path)); };
+    browser = await suiteBrowser(engine);
+    const page = await browser.newPage();
+    await page.goto(loop.base);
+    await until(async () => (await rows())[0]?.status.rendered === 1, 30_000);
+    const canvas = await browser.newPage();
+    const reports = [];
+    canvas.on('request', r => {
+      if (!r.url().endsWith('/__dev/report')) return;
+      const body = JSON.parse(r.postData());
+      if (body.rendered !== undefined) reports.push([r.frame().name(), body.rendered]);
+    });
+    await canvas.goto(`http://127.0.0.1:${port}/`);
+    // scale(0) keeps the layout viewport. A document loaded under display:none has none.
+    await canvas.evaluate(([a, b]) => {
+      for (const [name, src, style] of [['a', a, 'transform:scale(0)'], ['b', b, 'display:none']]) {
+        const frame = Object.assign(document.createElement('iframe'), { src, name });
+        frame.style.cssText = style;
+        document.body.append(frame);
+      }
+    }, paths.slice(1).map(path => loop.base + path));
+    await until(async () => { const [, a, b] = await rows(); return a?.status.rendered === 1 && b; }, 60_000);
+    const viewport = frame => canvas.frame(frame).evaluate(() => [innerWidth, innerHeight, document.visibilityState]);
+    expect(await viewport('a')).toEqual([300, 150, 'visible']);
+    expect(await viewport('b')).toEqual([0, 0, 'visible']);
+    expect((await rows()).map(row => row.status.rendered)).toEqual([1, 1, undefined]);
+    const old = (await rows())[2];
+    writeFileSync(join(dir, 'frames/b.contract'), entry('rebuilt'));
+    await until(async () => { const b = (await rows())[2]; return b && b.planDigest !== old.planDigest; }, 60_000);
+    expect((await rows()).map(row => row.status.rendered)).toEqual([1, 1, undefined]);
+
+    const frameB = canvas.locator('iframe[name=b]');
+    await frameB.evaluate(el => el.style.display = '');
+    await until(async () => (await rows())[2]?.status.rendered === 2, 15_000);
+    expect(reports).not.toContainEqual(['b', 1]);
+    expect(new Set((await rows()).map(row => row.id)).size).toBe(3);
+
+    const frame = canvas.frame('b'), color = () => getComputedStyle(document.querySelector('[data-testid=words]')).color;
+    const before = await frame.evaluate(color);
+    writeFileSync(join(dir, 'app.forma'), 'forma canvas\n\ntheme\n  ink = #654321\n');
+    await until(async () => await frame.evaluate(color) !== before, 30_000).catch(async error => {
+      throw new Error(`The frame's ink stayed ${await frame.evaluate(color)} after the edit.\n${loop.said()}`, { cause: error });
+    });
+    writeFileSync(join(dir, 'frames/b.contract'), 'component App\n  view\n    text unknownValue\n');
+    await canvas.frame('b').locator('pre').filter({ hasText: 'unknownValue' }).waitFor();
+    expect((await rows()).map(row => row.status.rendered)).toEqual([1, 1, 2]);
+
+    // A report already in flight can arrive after the embedder hides the frame.
+    await canvas.route('**/__dev/report', async route => {
+      if (route.request().frame().name() === 'b' && route.request().postDataJSON()?.rendered === 3)
+        await frameB.evaluate(el => el.style.display = 'none');
+      await route.continue();
+    });
+    writeFileSync(join(dir, 'frames/b.contract'), entry('recovered'));
+    await until(async () => (await rows())[2]?.status.rendered === 3, 60_000);
+    expect(await frameB.evaluate(el => el.style.display)).toBe('none');
+  } finally {
+    await browser?.close(); await loop?.stop(); parent.close(); rmSync(dir, { recursive: true, force: true });
+  }
+}, 180_000);
+
+for (const engine of await drivable(['chromium', 'webkit'])) test(`${engine}: replacing a pending render and detaching its document cancel the old report`, async () => {
+  const browser = await suiteBrowser(engine);
+  try {
+    const page = await browser.newPage();
+    const receipts = await page.evaluate(async source => {
+      const seen = [];
+      const child = () => {
+        const frame = document.body.appendChild(document.createElement('iframe'));
+        frame.contentDocument.documentElement.style.height = '100%';
+        const watch = frame.contentWindow.eval('(' + source + ')');
+        return { frame, watch };
+      };
+      const old = child();
+      old.watch(() => seen.push('detached'));
+      old.frame.remove();
+      const fresh = child();
+      const cancel = fresh.watch(() => seen.push('superseded'));
+      cancel();
+      await new Promise(resolve => fresh.watch(() => { seen.push('fresh'); resolve(); }));
+      return seen;
+    }, whenRendered.toString());
+    expect(receipts).toEqual(['fresh']);
+  } finally { await browser.close(); }
+}, 30_000);
+
+for (const engine of await drivable(['chromium', 'webkit'])) test(`${engine}: a viewport collapsed after commit waits for both dimensions`, async () => {
+  const browser = await suiteBrowser(engine);
+  try {
+    const page = await browser.newPage();
+    const reports = await page.evaluate(async source => {
+      const watch = eval('(' + source + ')'), reports = [];
+      for (const dimension of ['width', 'height']) {
+        const frame = document.body.appendChild(document.createElement('iframe'));
+        const child = frame.contentWindow;
+        const rendered = new Promise(resolve => child.eval('(' + source + ')')(() => {
+          reports.push([child.innerWidth, child.innerHeight]);
+          resolve();
+        }));
+        frame.style[dimension] = '0px';
+        await new Promise(resolve => watch(resolve));
+        frame.style[dimension] = '';
+        await rendered;
+        frame.remove();
+      }
+      return reports;
+    }, whenRendered.toString());
+    expect(reports).toEqual([[300, 150], [300, 150]]);
+  } finally { await browser.close(); }
+}, 30_000);
+
+for (const engine of await drivable(['chromium', 'webkit'])) test(`${engine}: cross-origin frames with visibility:hidden, a placeholder or a zero-height root report`, async () => {
+  const documentAt = html => Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response(html, { headers: { 'content-type': 'text/html' } }) });
+  const frame = documentAt(`<!doctype html><html><style>html,body{margin:0;height:0}aside{position:fixed;width:80px;height:40px}</style><body><aside>words</aside><script>
+    (${whenRendered.toString()})(() => parent.postMessage(name + ':rendered', '*'));
+    </script></body></html>`);
+  const tool = documentAt(`<!doctype html><script>window.receipts=[];onmessage=e=>receipts.push(e.data)</script>
+    <iframe name="hidden" style="visibility:hidden" src="${frame.url}"></iframe>
+    <iframe name="covered" src="${frame.url}"></iframe><div style="position:fixed;inset:0;background:white"></div>`);
+  let browser;
+  try {
+    browser = await suiteBrowser(engine);
+    const page = await browser.newPage();
+    await page.goto(tool.url.href);
+    await page.waitForFunction(() => receipts.includes('hidden:rendered') && receipts.includes('covered:rendered'));
+    expect(await page.frame('covered').evaluate(() => [
+      document.documentElement.getBoundingClientRect().height, document.querySelector('aside').getBoundingClientRect().height,
+    ])).toEqual([0, 40]);
+    const hidden = page.frame('hidden');
+    await page.locator('iframe[name=hidden]').evaluate(el => el.style.transform = 'scale(0)');
+    await hidden.evaluate(source => {
+      document.documentElement.style.display = 'none';
+      eval('(' + source + ')')(() => parent.postMessage('boxless:rendered', '*'));
+    }, whenRendered.toString());
+    await page.waitForFunction(() => receipts.includes('boxless:rendered'));
+  } finally { await browser?.close(); tool.stop(true); frame.stop(true); }
+}, 45_000);

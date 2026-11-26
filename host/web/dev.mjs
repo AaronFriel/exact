@@ -1412,7 +1412,7 @@ const serve = async (req, res) => {
     let gone = false, opened = null;
     const end = () => { if (gone) return; gone = true; opened?.close(); clients.delete(res); };
     req.on('close', end); res.on('close', end);
-    opened = forma?.channel.open(write) ?? (servedAs != null ? await relayChannel(`http://127.0.0.1:${servedAs}`, write, 250, () => res.end()) : null);
+    opened = forma?.channel.open(write, { sequence: () => current?.seq }) ?? (servedAs != null ? await relayChannel(`http://127.0.0.1:${servedAs}`, write, 250, () => res.end()) : null);
     if (gone) { opened?.close(); return; }
     res.write(`data: ${hello(opened?.nonce)}\n\n`);
     for (const [stem, version] of gpuSides) res.write(`data: ${JSON.stringify({gpu:version, ...(stem === 'gpu' ? {} : {module:stem.slice(4)})})}\n\n`);

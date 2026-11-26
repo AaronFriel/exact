@@ -2357,6 +2357,12 @@ builds only:** the Forma protocol server (`forma/1`, LLP 1121 D13) and the desig
 be removed when no surviving `when` uses it. Unsetting conditions and removing the axis
 is one undoable transaction (LLP 1121 D13 and LLP 1122 §10).
 
+**Rendered builds (panel, 2026-11-25).** Under AR1 as amended by AV1 and AX1, a web
+client's `status` may report the build whose first commit completed a rendering update
+in a nonzero viewport while the document's visibility state was `visible` (LLP 1122 D4).
+Frame pages take mode pins and report selections over the same channel. The tool supplies
+no script to a frame.
+
 Each host's development build gains an **inspect mode** and a build channel: four commands
 down (inspect, outline, hold, pin) and three reports up (status, a selection,
 unsupported); the tool never drives an app. Release builds carry none of it: no endpoint,

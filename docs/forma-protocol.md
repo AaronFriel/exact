@@ -1,7 +1,7 @@
 # The Forma protocol, `forma/1`
 
 The reference for the design server's wire (LLP 1121 D13), versioned with it. This page
-describes **`forma/1.19`**, the version `hello` reports. The design and the reasons are in LLP 1121
+describes **`forma/1.20`**, the version `hello` reports. The design and the reasons are in LLP 1121
 D13 and LLP 1122 D2, D9 and D10; what was built and how it differs from them is in each RFC's §10.
 The recipe is `docs/recipes/forma.md`. Each change to the wire changes this page in the same
 commit.
@@ -11,7 +11,7 @@ on macOS and Linux.
 
 ## Versions
 
-- `hello` reports the protocol (`"forma/1.19"`) and the IR's format number (`format`).
+- `hello` reports the protocol (`"forma/1.20"`) and the IR's format number (`format`).
 - **A minor version** adds requests or fields. A client ignores fields it doesn't know.
 - **No request carries a client's version.** A client checks `hello`'s `protocol` itself and stops
   on a major version it doesn't speak.
@@ -215,6 +215,8 @@ on macOS and Linux.
   409 `{stale: true, choice, choiceBy, choiceAt}` (the check is optional), and `edit-held` carries it, refused alike
   when it names an older `choiceAt` (see Held proposals).
 - `forma/1.19` adds `remove-axis` and the optional `before` and `comment` fields on `add-axis`.
+
+- `forma/1.20` adds the optional `rendered` build sequence to `status`.
 
 ## Where it runs
 
@@ -1634,6 +1636,29 @@ The tool drives no input into an app; a command changes only what `prefer` would
     host), reported when it moves. A pinned copy also says `app` (*1.14*): `{scheme?, mode?,
     rootFontSize?}`, what the app asked instead of its pin (strings; `mode` `{axis: value}`; at
     most 1 KiB), or nothing.
+    **`rendered: N`** (*1.20*) means this document completed a rendering update containing
+    build N's first commit with a nonzero viewport width and height while
+    `document.visibilityState` was `visible`. A frame loaded without a viewport (for
+    example, under `display:none`) waits until it has one. A frame with `transform: scale(0)`
+    still has a layout viewport and reports.
+
+    Only the embedder knows whether it hid the frame with `visibility:hidden`, covered it
+    with an overlay or hid its native view. None of these delays a document that meets the
+    conditions above. A report can arrive just after the embedder hid the frame. It does
+    not establish that a person could see the build or give the compositor a deadline.
+    A capture taken at the same instant can show the previous frame.
+
+    N is the JS page's reload number or the wasm producer's generation sequence. Compare it
+    within one client's current stream. The app, gallery and frame pages report separately.
+    During a reload, the last status still describes the old document until the replacement
+    registers. Registration clears status. The new document or applied build omits the field
+    until it earns its own report. A failed compile keeps the last good build's report.
+    Value batches and scrub previews retain N even when they change pixels.
+
+    Native macOS, iOS, tvOS, Linux and Android clients omit `rendered`: their channel
+    implementations have no equivalent per-build rendering receipt. Windows has no such
+    channel client.
+
     Sent on connect and on any change, the app's own `setScheme`, `setMode` and
     `setRootFontSize` included (at most once a turn). A scrub's frames move the design without a
     status each: the web pages report it once, about 150 ms after the drag rests. A native host
