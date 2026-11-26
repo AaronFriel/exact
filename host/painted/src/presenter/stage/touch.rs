@@ -47,6 +47,10 @@ pub(in crate::presenter) enum Gesture {
         velocity: VelocityTracker,
         moving: bool,
         directions: (bool, bool),
+        /// Whether a list under the finger shares the drag with the sheet
+        /// (`Under::nested_sheet`), which then moves as Android's nested
+        /// scrolling moves it: by what lies past the list's slop.
+        nested: bool,
         contact: Contact,
     },
 }
@@ -300,6 +304,7 @@ impl<D: DataSource> Presenter<D> {
             return true;
         }
         let under = self.scrollers_at(x, y);
+        let nested = !handle && under.nested_sheet.is_some();
         let directions = if handle || (under.chain.is_empty() && !under.claims.1) {
             (true, true)
         } else {
@@ -317,6 +322,7 @@ impl<D: DataSource> Presenter<D> {
                 velocity,
                 moving: false,
                 directions,
+                nested,
                 contact,
             }
         });
@@ -403,12 +409,28 @@ impl<D: DataSource> Presenter<D> {
                     return false;
                 }
                 // Past the slop the drag is the sheet's: what the contact
-                // pressed is let go.
+                // pressed is let go. Dragged directly, the sheet moves from
+                // the event that crossed the slop, as Material's
+                // `ViewDragHelper` captures its view there and moves it
+                // from that event's position: the crossing moves nothing.
+                // A list sharing the drag hands the sheet what lies past
+                // its slop, as `RecyclerView` scrolls by the distance less
+                // the slop.
                 let gesture = self.stage.gesture.take();
                 let _ = self.pointer_cancel(now);
                 self.stage.gesture = gesture;
-                if let Some(Gesture::Drag { moving, .. }) = &mut self.stage.gesture {
+                if let Some(Gesture::Drag {
+                    moving,
+                    finger,
+                    nested,
+                    ..
+                }) = &mut self.stage.gesture
+                {
                     *moving = true;
+                    finger.1 = match nested {
+                        true => finger.1 + SLOP.copysign(y - finger.1),
+                        false => y,
+                    };
                 }
             }
             Some(Gesture::Drag { .. }) => {}
