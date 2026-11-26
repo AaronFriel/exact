@@ -97,6 +97,19 @@ class ScrollingTest {
         }
     }
 
+    @Test fun aLayoutSnapAndItsRecordingArriveInTheSameStatement() {
+        val f = Fixture(1)
+        f.told(1)
+        val s = f.scroller()
+        s.own = true
+        s.pendX = 3f
+        // The second landscape page moves to 411 points when the new range ends at 822.
+        f.scrolling.told(intArrayOf(2f.toBits(), 1, 1, 1, 411f.toBits(), 0, 822f.toBits(), 0, 822f.toBits(), 0))
+        assertEquals(822f, s.at(true), 0f)
+        assertEquals(s.drawnX, s.at(true), 0f)
+        assertEquals(1644f, s.end(true), 0f)
+    }
+
     @Test fun aTouchsAnswerTellsEachScrollersSnap() {
         val f = Fixture(1)
         f.down()
@@ -182,7 +195,7 @@ class ScrollingTest {
         }
         val mode get() = field("mode").getInt(f.scrolling)
         fun snap(v: Float) = Scrolling::class.java.getDeclaredMethod("snap", Float::class.java).apply { isAccessible = true }
-            .invoke(f.scrolling, v) as Boolean
+            .invoke(f.scrolling, v) as Float?
         /** The list's areas around the projection, at [positions]. */
         fun answer(vararg positions: Float) {
             val b = { v: Float -> v.toBits() }
@@ -192,7 +205,7 @@ class ScrollingTest {
 
     @Test fun aProximityListFlungPastItsToldAreasAsksForThoseAroundTheProjection() {
         val r = ListRelease(mandatory = false)
-        assertFalse("nothing told is near: the fling is the platform's", r.snap(8000f))
+        assertNull("nothing told is near: the fling is the platform's", r.snap(8000f))
         val projected = r.asked!!.first
         assertTrue(projected > 1000f)
         // The fling that release starts is under way when the answer comes: one near its projection takes it.
@@ -202,9 +215,17 @@ class ScrollingTest {
         assertEquals((projected + 40f - r.at).toInt().toFloat(), fling.finalX.toFloat(), 1f)
     }
 
+    @Test fun aReleaseNamesItsSnapAreaEvenWhenTheNewRangeEndsBeforeIt() {
+        val r = ListRelease(mandatory = true)
+        r.s.maxX = 500f
+        assertEquals(600f, r.snap(8000f)!!, 0f)
+        val fling = r.field("fling").get(r.f.scrolling) as android.widget.OverScroller
+        assertEquals(200, fling.finalX)
+    }
+
     @Test fun anAnswerForAListTheAppScrolledSinceIsDropped() {
         val r = ListRelease(mandatory = true)
-        assertTrue(r.snap(8000f))
+        assertNotNull(r.snap(8000f))
         // The app scrolls the list (a new revision): the settle ends, and the late answer moves nothing.
         r.f.scrolling.told(intArrayOf(1f.toBits(), 1, 1, 1, 0, 0, 0, 0, 100000f.toBits(), 500f.toBits()))
         assertEquals(0, r.mode)

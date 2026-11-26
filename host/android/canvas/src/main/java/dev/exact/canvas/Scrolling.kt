@@ -776,7 +776,7 @@ internal class Scrolling(private val view: ExactView) {
         val edged = edged()
         val stretched = edged != null && STRETCH && edged.edges.any { it != null && it.distance != 0f }
         if (edged != null) { for (e in edged.edges) e?.onRelease(); if (stretched) stretching() }
-        if (!stretched && snap(v)) { lifted(v, mode == FLINGING); return }
+        if (!stretched && snap(v) != null) { lifted(v, mode == FLINGING); return }
         if (stretched || abs(v) < minFling || active.isEmpty()) { lifted(v, false); mode = IDLE; return }
         mode = FLINGING
         flingAt = 0
@@ -794,17 +794,17 @@ internal class Scrolling(private val view: ExactView) {
     /**
      * The drag's innermost scroller snaps along the drag's axis (LLP 1008 §9): it comes to rest where [snapRest] says,
      * from where the platform's fling at [v] px/s would have left it, and settles there in ViewPager's time. At its end
-     * and flung on past it, it does not: the fling goes on to the scrollers outside. Whether it took the release; a
-     * list's `proximity` snap that the areas the touch told leave free does not, and may still take it once the
+     * and flung on past it, it does not: the fling goes on to the scrollers outside. Its target before clamping to the latest range; a
+     * list's `proximity` snap that the areas the touch told leave free returns null, and may still settle once the
      * areas around the projection arrive ([aimAgain]).
      */
-    private fun snap(v: Float): Boolean {
-        val s = active.firstOrNull() ?: return false
+    private fun snap(v: Float): Float? {
+        val s = active.firstOrNull() ?: return null
         val axis = if (sideways) 0 else 1
-        if (s.snapPort[axis] <= 0f || s.snaps[axis].isEmpty()) return false
+        if (s.snapPort[axis] <= 0f || s.snaps[axis].isEmpty()) return null
         val at = s.at(sideways)
         val end = s.end(sideways)
-        if ((v < 0f && at <= 0f) || (v > 0f && at >= end)) return false
+        if ((v < 0f && at <= 0f) || (v > 0f && at >= end)) return null
         val flung = abs(v) >= minFling
         var projected = at
         if (flung) {
@@ -815,9 +815,11 @@ internal class Scrolling(private val view: ExactView) {
         }
         val way = if (flung) (if (v > 0f) 1 else -1) else 0
         val target = snapRest(s.snaps[axis], s.stops[axis], projected, at, dragFrom, way, s.snapMandatory, s.snapPort[axis])
-        if (target == null && !s.snapList) return false
+        if (target == null && !s.snapList) return null
         if (target != null) {
             val d = (target.coerceIn(0f, end) - at).roundToInt()
+            val landing = at + d
+            tell { Native.snapTarget(s.id, axis == 1, target, landing) }
             // ViewPager's settle: four times as long as the finger's speed would take to cover it, within its bound;
             // a release too slow to fling takes the platform's default scroll duration.
             settle(d, if (flung) settleMs(d, v) else SNAP_MS)
@@ -828,7 +830,7 @@ internal class Scrolling(private val view: ExactView) {
             val aim = Aim(serial, s.rev, axis, projected, at, dragFrom, way, target != null)
             snapsAround(s.id, !sideways, at, projected) { w -> aimAgain(s, aim, w) }
         }
-        return target != null
+        return target
     }
 
     /** ViewPager's settle time over [d] px for a finger, or a fling, moving at [v] px/s. */
@@ -867,7 +869,10 @@ internal class Scrolling(private val view: ExactView) {
         mergeSnaps(s, aim.axis, w)
         val target = snapRest(s.snaps[aim.axis], s.stops[aim.axis], aim.projected, aim.release, aim.start, aim.way, s.snapMandatory,
             s.snapPort[aim.axis]) ?: return
-        val d = (target.coerceIn(0f, s.end(sideways)) - s.at(sideways)).roundToInt()
+        val at = s.at(sideways)
+        val d = (target.coerceIn(0f, s.end(sideways)) - at).roundToInt()
+        val landing = at + d
+        tell { Native.snapTarget(s.id, aim.axis == 1, target, landing) }
         if (d == 0 && mode == IDLE) return
         val ms = when {
             aim.settles -> (settleEnds - SystemClock.uptimeMillis()).toInt().coerceIn(100, SNAP_MAX_MS)

@@ -458,19 +458,30 @@ impl<D: DataSource> Presenter<D> {
         if completion == Completion::Reader {
             self.keep_own_position(id);
         }
+        self.set_scroll_offset(id, s.offset, next, completion);
+        Some((next, movement))
+    }
+
+    /// Publish an offset already constrained to the range of the picture it belongs to.
+    pub(super) fn set_scroll_offset(
+        &mut self,
+        id: ViewId,
+        from: (f32, f32),
+        next: (f32, f32),
+        completion: Completion,
+    ) {
         if id == PAGE {
             self.page = next;
         } else {
             self.scroll.insert(id, next);
-            self.scroll_end_input(id, s.offset, completion);
-            self.collection_scroll_input(id, s.offset);
+            self.scroll_end_input(id, from, completion);
+            self.collection_scroll_input(id, from);
         }
         self.scroll_timelines();
         self.dirty = true;
         if let Some(error) = self.refresh_transform_geometry() {
             self.host.log(error);
         }
-        Some((next, movement))
     }
 
     /// The reader moved scroller `id` by `by`, knowing revision `rev` of
@@ -520,6 +531,12 @@ impl<D: DataSource> Presenter<D> {
         // not at the next statement, and this move is the stale one.
         if self.reader_revision(&s) != rev {
             return None;
+        }
+        if by.0 != 0. {
+            self.use_touch_snap(id, false);
+        }
+        if by.1 != 0. {
+            self.use_touch_snap(id, true);
         }
         let from = s.offset;
         let sent = (from.0 + by.0, from.1 + by.1);

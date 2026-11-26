@@ -98,6 +98,9 @@ impl<D: DataSource> Presenter<D> {
         before: (f32, f32),
         completion: Completion,
     ) {
+        if completion == Completion::Instant {
+            self.snap_requested(view, before, self.scroll_of(view));
+        }
         // Input can move only the pending model, including back to the
         // acknowledged offset. Its completion still belongs to this input.
         if self.scroll_of(view) != before || self.pending_model_scroll(view).is_some() {
@@ -172,6 +175,11 @@ impl<D: DataSource> Presenter<D> {
         before: (f32, f32),
         completion: Completion,
     ) {
+        let to = self.pending_model_scroll(view).map_or_else(
+            || self.scroll_of(view),
+            |m| (m.left.unwrap_or(before.0), m.top),
+        );
+        self.snap_requested(view, before, to);
         if self.booting || !self.tracks_scroll_end(view) {
             return;
         }
@@ -351,6 +359,14 @@ impl<D: DataSource> Presenter<D> {
         }
     }
 
+    pub(super) fn snap_input_active(&self, view: ViewId) -> bool {
+        self.scroll_end_blocked(view) || self.scroll_held(view)
+    }
+
+    pub(super) fn reader_dragging(&self) -> bool {
+        !self.scroll_end.held.is_empty()
+    }
+
     /// The reader holds scroller `view`'s scroll: its finger began dragging
     /// it, or lifted from it into a fling. While held its samples owe no
     /// completion, however long they rest.
@@ -375,6 +391,8 @@ impl<D: DataSource> Presenter<D> {
         // reader's scroll, before the end.
         self.zoom_rests(view);
         self.scroll_end.held.remove(&view);
+        self.snap_motion_landed(view);
+        self.dirty |= self.snap_probe_needed();
         let now = self.host.now();
         if let Some(p) = self
             .scroll_end

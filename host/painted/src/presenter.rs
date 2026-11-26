@@ -233,9 +233,8 @@ pub struct Presenter<D: DataSource> {
     /// Per snapping scroller, where its wheel would have put it unsnapped and
     /// where it put it (`snap.rs`).
     wheel_free: BTreeMap<ViewId, snap::WheelFree>,
-    /// Per scroller and axis (true: y), the snap area it was last found
-    /// resting on and the position (`snap.rs`).
-    snap_rested: BTreeMap<(ViewId, bool), (ViewId, f32)>,
+    /// The snap geometry each scroller last had a chance to settle in.
+    snap_layout: snap::Layouts,
     /// The display's clock while it owns time, given to every host (`clock.rs`)
     live_clock: Option<clock::Wall>,
     /// Pictures reach a display whose presents the host hears (`present.rs`).
@@ -652,7 +651,7 @@ impl<D: DataSource> Presenter<D> {
         let mut p = Presenter {
             last_wheel: None,
             wheel_free: BTreeMap::new(),
-            snap_rested: BTreeMap::new(),
+            snap_layout: Default::default(),
             host,
             executor,
             start_executor,
@@ -956,7 +955,6 @@ impl<D: DataSource> Presenter<D> {
         // wake another turn; waking here makes an idle list redraw forever.
         self.schedule_collections();
         let refined = crate::traced(c"exact refine collections", || self.refine_collections());
-        self.resnap_scrollers();
         let geometry = self.refresh_transform_geometry();
         self.sync_surface();
         error.or(refined).or(geometry)
@@ -1119,6 +1117,7 @@ impl<D: DataSource> Presenter<D> {
         }
         // Hidden windows service commits without painting. Invalidate kept rows
         // and maintain measured text here so neither waits for a display frame.
+        self.advance_snap_layout();
         let dirty = self.host.row_dirty.take_changes();
         self.brush.rows_dirty(self.host.kernel(), dirty);
         self.text.borrow_mut().maintain();

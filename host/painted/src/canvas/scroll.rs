@@ -172,6 +172,12 @@ impl<D: DataSource + Default> CanvasHost<D> {
             .reader_snaps_around(id, vertical, release, projected, self.scale)
     }
 
+    /// The position the reader selected for a snap, before clamping to a resized range.
+    pub fn snap_target(&mut self, id: u32, vertical: bool, target: f32, landing: f32) {
+        self.p
+            .reader_snap_target(id, vertical, target, landing, self.scale);
+    }
+
     /// The native drag's sheet position and release velocity, in window pixels.
     pub fn sheet_drag(&mut self, index: u32, generation: u32, top: f32, release: Option<f32>) {
         let now = self.now();

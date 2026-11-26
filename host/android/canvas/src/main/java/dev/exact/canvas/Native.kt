@@ -123,6 +123,8 @@ object Native {
      * these [snapsAround] tells. */
     @JvmStatic external fun readerSelection(action: Int, x: Float, y: Float): String?
     @JvmStatic external fun under(x: Float, y: Float): IntArray
+    /** Position selected by the reader's settle in the touch's layout, in pixels. */
+    @JvmStatic external fun snapTarget(id: Int, vertical: Boolean, target: Float, landing: Float)
     /** Virtualized list [id]'s snap areas up and down ([vertical]) or sideways, for a release at offset [release] whose
      * rest is projected near [projected] (pixels): a count, then per area its least and greatest offsets as float bits
      * and 1 for `scroll-snap-stop: always` (`host/painted/src/presenter/snap.rs`, `reader_snaps_around`). */

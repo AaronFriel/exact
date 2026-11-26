@@ -17,7 +17,7 @@ pub(super) enum Cause {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Geometry {
+pub(super) enum Geometry {
     Presented,
     /// An internal preflight walk; never used to route input to an unshown node.
     Current,
@@ -707,7 +707,7 @@ impl<D: DataSource> Presenter<D> {
         b.scroll_bounds(&mapping)
     }
 
-    fn reveal_box(&mut self, id: ViewId, geometry: Geometry) -> Option<PaintedBox> {
+    pub(super) fn reveal_box(&mut self, id: ViewId, geometry: Geometry) -> Option<PaintedBox> {
         match geometry {
             Geometry::Presented => self.box_of(id),
             Geometry::Current => self

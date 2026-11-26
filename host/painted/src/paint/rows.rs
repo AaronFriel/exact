@@ -48,6 +48,12 @@ impl Dirty {
         changes
     }
 
+    /// The changed nodes when the damage is known and none has lost its ancestry.
+    pub(crate) fn known_nodes(&self) -> Option<impl Iterator<Item = NodeKey> + '_> {
+        let nodes = self.hard.iter().chain(&self.moved).chain(&self.renewed);
+        (!self.destroyed && nodes.clone().next().is_some()).then(|| nodes.copied())
+    }
+
     /// A commit's nodes, and when it landed (ms).
     pub fn commit(&mut self, r: &exact_kernel::CommitReceipt, at: f64) {
         self.committed = Some(at);

@@ -86,9 +86,13 @@ impl<D: DataSource> Presenter<D> {
         let _roles = self.host.runner().bind_roles();
         let frame = crate::text::cache::deferring_eviction(|| {
             // The probe draws nothing, so the canvases' tick stays with the frame's own paint.
-            if self.focus_reveal.is_some() || !self.host.flights.reveal.is_empty() {
+            let resnap = self.snap_probe_needed();
+            if resnap || self.focus_reveal.is_some() || !self.host.flights.reveal.is_empty() {
                 self.paint_frame(FrameTarget::Geometry, false, true);
                 if self.last_frame_succeeded {
+                    if resnap {
+                        self.resnap_before_paint();
+                    }
                     self.reveal_before_paint();
                 }
             }
@@ -96,6 +100,7 @@ impl<D: DataSource> Presenter<D> {
             if !self.last_frame_succeeded {
                 return frame;
             }
+            self.remember_snap_layout();
             let immediate = !self.display.submitting();
             let scrollbar_hover = immediate && self.scrollbars_shown();
             // Layout can move a caret, a fragment target (LLP 1153 D5),

@@ -40,6 +40,19 @@ macro_rules! canvas_jni_scroll {
             flag(moved)
         }
 
+        /// The snap position selected by the reader, in its pixels.
+        #[no_mangle]
+        pub unsafe extern "system" fn Java_dev_exact_canvas_Native_snapTarget(
+            _env: *mut $crate::canvas::jni_sys::JNIEnv,
+            _class: $crate::canvas::jni_sys::jclass,
+            id: $crate::canvas::jni_sys::jint,
+            vertical: $crate::canvas::jni_sys::jboolean,
+            target: $crate::canvas::jni_sys::jfloat,
+            landing: $crate::canvas::jni_sys::jfloat,
+        ) {
+            with(|h| h.snap_target(id as u32, vertical != 0, target, landing));
+        }
+
         /// List `id`'s snap areas around a release's projection
         /// (`CanvasHost::snaps_around`; px).
         #[no_mangle]

@@ -647,6 +647,7 @@ class ScrollTouchTest {
         down(400f); move(380f); move(340f); move(300f); up(300f)
         // The next touch comes down before exact2 has answered for the first.
         down(400f)
+        assertEquals("only the first down has asked for its geometry", 1, thread.answers.size)
         answer(reply(scroller(1, 0f)))
         assertEquals(100f - slop, thread.moved[1]!!, 0.01f)
         assertEquals("its fling stopped where the next touch came down",

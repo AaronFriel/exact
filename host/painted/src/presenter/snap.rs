@@ -4,8 +4,77 @@
 //! at. Android's reader aims its fling with them ([`Presenter::reader_snaps`],
 //! `Scrolling.kt`'s `snapRest`); a desktop wheel snaps here (`wheel.rs`).
 //! Apple's is `host/apple/Sources/ExactKit/ScrollSnap.swift`.
+use super::reveal::Geometry;
 use super::*;
+use exact_kernel::id::IdSet;
 use exact_kernel::style::snap::SnapAlign;
+
+type Stamp = (u64, u64, u64);
+
+#[derive(Default)]
+pub(super) struct Layouts {
+    declared: Option<bool>,
+    scanned: Option<Stamp>,
+    checked: Option<(Stamp, (f32, f32), f32)>,
+    offered: BTreeMap<(ViewId, bool), AxisLayout>,
+    touch_scale: f32,
+    axes: BTreeMap<(ViewId, bool), AxisLayout>,
+}
+
+struct AxisLayout {
+    stamp: Stamp,
+    snap: Snap,
+    // A range clamp preserves the area the old offset belonged to.
+    clamped: Option<(f32, f32)>,
+    // The chosen area's offset and the landing the platform can reach.
+    release: Option<(f32, f32)>,
+    absent: Option<Stamp>,
+    preferred: Option<ViewId>,
+}
+
+impl AxisLayout {
+    fn new(stamp: Stamp, snap: Snap, preferred: Option<ViewId>) -> Self {
+        Self {
+            stamp,
+            snap,
+            preferred,
+            clamped: None,
+            release: None,
+            absent: None,
+        }
+    }
+
+    fn before_clamp(&self, current: f32) -> f32 {
+        self.clamped
+            .filter(|(to, _)| *to == current)
+            .map_or(current, |(_, from)| from)
+    }
+
+    fn rested(&self, current: f32) -> Option<(ViewId, f32)> {
+        self.area_at(self.before_clamp(current))
+    }
+
+    fn area_at(&self, at: f32) -> Option<(ViewId, f32)> {
+        self.snap
+            .areas
+            .iter()
+            .filter(|a| a.id != 0 && at >= a.from - 0.5 && at <= a.to + 0.5)
+            .min_by_key(|a| Some(a.id) != self.preferred)
+            .map(|a| (a.id, at))
+    }
+}
+
+impl Layouts {
+    pub(super) fn clamped(&mut self, id: ViewId, from: (f32, f32), to: (f32, f32)) {
+        for (vertical, before, after) in [(false, from.0, to.0), (true, from.1, to.1)] {
+            if before != after {
+                if let Some(axis) = self.axes.get_mut(&(id, vertical)) {
+                    axis.clamped = Some((after, axis.before_clamp(before)));
+                }
+            }
+        }
+    }
+}
 
 /// The offsets one snap area rests at, `from` through `to`, and whether a
 /// snap may not pass over them (`scroll-snap-stop: always`).
@@ -166,60 +235,335 @@ pub fn resnap(
             .then(|| rest(areas, current, current, mandatory, port))
             .flatten();
     }
-    rest(&kept, current, current, true, port).filter(|p| (p - at).abs() > 0.5)
+    rest(&kept, current, current, true, port).filter(|p| (p - current).abs() > 0.5)
 }
 
 impl<D: DataSource> Presenter<D> {
-    /// [`resnap`] on each scroller the presenter moves whose snap is
-    /// `mandatory`, once a commit is laid out and nothing scrolls. A scroller
-    /// Android's reader moves is the reader's to place (LLP 1115.001 D7) and
-    /// is left. The area a scroller rested on is the one this found it on
-    /// after the last commit.
-    pub(super) fn resnap_scrollers(&mut self) {
-        if self.scroll_activity() {
+    /// A new command's destination belongs to the current layout on each axis it moves.
+    pub(super) fn snap_requested(&mut self, id: ViewId, from: (f32, f32), to: (f32, f32)) {
+        if self.snap_layout.axes.is_empty() {
             return;
         }
-        let ids: Vec<ViewId> = (self.scroll.keys().copied())
-            .filter(|&id| {
-                !self.reader_knows(id)
-                    && self
-                        .host
-                        .kernel()
-                        .node(id)
-                        .is_some_and(|n| n.style.scroll_snap_type.mandatory())
-            })
-            .collect();
-        for id in ids {
-            let at = self.scroll_of(id);
-            let mut to = at;
-            for vertical in [false, true] {
-                let Some(snap) = self.snap(id, vertical) else {
-                    continue;
-                };
-                let (current, next) = if vertical {
-                    (at.1, &mut to.1)
-                } else {
-                    (at.0, &mut to.0)
-                };
-                let rested = self
-                    .snap_rested
-                    .get(&(id, vertical))
-                    .copied()
-                    .unwrap_or((0, 0.0));
-                if let Some(p) = resnap(&snap.areas, rested, current, snap.mandatory, snap.port) {
-                    *next = p;
-                }
-                let on = (snap.areas.iter())
-                    .find(|a| a.id != 0 && *next >= a.from - 0.5 && *next <= a.to + 0.5);
-                match on {
-                    Some(a) => self.snap_rested.insert((id, vertical), (a.id, *next)),
-                    None => self.snap_rested.remove(&(id, vertical)),
-                };
-            }
-            if to != at {
-                self.scroll_to_completion(id, to, Completion::Instant, None);
+        let stamp = self.host.kernel().layout_stamp();
+        for (key, moved) in [((id, false), from.0 != to.0), ((id, true), from.1 != to.1)] {
+            if moved
+                && self
+                    .snap_layout
+                    .axes
+                    .get(&key)
+                    .is_some_and(|a| a.stamp != stamp)
+            {
+                self.snap_layout.axes.remove(&key);
+                self.snap_layout.scanned = None;
             }
         }
+    }
+
+    /// A commit outside a snap container and its ancestors leaves its saved areas valid.
+    pub(super) fn advance_snap_layout(&mut self) {
+        let k = self.host.kernel();
+        let stamp = k.layout_stamp();
+        let current = (stamp, self.viewport, self.brush.scale);
+        let Some((previous, viewport, scale)) = self.snap_layout.checked.replace(current) else {
+            return;
+        };
+        if self.snap_layout.axes.is_empty()
+            || previous == stamp
+            || self.viewport != viewport
+            || self.brush.scale != scale
+            || self.host.content_region().is_some()
+        {
+            return;
+        }
+        let Some(changes) = self.host.row_dirty.known_nodes() else {
+            return;
+        };
+        let mut changed = IdSet::default();
+        let mut containing_changes = IdSet::default();
+        let mut discover = false;
+        for key in changes {
+            let Some(n) = k.node_by_key(key) else { return };
+            if changed.insert(n.id) {
+                discover |= n.style.scroll_snap_type.axes() != (false, false);
+                let mut at = Some(n.id);
+                while let Some(id) = at {
+                    if !containing_changes.insert(id) {
+                        break;
+                    }
+                    at = k.node(id).and_then(|n| n.parent);
+                }
+            }
+        }
+        for (&(id, _), axis) in &mut self.snap_layout.axes {
+            if axis.stamp != previous || containing_changes.contains(&id) {
+                continue;
+            }
+            let mut ancestors =
+                std::iter::successors(Some(id), |&id| k.node(id).and_then(|n| n.parent));
+            if !ancestors.any(|id| changed.contains(&id)) {
+                axis.stamp = stamp;
+            }
+        }
+        if !discover
+            && self.snap_layout.scanned == Some(previous)
+            && self.snap_layout.axes.values().all(|a| a.stamp == stamp)
+        {
+            self.snap_layout.scanned = Some(stamp);
+        }
+    }
+
+    pub(super) fn use_touch_snap(&mut self, id: ViewId, vertical: bool) {
+        let key = (id, vertical);
+        if let Some(offered) = self.snap_layout.offered.remove(&key) {
+            self.snap_layout.axes.insert(key, offered);
+        }
+    }
+
+    /// The target uses the density of the snap areas supplied at touch-down.
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn reader_snap_target(
+        &mut self,
+        id: ViewId,
+        vertical: bool,
+        pixels: f32,
+        landing: f32,
+        scale: f32,
+    ) {
+        self.use_touch_snap(id, vertical);
+        self.snap_destination(
+            id,
+            vertical,
+            pixels / self.snap_layout.touch_scale,
+            landing / scale,
+        );
+    }
+
+    /// Keep the destination in the layout the reader used for its release. A smaller
+    /// range can end the fling before the reader reaches that offset.
+    pub(crate) fn snap_destination(
+        &mut self,
+        id: ViewId,
+        vertical: bool,
+        target: f32,
+        landing: f32,
+    ) {
+        if let Some(axis) = self.snap_layout.axes.get_mut(&(id, vertical)) {
+            axis.release = Some((target, landing));
+        }
+    }
+
+    pub(super) fn snap_motion_landed(&mut self, id: ViewId) {
+        let at = self.scroll_of(id);
+        let stamp = self.host.kernel().layout_stamp();
+        let mut range = None;
+        for (vertical, current) in [(false, at.0), (true, at.1)] {
+            let Some(axis) = self.snap_layout.axes.get_mut(&(id, vertical)) else {
+                continue;
+            };
+            let Some((to, landing)) = axis.release.take() else {
+                continue;
+            };
+            if axis.area_at(to).is_none() {
+                continue;
+            }
+            if (current - landing).abs() < 0.5 {
+                axis.clamped = Some((current, to));
+                continue;
+            }
+            if axis.stamp == stamp || (to <= current && axis.before_clamp(current) == current) {
+                continue;
+            }
+            let max = *range
+                .get_or_insert_with(|| self.scroll_range(id, &self.collection_scroll_limits()));
+            if (current - if vertical { max.1 } else { max.0 }).abs() < 0.5 {
+                self.snap_layout
+                    .axes
+                    .get_mut(&(id, vertical))
+                    .unwrap()
+                    .clamped = Some((current, to));
+            }
+        }
+    }
+
+    fn snap_busy(&self, id: ViewId) -> bool {
+        let inside = |node| node == id || self.is_inside(node, id);
+        self.snap_input_active(id)
+            || self.gliding(id)
+            || self.zoom_animating(id)
+            || self.pending_model_scroll(id).is_some()
+            || self
+                .control_contact
+                .is_some_and(|(node, _, _)| inside(node))
+            || self.brush.scrollbars.drag.is_some_and(|(key, _, _)| {
+                self.host
+                    .kernel()
+                    .node_by_key(key)
+                    .is_some_and(|n| n.id == id)
+            })
+            || !self.reader_dragging()
+                && [self.contact_hit(), self.pointer_held]
+                    .into_iter()
+                    .flatten()
+                    .any(|key| {
+                        self.host
+                            .kernel()
+                            .node_by_key(key)
+                            .is_some_and(|n| inside(n.id))
+                    })
+    }
+
+    /// A gesture keeps the areas its release uses until it rests. Other scrollers can
+    /// follow their areas in the first picture of the new layout.
+    pub(crate) fn snap_probe_needed(&self) -> bool {
+        let stamp = self.host.kernel().layout_stamp();
+        self.snap_layout.axes.iter().any(|(&(id, vertical), axis)| {
+            let at = self.scroll_of(id);
+            axis.stamp != stamp
+                && axis.absent != Some(stamp)
+                && !self.snap_busy(id)
+                && (self
+                    .host
+                    .kernel()
+                    .node(id)
+                    .is_some_and(|n| n.style.scroll_snap_type.mandatory())
+                    || axis.rested(if vertical { at.1 } else { at.0 }).is_some())
+        })
+    }
+
+    /// Read the new picture's boxes before drawing it. Input still addresses the
+    /// acknowledged picture, whose scroll range can already be too short for this rest.
+    pub(crate) fn resnap_before_paint(&mut self) {
+        let stamp = self.host.kernel().layout_stamp();
+        let mut moves = BTreeMap::new();
+        let axes: Vec<_> = self.snap_layout.axes.keys().copied().collect();
+        for (id, vertical) in axes {
+            let old = &self.snap_layout.axes[&(id, vertical)];
+            if old.stamp == stamp || old.absent == Some(stamp) || self.snap_busy(id) {
+                continue;
+            }
+            let at = self.scroll_of(id);
+            let current = if vertical { at.1 } else { at.0 };
+            let rested = old.rested(current);
+            if rested.is_none()
+                && !self
+                    .host
+                    .kernel()
+                    .node(id)
+                    .is_some_and(|n| n.style.scroll_snap_type.mandatory())
+            {
+                continue;
+            }
+            let Some(snap) = self.snap_at(id, vertical, None, Geometry::Current) else {
+                continue;
+            };
+            let target = match rested {
+                Some((area, _)) => resnap(
+                    &snap.areas,
+                    (area, current),
+                    current,
+                    snap.mandatory,
+                    snap.port,
+                ),
+                None if snap.mandatory => rest(&snap.areas, current, current, true, snap.port),
+                None => None,
+            };
+            if let Some(to) = target {
+                let next = moves.entry(id).or_insert(at);
+                if vertical {
+                    next.1 = to;
+                } else {
+                    next.0 = to;
+                }
+            }
+            self.snap_layout.axes.insert(
+                (id, vertical),
+                AxisLayout::new(stamp, snap, rested.map(|r| r.0)),
+            );
+        }
+        for (id, to) in moves {
+            let from = self.scroll_of(id);
+            if from != to {
+                self.set_scroll_offset(id, from, to, Completion::Instant);
+            }
+        }
+    }
+
+    /// Keep the layout in which a later offset comes to rest. Reader samples need
+    /// no area walk and can arrive right up to the next layout.
+    pub(crate) fn remember_snap_layout(&mut self) {
+        let declared = *self.snap_layout.declared.get_or_insert_with(|| {
+            self.host.runner().plan().bindings.iter().any(|b| {
+                b.kind == exact_plan::BindingKind::Style
+                    && b.id == exact_kernel::StyleId::ScrollSnapType as u16
+            })
+        });
+        if !declared && self.host.content_region().is_none() {
+            return;
+        }
+        let stamp = self.host.kernel().layout_stamp();
+        if self.snap_layout.scanned == Some(stamp)
+            && self.snap_layout.axes.iter().all(|(&(id, _), a)| {
+                a.stamp == stamp || a.absent == Some(stamp) || self.snap_busy(id)
+            })
+        {
+            return;
+        }
+        let kernel = self.host.kernel();
+        self.snap_layout.axes.retain(|&(id, vertical), _| {
+            kernel.node(id).is_some_and(|n| {
+                let axes = n.style.scroll_snap_type.axes();
+                if vertical {
+                    axes.1
+                } else {
+                    axes.0
+                }
+            })
+        });
+        let ids: Vec<_> = self
+            .boxes
+            .iter()
+            .filter(|b| b.scroll.is_some())
+            .filter_map(|b| {
+                let axes = kernel.node(b.id)?.style.scroll_snap_type.axes();
+                (axes.0 || axes.1).then_some((b.id, axes))
+            })
+            .collect();
+        if self.snap_layout.scanned != Some(stamp) {
+            // A hidden scroller keeps its last geometry until it is shown again.
+            for axis in self.snap_layout.axes.values_mut() {
+                axis.absent = Some(stamp);
+            }
+        }
+        for (id, axes) in ids {
+            for (vertical, enabled) in [(false, axes.0), (true, axes.1)] {
+                if !enabled {
+                    continue;
+                }
+                if let Some(a) = self.snap_layout.axes.get_mut(&(id, vertical)) {
+                    a.absent = None;
+                }
+                if self
+                    .snap_layout
+                    .axes
+                    .get(&(id, vertical))
+                    .is_some_and(|a| a.stamp == stamp || self.snap_busy(id))
+                {
+                    continue;
+                }
+                if let Some(snap) = self.snap_at(id, vertical, None, Geometry::Current) {
+                    let preferred = self
+                        .snap_layout
+                        .axes
+                        .get(&(id, vertical))
+                        .and_then(|a| a.preferred);
+                    self.snap_layout
+                        .axes
+                        .insert((id, vertical), AxisLayout::new(stamp, snap, preferred));
+                }
+            }
+        }
+        self.snap_layout.scanned = Some(stamp);
+        self.snap_layout.checked = Some((stamp, self.viewport, self.brush.scale));
     }
 
     /// Scroller `id`'s snap along y when `vertical`, else along x; `None`
@@ -230,7 +574,7 @@ impl<D: DataSource> Presenter<D> {
     /// virtualized list adds the rows it has not mounted, up to 64 either way
     /// of the one at its offset (`Runner::collection_snap_areas`).
     pub fn snap(&mut self, id: ViewId, vertical: bool) -> Option<Snap> {
-        self.snap_at(id, vertical, None)
+        self.snap_at(id, vertical, None, Geometry::Presented)
     }
 
     /// [`Presenter::snap`], with a virtualized list's unmounted rows read
@@ -238,7 +582,13 @@ impl<D: DataSource> Presenter<D> {
     /// unmounted `always` row past its first offset toward its second
     /// (`Runner::collection_snap_stop`): for a release at the first whose
     /// rest is near the second.
-    fn snap_at(&mut self, id: ViewId, vertical: bool, aim: Option<(f32, f32)>) -> Option<Snap> {
+    fn snap_at(
+        &mut self,
+        id: ViewId,
+        vertical: bool,
+        aim: Option<(f32, f32)>,
+        geometry: Geometry,
+    ) -> Option<Snap> {
         let kernel = self.host.kernel();
         let node = kernel.node(id)?;
         let kind = node.style.scroll_snap_type;
@@ -279,13 +629,27 @@ impl<D: DataSource> Presenter<D> {
         }
         let mandatory = kind.mandatory();
         let limits = self.collection_scroll_limits();
-        let s = self.scroller(id, &limits)?;
-        let b = self.box_of(id)?;
-        let painted = b.scroll.unwrap_or(s.offset);
-        let (at, length, before, after, max, offset) = if vertical {
-            (b.rect.1, b.rect.3, bt, bb, s.max.1, (painted.1, s.offset.1))
+        let bounds = if geometry == Geometry::Current {
+            self.brush
+                .scroll_bounds(
+                    kernel,
+                    self.host.content_region(),
+                    &node,
+                    limits.get(&id).copied(),
+                    &|id| self.host.presented(id),
+                    self.host.scaled_presented(),
+                )
+                .max
         } else {
-            (b.rect.0, b.rect.2, bl, br, s.max.0, (painted.0, s.offset.0))
+            self.scroller(id, &limits)?.max
+        };
+        let off = self.scroll_of(id);
+        let b = self.reveal_box(id, geometry)?;
+        let painted = b.scroll.unwrap_or(off);
+        let (at, length, before, after, max, offset) = if vertical {
+            (b.rect.1, b.rect.3, bt, bb, bounds.1, (painted.1, off.1))
+        } else {
+            (b.rect.0, b.rect.2, bl, br, bounds.0, (painted.0, off.0))
         };
         let env = self.host.kernel().env_of(id);
         let scrollport = (length - before - after).max(0.0);
@@ -302,7 +666,9 @@ impl<D: DataSource> Presenter<D> {
         let range = (lead, max + lead);
         let mut areas = Vec::new();
         for (c, align, stop, grow) in found {
-            let Some(a) = self.box_of(c) else { continue };
+            let Some(a) = self.reveal_box(c, geometry) else {
+                continue;
+            };
             let (lo, len) = if vertical {
                 (a.rect.1, a.rect.3)
             } else {
@@ -409,11 +775,6 @@ impl<D: DataSource> Presenter<D> {
             ) {
                 *r = at;
             }
-            match (snap.areas.iter()).find(|a| a.id != 0 && *r >= a.from - 0.5 && *r <= a.to + 0.5)
-            {
-                Some(a) => self.snap_rested.insert((id, vertical), (a.id, *r)),
-                None => self.snap_rested.remove(&(id, vertical)),
-            };
         }
         // Once it moves, the next ticks add up from where it rests.
         let free = (
@@ -434,6 +795,8 @@ impl<D: DataSource> Presenter<D> {
     /// past these the reader asks for at its release
     /// ([`Presenter::reader_snaps_around`]).
     pub fn reader_snaps(&mut self, ids: &[ViewId], scale: f32) -> Vec<i32> {
+        self.snap_layout.offered.clear();
+        self.snap_layout.touch_scale = scale;
         let mut out = Vec::new();
         for &id in ids {
             let snaps = [self.snap(id, false), self.snap(id, true)];
@@ -447,7 +810,8 @@ impl<D: DataSource> Presenter<D> {
                     | i32::from(mandatory) << 2
                     | i32::from(list) << 3,
             );
-            for snap in &snaps {
+            let stamp = self.host.kernel().layout_stamp();
+            for (axis, snap) in snaps.into_iter().enumerate() {
                 let (port, areas) = snap
                     .as_ref()
                     .map_or((0.0, &[][..]), |s| (s.port, &s.areas[..]));
@@ -458,6 +822,20 @@ impl<D: DataSource> Presenter<D> {
                         (a.to * scale).to_bits() as i32,
                         i32::from(a.stop),
                     ]);
+                }
+                // A finger that catches a fling uses the areas it was just shown.
+                if self.display.shows_epoch(stamp.1) {
+                    if let Some(snap) = snap {
+                        let key = (id, axis == 1);
+                        let preferred = self
+                            .snap_layout
+                            .axes
+                            .get(&key)
+                            .and_then(|old| old.preferred);
+                        self.snap_layout
+                            .offered
+                            .insert(key, AxisLayout::new(stamp, snap, preferred));
+                    }
                 }
             }
         }
@@ -480,7 +858,12 @@ impl<D: DataSource> Presenter<D> {
         scale: f32,
     ) -> Vec<i32> {
         let areas = self
-            .snap_at(id, vertical, Some((release / scale, projected / scale)))
+            .snap_at(
+                id,
+                vertical,
+                Some((release / scale, projected / scale)),
+                Geometry::Presented,
+            )
             .map(|s| s.areas)
             .unwrap_or_default();
         let mut out = vec![areas.len() as i32];

@@ -21,7 +21,7 @@ impl<D: DataSource> Presenter<D> {
             scroll,
             scroll_end,
             wheel_free,
-            snap_rested,
+            snap_layout,
             glides,
             zooms,
             page,
@@ -183,7 +183,7 @@ impl<D: DataSource> Presenter<D> {
         // Kept by view id, as where a wheel left a scroller and the area it
         // last rested on.
         wheel_free.clear();
-        snap_rested.clear();
+        *snap_layout = Default::default();
         *glides = Default::default();
         *zooms = zoom::Zooms::kept(zooms);
         *page = (0.0, 0.0);

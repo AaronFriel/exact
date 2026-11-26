@@ -1,5 +1,8 @@
 # Queue
 
+- Make two focusable painted snap areas share an end-clamped offset, focus the second, then add tail space. When their snap positions separate, prefer the focused area.
+- Scroll a painted pager between pages with snapping disabled, then enable `x mandatory`. The offset stays between pages until the next scroll or resize.
+- Fling a virtualized painted snap list past its mounted rows, then resize before it lands. Unmounted snap positions carry no row identity for following the same row through layout.
 - Under heavy build load, `cargo test -p exact-kernel --test it` took 6.77 s in `svg_scene::bounds::a_use_box_stops_at_the_expansion_limit` and hit its 5 s wall-clock limit. The expansion assertion passed, and the full binary passed with four test threads.
 - The wire digest's production-source cutoff matches a literal newline-delimited `#[cfg(test)]`. Adding a space after the attribute in `kernel/src/wire/codec.rs` includes the snapshot literal itself in the hash. Exercise that case when revisiting the digest.
 - Correct the generated documentation for `StyleId::enum_names` in `kernel/build.rs`. A numeric keyword row such as `ListInsetsContentToSafeArea` returns its schema words although the comment says it returns an empty list.
@@ -1837,7 +1840,7 @@ sits on that list carries the trade it would take.
 
 - **Kernel / layout** (LLP 1001, 1010): `position: fixed`; `text_align: start`;
   presentation transforms in scrollable overflow; `overscroll-behavior`;
-  snap re-snapping on Android after a layout change; Linux scroll events.
+  Linux scroll events.
 - **Durable state** (LLP 1018 §5, built 2026-08-30 for Weird Castle's token): the
   `plain` tier — persisted slots, with Caltrain's "last station"; `me`; the iOS
   first-launch keychain wipe; the data-protection keychain on macOS (a bundle and a
@@ -2253,6 +2256,6 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - Run `cargo test -p exact-web-js the_js_target_reads_a_role_as_the_kernel_does`. On b505d1ade the JS reader accepts a nested accent fallback that the kernel refuses.
 - Keep a terminal draft across input that only validates (#1733). Bind a terminal input to `"4"`, store its input in a separate label and type `-` then `2`. The label shows `4-` then `42`; the field shows `4` after both keys.
 - Read the live editor in Apple authored field assertions (#1733). On macOS, bind a field to `"A"`, let its input action only validate, type `abc` and `expect text` on the field. Both revisions report `A`. On iOS the reporter’s assertions passed even when its keyboard showed the rejected text.
-- Run `bun test ./scripts/completion-inventory.test.mjs` at 0fa23a7fe. Its two ownership assertions report a stale classification of `Presenter::drag_of` in `drag_out.rs`.
+- Run `bun test ./scripts/completion-inventory.test.mjs` at 0fa23a7fe. Its ownership assertions report stale classifications for `Presenter::drag_of` and five accessibility helpers in `access.rs` (`bun scripts/completion-inventory.mjs --check`).
 - Run `bun test scripts/forma-server.test.mjs -t 'no web build ships inspect'`. The assertion rejects a reference to `inspect-dev.js` in the builder's source even when the release artifact omits it.
 - Refresh inspect copy groups when a build's source map changes under identical plan bytes. Register a build with `copies`, enter inspect, change the map's copy groups, then report the same plan digest and reenter inspect. The page keeps the first groups.

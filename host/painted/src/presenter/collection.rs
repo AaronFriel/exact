@@ -28,8 +28,8 @@ static LEAN: std::sync::LazyLock<bool> =
 pub(super) struct ModelScroll {
     pub(super) key: NodeKey,
     pub(super) sequence: u64,
-    top: f32,
-    left: Option<f32>,
+    pub(super) top: f32,
+    pub(super) left: Option<f32>,
     /// Cumulative anchor correction on this input sequence, acknowledged with its pixels.
     rebase: f32,
     /// The offset it was planned from: a list's own position is its change from here.
