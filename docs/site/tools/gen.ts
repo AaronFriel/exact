@@ -43,7 +43,7 @@ type TocItem = { id: string; title: string; href: string };
 
 type Section = { title: string; anchor: string; tokens: Token[] };
 type Doc = { nav: NavPage; title: string; description: string; intro: Token[]; sections: Section[]; anchors: Map<string, string> };
-type SitePage = { route: string; path: string; title: string; description: string; source: string; tokens: Token[]; part: boolean; skipHeading: string; hidden: boolean; landing: boolean };
+type SitePage = { route: string; path: string; title: string; description: string; source: string; tokens: Token[]; part: boolean; hidden: boolean; landing: boolean };
 
 const THEMES = { light: 'github-light', dark: 'github-dark' } as const;
 const contractGrammar = JSON.parse(readFileSync(join(REPO, 'editors/vscode/syntaxes/exact-contract.tmLanguage.json'), 'utf8'));
@@ -219,7 +219,7 @@ function render(page: SitePage): { blocks: Block[]; toc: TocItem[] } {
         case 'heading': {
           const r = runs(t.tokens, source, next);
           const id = slug(plain(t.tokens));
-          if (t.depth === 1 || id === page.skipHeading) break;
+          if (t.depth === 1 || (page.part && t === page.tokens[0])) break;
           if (t.depth === 2) toc.push({ id: next(), title: plain(t.tokens), href: `#${id}` });
           block({ kind: 'heading', depth: t.depth, href: id, runs: r });
           break;
@@ -354,7 +354,7 @@ function sectionsFromLevelTwo(tokens: Token[], title?: Token): Token[] {
 }
 
 const pages: SitePage[] = docs.filter(doc => !(publishing && doc.nav.hidden)).flatMap(doc => {
-  const base: SitePage = { route: doc.nav.route, path: doc.nav.path, title: doc.title, description: doc.description, source: doc.nav.source, tokens: sectionsFromLevelTwo(doc.intro), part: false, skipHeading: '', hidden: !!doc.nav.hidden, landing: !!doc.nav.landing };
+  const base: SitePage = { route: doc.nav.route, path: doc.nav.path, title: doc.title, description: doc.description, source: doc.nav.source, tokens: sectionsFromLevelTwo(doc.intro), part: false, hidden: !!doc.nav.hidden, landing: !!doc.nav.landing };
   // An unsplit page has no sections: its intro is the whole page.
   if (!doc.nav.split) return [base];
   const written = doc.nav.sectionDescriptions ?? {};
@@ -368,7 +368,6 @@ const pages: SitePage[] = docs.filter(doc => !(publishing && doc.nav.hidden)).fl
       source: doc.nav.source,
       tokens: sectionsFromLevelTwo(s.tokens, s.tokens[0]),
       part: true,
-      skipHeading: s.anchor,
       hidden: !!doc.nav.hidden,
       landing: !!doc.nav.landing,
     })),

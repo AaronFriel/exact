@@ -306,12 +306,14 @@ test('WebMCP search and section tools explain invalid inputs', () => withPage({}
 }));
 
 test('WebMCP reads headings after an inline code span that starts with three backticks', () => withPage({}, async page => {
-  const call = await visitWithTools(page);
   const path = '/reference/developer/generate-typescript-data-source-types';
+  const call = await visitWithTools(page, path);
   const info = await call('get_page_info', { path });
   const section = await call('get_page_markdown', { path, section: 'Notifications' });
   expect(JSON.parse(info.value).headings).toContainEqual({ level: 2, text: 'Notifications' });
   expect(section).toMatchObject({ outcome: 'ok', value: expect.stringContaining('\n## Notifications\n') });
+  await page.getByRole('heading', { level: 2, name: 'Notifications', exact: true }).waitFor();
+  expect(await page.getByTestId('toc').getByRole('link', { name: 'Notifications', exact: true }).getAttribute('href')).toBe(`${path}#notifications`);
 }));
 
 test('WebMCP page info uses metadata and headings from one build', () => withPage({}, async page => {
@@ -335,17 +337,24 @@ test('WebMCP rereads section offsets when a deployment replaces the Markdown', (
   const body = '# A newer recipe\n\nAn introduction in the new build.\n\n## A setting\n\nNew text.\n\n## A deep link\n\nA separate section.\n';
   const digest = createHash('sha256').update(body).digest('hex');
   let metadataReads = 0;
+  const requests = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/assets/markdown/')) requests.push(path);
+  });
   await page.route('**/assets/markdown/tools/recipeWebsite.json', route => {
     if (++metadataReads === 1) return route.continue();
     return route.fulfill({ json: { digest, headings: markdownHeadings(body) } });
   });
-  await page.route('**/assets/markdown/tools/recipeWebsite-*.md', route => route.fulfill({ status: 404 }));
   await page.route('**/assets/markdown/recipeWebsite.md', route => route.fulfill({ body }));
   const call = await visitWithTools(page);
   expect(await call('get_page_markdown', { path: '/recipes/website', section: 'A setting' })).toMatchObject({
     outcome: 'ok', value: '# A newer recipe\n## A setting\n\nNew text.',
   });
-  expect(metadataReads).toBe(2);
+  expect(requests).toEqual([
+    '/assets/markdown/tools/recipeWebsite.json', '/assets/markdown/recipeWebsite.md',
+    '/assets/markdown/tools/recipeWebsite.json', '/assets/markdown/recipeWebsite.md',
+  ]);
 }));
 
 test('WebMCP navigation is a consequential write', () => withPage({}, async page => {
