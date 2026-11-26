@@ -684,8 +684,11 @@ fn a_ceiling_open_streams_leave_no_room_for_is_refused_when_made() {
     core.run(job(1, stream), None).unwrap();
     fixture.wait_held(1);
     let read = |ceiling| Request::get("https://example.test/read").independent_http(ceiling);
-    let refused = core.run(job(2, read(64 << 20)), None).unwrap_err();
-    assert!(refused.contains("held by open streams"), "{refused}");
+    let request = read(64 << 20);
+    let needed = reservation(&request).unwrap().2;
+    let held = core.shared.state.lock().unwrap().running[0].charge;
+    let refused = core.run(job(2, request), None).unwrap_err();
+    assert_eq!(refused, format!("This response needs {needed} bytes and open streams hold {held} bytes (maximum {} bytes for independent requests)", BYTES[1]));
     core.run(job(3, read(48 << 20)), None).unwrap();
     let outcomes = collect(&core, &woke, 1);
     assert!(
@@ -760,7 +763,7 @@ fn a_queued_read_crowded_out_by_a_later_stream_is_refused() {
         let outcomes = collect(&core, &woke, 1);
         assert!(
             matches!(&outcomes[0], (2, Outcome::Failed { kind: FailureKind::Refused, message })
-                if message == "native response ceiling exceeds the lane budget held by open streams"),
+                if message.contains("bytes and open streams hold")),
             "{outcomes:?}"
         );
 
@@ -883,7 +886,7 @@ fn an_upload_reserving_room_wakes_queued_reads_before_its_first_event() {
             let outcomes = collect(&core, &woke, 1);
             assert!(
                 matches!(&outcomes[0], (2, Outcome::Failed { kind: FailureKind::Refused, message })
-                    if message == "native response ceiling exceeds the lane budget held by open streams"),
+                    if message.contains("bytes and open streams hold")),
                 "{outcomes:?}"
             );
             let state = core.shared.state.lock().unwrap();

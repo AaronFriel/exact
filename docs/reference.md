@@ -3662,7 +3662,7 @@ globals (no boundary there, LLP 1027 D5), is not counted, so an answer awaiting
 it beside a held fetch may count as held. Hermes reaches no such globals.
 
 An answer that keeps coming (LLP 1016.000) is a `fetch` with `exactStream`,
-returned as the answer: `return fetch(url, { exactStream: (event) => value })`.
+returned as the answer: `return fetch(url, { exactStream: (event) => value })`. A native app can hold 16 streams at once. Every open stream uses one slot, including an event feed, a streaming child or a long poll.
 The promise never settles; each message, and the end, is mapped and commits
 as the resource's answer. A mapper may return a promise (an `async` mapper):
 the message commits when it settles. The resource stays pending until its first
@@ -3833,7 +3833,7 @@ A **long poll** (LLP 1016.000 D8) is a stream with `exactLongPoll: {cursor,
 from}` beside `exactStream`, for an endpoint that holds each request until it
 has news: `fetch('https://sync.example/changes?since=0&wait=25', {
 exactStream: (e) => e.type === 'error' ? null : JSON.parse(e.data),
-exactLongPoll: { cursor: 'since', from: 'seq' } })`. The host asks with GET
+exactLongPoll: { cursor: 'since', from: 'seq' } })`. Each long poll holds one of the native app’s 16 stream slots, including while it waits to ask again. Refresh a refused poll once a slot is free. The host asks with GET
 (`Accept: application/json` unless named), one request at a time. Each 2xx
 JSON reply is one `message`: `data` its text, `lastEventId` its cursor, the
 reply's field `from` (`seq`, or `meta.seq` one level down; a string, or a
@@ -4725,7 +4725,7 @@ Windows have no browser (`available` false); a typed address still works there.
 A desktop app's data code starts programs with Node's names (LLP 1133.007):
 `spawn(program, args, {exactStream, …})` is a resource's answer, a child that
 lives while the resource holds it, and `execFile`, `execPath`,
-`loginShellEnvironment()` and `appEnvironment()` are steps an answer awaits.
+`loginShellEnvironment()` and `appEnvironment()` are steps an answer awaits. Each streaming child holds one of the app’s 16 native stream slots, shared with long polls and other streams. A spawn refused at this limit starts no child for `exactRestart` to restart. Once a slot is free, refresh the resource to try again.
 Each program is named by a grant line: `process.spawn path:ssh`,
 `process.spawn /usr/bin/tar`, `process.spawn home:/.t3/runtime/versions` or a
 `bundle:` helper; the call names it as its line does

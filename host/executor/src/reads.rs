@@ -61,7 +61,7 @@ pub(super) fn waits_for(class: RequestClass, before: RequestClass, overlap: bool
 pub(super) fn reservation(
     request: &Request,
     overlap: bool,
-) -> Result<(usize, usize, usize), &'static str> {
+) -> Result<(usize, usize, usize), String> {
     super::reservation(request).map(|(lane, charge, limit)| {
         // LLP 1162 D1: one buffer reserved before reading, on the ordered lane.
         (lane, charge, limit - if overlap { MAX_BODY } else { 0 })

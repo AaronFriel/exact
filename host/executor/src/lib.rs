@@ -9,6 +9,7 @@
 //! and transports and decides which [`WorkerBudget`] its workers count against.
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
+use admission::{response_room, stream_room};
 use exact_runner::{
     CompletionTiming, FailureKind, HttpScheduling, Outcome, Reply, Request, RequestClass,
     RequestOut, Response, Work as OwnedWork,
@@ -146,7 +147,7 @@ enum Fenced {
     Held(Box<RequestOut>, Option<OwnedWork>, usize, bool, bool),
     /// A request refused while the barrier was up: refused when its turn
     /// comes, after the held requests before it are admitted.
-    Refused(u64, &'static str),
+    Refused(u64, String),
 }
 impl Fenced {
     fn ticket(&self) -> u64 {
@@ -279,7 +280,7 @@ impl Shared {
 /// request buffers, leaving room to start its head.
 pub struct Core {
     shared: Arc<Shared>,
-    disabled: bool,
+    worker_refusal: Option<String>,
     /// The workers not started yet: each owner's bindings and its slot.
     /// They start at the first request admitted (an app that never asks for
     /// anything carries no threads); `None` once they have, or could not.
@@ -458,11 +459,9 @@ impl Core {
             None => (None, owners.len()),
         };
         let budget = budget.live();
-        let reserved = budget
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n + count <= MAX_WORKERS).then_some(n + count)
-            })
-            .is_ok();
+        let reserved = budget.try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+            (n + count <= MAX_WORKERS).then_some(n + count)
+        });
         let lane = Lane::new(host.clone());
         let machine = lanes.map(|lanes| {
             asynch::Machine::new(shared.clone(), owners.clone(), grants, &lane, &lanes)
@@ -474,7 +473,7 @@ impl Core {
             Some(_) => (0..count).map(|_| None).collect(),
             None => owners,
         };
-        let idle = reserved.then(|| {
+        let idle = reserved.is_ok().then(|| {
             owners
                 .into_iter()
                 .enumerate()
@@ -483,7 +482,9 @@ impl Core {
         });
         Self {
             shared,
-            disabled: !reserved,
+            worker_refusal: reserved
+                .err()
+                .map(|used| format!("At executor startup, {} native workers were needed ({used} already reserved, maximum {MAX_WORKERS})", used + count)),
             idle: Mutex::new(idle),
             failed: std::sync::atomic::AtomicBool::new(false),
             grants: grants.to_string(),
@@ -573,12 +574,12 @@ impl Core {
     }
 
     #[cfg(test)]
-    fn run(&self, r: RequestOut, work: Option<Work>) -> Result<(), &'static str> {
+    fn run(&self, r: RequestOut, work: Option<Work>) -> Result<(), String> {
         self.run_owned(r, work.map(OwnedWork::Now))
     }
 
     /// Admit work, or return a refusal without an overflow queue.
-    pub fn run_owned(&self, r: RequestOut, work: Option<OwnedWork>) -> Result<(), &'static str> {
+    pub fn run_owned(&self, r: RequestOut, work: Option<OwnedWork>) -> Result<(), String> {
         self.admit(r, work, false, false, None)
             .map_err(|(reason, _work)| reason)
     }
@@ -670,14 +671,14 @@ impl Core {
     /// the host when something is ready). The answer stays pending: room
     /// never refuses a re-ask. Refused only when the executor is retired or
     /// never started, as all work is.
-    pub fn again(&self, ticket: u64) -> Result<(), &'static str> {
+    pub fn again(&self, ticket: u64) -> Result<(), String> {
         let mut state = self.shared.state.lock().unwrap();
         state.dispatched = true;
-        if self.disabled {
-            return Err("native executor worker limit reached");
+        if let Some(why) = &self.worker_refusal {
+            return Err(why.clone());
         }
         if state.retired {
-            return Err("native executor retired");
+            return Err("native executor retired".into());
         }
         if state.waiting_set.contains(&ticket) || state.ordered.contains(&ticket) {
             return Ok(());
@@ -897,20 +898,6 @@ fn read(request: &Request, work: bool) -> bool {
         && !request.is_auth()
 }
 
-fn stream_room(state: &State, lane: usize, limit: usize) -> Result<(), &'static str> {
-    let streams: usize = state
-        .running
-        .iter()
-        .filter(|run| run.lane == lane && run.stream)
-        .map(|run| run.charge)
-        .sum();
-    if lane == 1 && limit > BYTES[lane].saturating_sub(streams) {
-        Err("native response ceiling exceeds the lane budget held by open streams")
-    } else {
-        Ok(())
-    }
-}
-
 fn has_ready(state: &State) -> bool {
     !state.completed[1].is_empty()
         || state
@@ -1011,24 +998,24 @@ fn wake(state: &mut State) {
 }
 
 /// The lane, the charge at admission and the ceiling a job may retain.
-fn reservation(request: &Request) -> Result<(usize, usize, usize), &'static str> {
+fn reservation(request: &Request) -> Result<(usize, usize, usize), String> {
     if request.stream
         && (request.http == HttpScheduling::Ordered
             || request.storage.is_some()
             || request.continuation.is_some()
             || request.is_native())
     {
-        return Err("a stream is independent HTTP (LLP 1016.000)");
+        return Err("a stream is independent HTTP (LLP 1016.000)".into());
     }
     let (lane, body) = match request.http {
         HttpScheduling::Ordered => (0, MAX_BODY),
         HttpScheduling::Independent { max_response_bytes } => {
             if request.storage.is_some() || request.continuation.is_some() {
-                return Err("only HTTP may opt into independent transport");
+                return Err("only HTTP may opt into independent transport".into());
             }
             // 1..=64 MiB, or 1 GiB for a body written to a file.
             if let Some(why) = request.ceiling_refusal() {
-                return Err(why);
+                return Err(why.into());
             }
             (1, max_response_bytes as usize)
         }
@@ -1063,7 +1050,7 @@ fn reservation(request: &Request) -> Result<(usize, usize, usize), &'static str>
         bytes = bytes.checked_add(n).ok_or("request size overflow")?;
     }
     if bytes > MAX_REQUEST {
-        return Err("native request exceeds 4 MiB (URL, headers and body together): send a larger body from an app file with exactBodyFrom");
+        return Err(format!("{bytes} request bytes (maximum {MAX_REQUEST}, including URL, headers and body). Send a larger body from an app file with exactBodyFrom"));
     }
     // A plain independent reply is read into one buffer of its ceiling
     // (`body_to::receive`; the asynchronous core grows its buffer only up to
@@ -1079,9 +1066,7 @@ fn reservation(request: &Request) -> Result<(usize, usize, usize), &'static str>
     // Admission charges the request buffers; the worker charges the
     // ceiling when it starts the job, waiting for bytes (LLP 1054.000 R3).
     // A ceiling the lane can never hold is refused here, not left waiting.
-    if limit > BYTES[lane] {
-        return Err("native response ceiling exceeds the lane's byte budget");
-    }
+    response_room(lane, limit)?;
     Ok((lane, bytes, limit))
 }
 

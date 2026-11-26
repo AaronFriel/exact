@@ -268,7 +268,7 @@ struct PendingReq {
     completion: Option<CompletionReply>,
     module: Option<ModuleInstance>,
     inspection_generation: u64,
-    refusal: Option<(&'static str, bool)>,
+    refusal: Option<(String, bool)>,
     /// The host refused this ordered request before execution (LLP 1041 §8.4).
     /// Earlier source turns may already have executed effects.
     refused: bool,

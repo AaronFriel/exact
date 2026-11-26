@@ -1104,7 +1104,7 @@ impl<D: DataSource> Runner<D> {
                 Target::Resource(i) => self.inspected_request(i),
                 Target::Mutation(_) | Target::Sent(..) => 0,
             },
-            refusal: refusal.map(|why| (why, false)),
+            refusal: refusal.map(|why| (why.into(), false)),
             refused: false,
             ticket,
             target,

@@ -1054,7 +1054,7 @@ impl<D: DataSource> Host<D> {
     }
 
     /// Admission failures remain on the runner's current tickets, not a queue.
-    pub fn refuse_request(&mut self, ticket: u64, reason: &'static str, ordered: bool) {
+    pub fn refuse_request(&mut self, ticket: u64, reason: impl Into<String>, ordered: bool) {
         self.runner.refuse_request(ticket, reason, ordered);
     }
 

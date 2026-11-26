@@ -744,7 +744,7 @@ fn prefetch_refuses_sends_streams_files_and_independent_requests() {
             }
             assert_eq!(
                 core.run(r, None),
-                Err("exactPrefetch requires a plain HTTP read")
+                Err("exactPrefetch requires a plain HTTP read".into())
             );
         }
         assert_eq!(server.count(), 0);

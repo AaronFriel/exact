@@ -37,7 +37,7 @@ fn work_in_flight(core: &Core) -> (usize, usize) {
     (state.jobs[0].len(), state.running.len())
 }
 
-fn effect(core: &Core, ticket: u64, request: Request) -> Result<(), &'static str> {
+fn effect(core: &Core, ticket: u64, request: Request) -> Result<(), String> {
     // Each candidate meets its own count check, not an earlier refusal's fence.
     core.resume_ordered();
     core.run(job(ticket, request), None)
@@ -101,7 +101,7 @@ fn past_sixteen_reads_and_re_asks_wait_and_effects_are_refused() {
     native.http = HttpScheduling::Ordered;
     let mut auth = Request::auth(vec![]);
     auth.http = HttpScheduling::Ordered;
-    let limit = Err("native executor admission limit reached");
+    let limit = Err("19 ordered request slots requested (18 in use, maximum 16). An effect needs a free ordered slot".into());
     for request in [write(19), Request::storage(vec![]), native, auth] {
         assert_eq!(effect(&core, 19, request), limit);
     }
@@ -141,7 +141,7 @@ fn finished_effects_hold_the_sixteen_until_drained_and_finished_reads_do_not() {
     assert_eq!(state(&core).light, 0);
     assert_eq!(
         core.run(job(16, write(16)), None),
-        Err("native executor admission limit reached")
+        Err("17 ordered request slots requested (16 in use, maximum 16). An effect needs a free ordered slot".into())
     );
     core.resume_ordered();
     assert_eq!(core.drain()[0].0, 0);
@@ -180,7 +180,7 @@ fn a_full_window_of_finished_reads_refuses_the_next_read() {
     until_complete(&core, &woke, 128);
     assert_eq!(
         core.run(job(128, Request::get("https://example.test/read")), None),
-        Err("native executor admission limit reached")
+        Err("129 ordered requests requested (128 in use, maximum 128)".into())
     );
     core.resume_ordered();
     assert_eq!(tickets(collect(&core, &woke, 128)).len(), 128);
@@ -439,7 +439,7 @@ fn a_background_round_beside_re_asks_is_admitted_and_behind_writes_refused() {
             job(30, background()),
             Some(Box::new(|| Outcome::Storage(vec![])))
         ),
-        Err("native executor admission limit reached")
+        Err("17 ordered request slots requested (16 in use, maximum 16). An effect needs a free ordered slot".into())
     );
 }
 
@@ -459,5 +459,5 @@ fn retirement_drops_re_asks_and_refuses_later_ones() {
     drop(state);
     let (core, _fixture, _woke) = setup();
     core.shared.state.lock().unwrap().retired = true;
-    assert_eq!(core.again(1), Err("native executor retired"));
+    assert_eq!(core.again(1), Err("native executor retired".into()));
 }

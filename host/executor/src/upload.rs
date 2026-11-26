@@ -155,9 +155,17 @@ impl Uploads {
 
 /// Whether an upload with an inline body of `bytes` would take the bodies
 /// of those waiting past their bound ([`WAITING_BODIES`]).
-pub(in super::super) fn waiting_full(shared: &Shared, bytes: usize) -> bool {
+pub(in super::super) fn check_waiting_room(shared: &Shared, bytes: usize) -> Result<(), String> {
     let budget = shared.uploads.0.lock().unwrap();
-    budget.waiting_bodies.saturating_add(bytes) > budget.waiting_limit
+    if budget.waiting_bodies.saturating_add(bytes) > budget.waiting_limit {
+        return Err(super::super::admission::budget_message(
+            "queued upload body bytes",
+            budget.waiting_bodies,
+            bytes,
+            budget.waiting_limit,
+        ));
+    }
+    Ok(())
 }
 
 /// Give the uploads waiting their chance at room the caller freed, from a

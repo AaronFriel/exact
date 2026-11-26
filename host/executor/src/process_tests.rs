@@ -3,6 +3,7 @@
 //! origin rule, release and its escalation, and the refusals that come
 //! before anything runs.
 use super::super::Core;
+use super::{admit_one_shot, ONE_SHOT_BYTES};
 use exact_runner::{
     CallOrigin, FailureKind, Outcome, ProcessOp, Request, RequestOut, SocketOp, SocketOrigin,
     SocketSend, WorkClock,
@@ -752,11 +753,23 @@ fn one_shots_have_room_of_their_own() {
     };
     assert_eq!(lane(&core), (0, 0));
     let refused = core.run(request(17, body, false), None).unwrap_err();
-    assert!(refused.contains("process limit"), "{refused}");
+    assert_eq!(
+        refused,
+        "17 one-shot child processes requested (16 in use, maximum 16)"
+    );
     core.forget(|_| false);
     ended(&core);
     assert_eq!(lane(&core), (0, 0));
     core.run(request(18, body, false), None).unwrap();
+}
+
+#[test]
+fn a_sole_one_shot_can_exceed_the_byte_limit_until_it_releases_its_room() {
+    let (core, _woke) = setup(&[]);
+    let held = ONE_SHOT_BYTES + 1;
+    admit_one_shot(&core.shared, 1, held).unwrap();
+    assert_eq!(admit_one_shot(&core.shared, 2, 0).unwrap_err(),
+        format!("{held} one-shot child process bytes requested ({held} in use, maximum {ONE_SHOT_BYTES})"));
 }
 
 /// A one-shot never waits in its lane's queue, so its `timeout_ms` arms no

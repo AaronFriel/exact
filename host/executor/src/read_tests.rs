@@ -781,7 +781,10 @@ fn a_refusal_from_waiting_admission_wakes_even_when_no_reply_can_drain() {
         woke.recv_timeout(HANG).expect("the deferred refusal wakes");
         assert_eq!(
             core.resume_ordered(),
-            [(129, "native executor admission limit reached")]
+            [(
+                129,
+                "129 ordered requests requested (128 in use, maximum 128)".into()
+            )]
         );
         assert!(core.resume_ordered().is_empty());
         core.forget(|_| false);
@@ -801,7 +804,7 @@ fn read_admission_forgetting_and_the_refusal_fence_stay_on_the_ordered_lane() {
         server.seen(&[1, 2, 3, 4, 5, 6]);
         assert_eq!(
             core.run(read_job(&server, 129), None),
-            Err("native executor admission limit reached")
+            Err("129 ordered requests requested (128 in use, maximum 128)".into())
         );
         core.run(read_job(&server, 130), None).unwrap();
         assert_eq!(
@@ -1116,7 +1119,7 @@ fn a_seventeenth_parallel_send_is_refused_and_forgotten_sends_still_run() {
         server.seen(&[1, 2, 3]);
         assert_eq!(
             core.run(job(17, server.post(17), RequestClass::Parallel(0)), None),
-            Err("native executor admission limit reached")
+            Err("17 ordered request slots requested (16 in use, maximum 16). An effect needs a free ordered slot".into())
         );
         core.forget(|_| false);
         for ticket in 1..=16 {

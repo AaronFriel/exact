@@ -1429,7 +1429,7 @@ A long poll (`/changes?since=…&wait=…`) is a stream too: add
 `exactLongPoll: { cursor: 'since', from: 'seq' }` beside `exactStream`, and the
 host asks again with each reply's cursor, skipping heartbeats and backing off
 on failures (`docs/reference.md`, LLP 1016.000 D8). Re-read on each event with
-`resource view = load() with live.seq`.
+`resource view = load() with live.seq`. A native app has 16 stream slots in all. Each `exactLongPoll`, streaming child and other open `exactStream` uses one.
 
 A bidirectional WebSocket uses a resource's TypeScript
 `fetch(url, { exactStream(event, socket) { … } })` (LLP 1016.000 D7).
@@ -2533,7 +2533,7 @@ if (!res.ok) throw new Error((await res.json()).message);
 
 ### Child processes (`@exact/child-process`)
 
-A desktop app's data code starts a program with Node's names (LLP 1133.007).
+A desktop app's data code starts a program with Node's names (LLP 1133.007). Each streaming child takes one of the app’s 16 native stream slots, shared with long polls and other streams. A refused spawn starts no child. When room opens, refresh the resource to retry.
 A resource answers `spawn(program, args, {exactStream})`: the child lives
 while the resource holds it, and its mapper hears `spawn`, `stdout`,
 `stderr`, `exit`, `close`, `drain`, `ready` and `ready-timeout`, with the

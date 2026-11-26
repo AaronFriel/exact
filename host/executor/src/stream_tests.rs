@@ -695,15 +695,16 @@ fn streams_have_their_own_bound_beside_a_full_independent_lane() {
         request: Request::get("https://example.test/read").independent_http(4096),
         forced: false,
     };
-    assert!(core.run_owned(read(500), None).is_err(), "the lane is full");
+    assert_eq!(
+        core.run_owned(read(500), None).unwrap_err(),
+        "129 independent requests requested (128 in use, maximum 128)"
+    );
     for ticket in 1000..1016 {
         core.run_owned(stream(ticket, "/plain", 4096), None)
             .unwrap();
     }
-    assert!(
-        core.run_owned(stream(2000, "/plain", 4096), None).is_err(),
-        "sixteen streams at most"
-    );
+    assert_eq!(core.run_owned(stream(2000, "/plain", 4096), None).unwrap_err(),
+        "17 streams requested (16 in use, maximum 16). Streaming children, long polls and other open streams each use one slot in the app");
 }
 
 #[test]
@@ -1043,7 +1044,7 @@ fn an_upload_is_refused_where_it_could_send_no_body() {
     get.request.body.clear();
     assert_eq!(
         core.run_owned(get, None),
-        Err("exactUploadProgress: a GET or HEAD request sends no body")
+        Err("exactUploadProgress: a GET or HEAD request sends no body".into())
     );
 }
 
@@ -1378,7 +1379,7 @@ fn the_bodies_of_uploads_waiting_are_bounded() {
     assert_eq!(core.shared.uploads.waiting().0, 2);
     assert_eq!(
         core.run_owned(upload(6, "/upload", 4 << 10), None),
-        Err("native executor upload queue limit reached")
+        Err("12288 queued upload body bytes requested (8192 in use, maximum 8192)".into())
     );
 }
 

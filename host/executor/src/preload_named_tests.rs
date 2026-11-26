@@ -367,7 +367,7 @@ fn an_invalid_rust_preload_name_is_refused_before_contact() {
         request.preload = Some("Bad".into());
         assert_eq!(
             core.run(job(1, request), None),
-            Err("exactPreload must match ^[a-z][a-z0-9-]*$")
+            Err("exactPreload must match ^[a-z][a-z0-9-]*$".into())
         );
         assert_eq!(server.count(), 0);
     }

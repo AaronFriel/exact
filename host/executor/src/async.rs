@@ -13,8 +13,8 @@
 //! run (ticket and generation): a parked upload's next run ignores the last
 //! one's late events.
 use super::{
-    body, bounded_outcome, failed, fetch_failure, fetch_request, handoff, retained, scoped_grants,
-    Completed, Job, Running, Shared, State, BYTES, MAX_HEADERS,
+    body, bounded_outcome, failed, fetch_failure, fetch_request, handoff, response_room, retained,
+    scoped_grants, Completed, Job, Running, Shared, State, BYTES, MAX_HEADERS,
 };
 use exact_runner::{FailureKind, Outcome, Reply, Request, Response, Work as OwnedWork};
 use ibex2::boundary::HostError;
@@ -183,16 +183,14 @@ impl Book {
         &self,
         request: &Request,
         (lane, charge, limit): (usize, usize, usize),
-    ) -> Result<(usize, usize, usize), &'static str> {
+    ) -> Result<(usize, usize, usize), String> {
         let extra = if self.portable[lane] {
             request.body.len()
         } else {
             0
         };
         let limit = limit.checked_add(extra).ok_or("request size overflow")?;
-        if limit > BYTES[lane] {
-            return Err("native response ceiling exceeds the lane's byte budget");
-        }
+        response_room(lane, limit)?;
         Ok((lane, charge, limit))
     }
     fn upload_bytes(&self, lane: usize, size: usize) -> Option<usize> {
