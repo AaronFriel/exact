@@ -703,8 +703,11 @@ fn streams_have_their_own_bound_beside_a_full_independent_lane() {
         core.run_owned(stream(ticket, "/plain", 4096), None)
             .unwrap();
     }
-    assert_eq!(core.run_owned(stream(2000, "/plain", 4096), None).unwrap_err(),
-        "17 streams requested (16 in use, maximum 16). Streaming children, long polls and other open streams each use one slot in the app");
+    assert_eq!(
+        core.run_owned(stream(2000, "/plain", 4096), None)
+            .unwrap_err(),
+        "17 network streams requested (16 in use, maximum 16). Long polls, event feeds, WebSockets, listeners and running uploads each use a network slot"
+    );
 }
 
 #[test]
@@ -1327,7 +1330,7 @@ fn the_uploads_let_go_that_had_started_are_told_once() {
     drop(going);
     let lane = || {
         let state = core.shared.state.lock().unwrap();
-        (state.counts[1], state.bytes[1], state.streams)
+        (state.counts[1], state.bytes[1], state.streams.len())
     };
     let deadline = Instant::now() + Duration::from_secs(5);
     while lane() != (0, 0, 0) {

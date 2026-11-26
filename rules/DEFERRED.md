@@ -1004,6 +1004,9 @@ names no take; `:focus-within` remains out.
   doing-list item is in this area, and the change retires app Swift. Still
   refused: a pseudo-terminal, shell command lines, daemons that outlive
   the app, and processes on iOS, Android and the web.
+  **Admitted (panel, 2026-11-25), AR2.** A desktop app has 16 streaming
+  child slots of its own alongside its 16 network streams (LLP 1016.000 D4,
+  LLP 1133.007 D3).
   **Amended (Charlie, 2026-11-11, issue #39):** iOS, iPadOS and tvOS name as
   `bundle:/` the trees app.json's `host.ios.resources` declares and nothing
   else of the bundle, read only, changed only by a new binary; `home:` stays

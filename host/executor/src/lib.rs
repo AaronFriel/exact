@@ -9,7 +9,7 @@
 //! and transports and decides which [`WorkerBudget`] its workers count against.
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
-use admission::{response_room, stream_room};
+use admission::{response_room, stream_room, StreamCounts, StreamKind};
 use exact_runner::{
     CompletionTiming, FailureKind, HttpScheduling, Outcome, Reply, Request, RequestClass,
     RequestOut, Response, Work as OwnedWork,
@@ -37,11 +37,19 @@ const AGAINS: usize = 128;
 /// What an `Again` marker retains until drained: its record, an empty body.
 const AGAIN_BYTES: usize = std::mem::size_of::<Completed>();
 const ORDERED_WAITING_BYTES: usize = 64 << 20;
-/// Open streams, bounded apart from the independent lane's count: a stream
+/// Open network streams, bounded apart from the independent lane's count: a stream
 /// holds a transport lease and a reader thread for as long as it is open,
 /// and must neither starve nor be starved by a lane of held replies
 /// (LLP 1016.000 D4; LLP 1069.004 As built). Its bytes stay on the lane.
 const STREAMS: usize = 16;
+/// A child with three pipes holds three descriptors and five host threads. On macOS,
+/// 16 long polls and the app held 25 descriptors. With 16 streaming and 16 one-shot
+/// children, 25 + 32 × 3 = 121 stayed open. If every spawn held both ends of its
+/// pipes at once, this app would use 217 descriptors under its tested limit of 256.
+/// A streaming cap of 32 would raise that modeled peak to 313. Linux’s
+/// extra fork-report pipe brings the peak for 16 streaming children and 16 one-shots
+/// to 281 (LLP 1133.007 D3).
+const STREAMING_CHILDREN: usize = 16;
 /// The independent lane holds the largest job it admits: a 64 MiB reply
 /// beside the most request buffers, alone.
 const BYTES: [usize; 2] = [512 << 20, MAX_REQUEST + MAX_BODY + MAX_HEADERS * 2];
@@ -90,7 +98,7 @@ struct Running {
     /// explicit abort fires ([`Core::cancel`]). None for work and streams.
     exchange: Option<AbortController>,
     forgotten: bool,
-    stream: bool,
+    stream: Option<StreamKind>,
     /// An upload waiting for its start (`stream::Uploads`), or a process
     /// one-shot, which has room of its own (`process::admit_one_shot`):
     /// it holds no count or bytes of its lane until then, or at all.
@@ -131,7 +139,7 @@ struct Completed {
     /// reservation stays with the running stream until the stream ends.
     message: bool,
     /// A stream's last outcome: draining it frees a stream slot.
-    stream: bool,
+    stream: Option<StreamKind>,
     /// An ordered outcome that holds no effect slot until drained: a
     /// re-ask's marker or a finished safe read (counted in `light`).
     light: bool,
@@ -182,8 +190,8 @@ struct State {
     waiting: VecDeque<u64>,
     /// The tickets in `waiting`, to keep one record each.
     waiting_set: std::collections::HashSet<u64>,
-    /// Admitted streams, also counted in `counts[1]`.
-    streams: usize,
+    /// A stream holds its slot through its undrained terminal reply. Both kinds count in `counts[1]`.
+    streams: StreamCounts,
     bytes: [usize; 2],
     next: usize,
     ordered: VecDeque<u64>,
@@ -637,7 +645,7 @@ impl Core {
             }
             state.light -= usize::from(done.light);
             state.agains -= usize::from(done.again);
-            state.streams -= usize::from(done.stream);
+            state.streams.release(done.stream);
             state.bytes[lane] -= done.bytes;
         }
         // An ordered job may be waiting for these bytes, a re-ask for this
@@ -740,7 +748,7 @@ impl Core {
                     for done in outcomes.iter().filter(|done| !done.message) {
                         state.counts[lane] -= 1;
                         state.bytes[lane] -= done.bytes;
-                        state.streams -= usize::from(done.stream);
+                        state.streams.release(done.stream);
                     }
                 }
                 state.light = 0;
@@ -879,7 +887,7 @@ fn settle_again(state: &mut State, ticket: u64) -> bool {
         outcome: exact_runner::Dispatch::again_outcome(),
         bytes: AGAIN_BYTES,
         message: false,
-        stream: false,
+        stream: None,
         light: true,
         again: true,
         reply: false,
@@ -924,7 +932,7 @@ fn complete(shared: &Shared, ticket: u64, outcome: Outcome) {
     rouse(shared, &state);
     if run.forgotten {
         state.counts[lane] -= usize::from(!run.waiting);
-        state.streams -= usize::from(run.stream);
+        state.streams.release(run.stream);
         state.bytes[lane] -= run.charge;
         cache::serve_ready(&mut state);
         // The lane going idle can let a retained ordered refusal settle,
@@ -935,7 +943,7 @@ fn complete(shared: &Shared, ticket: u64, outcome: Outcome) {
         // The room it held, in its lane and among the streams, may start an
         // upload waiting for it; one that held none frees none.
         drop(state);
-        if lane == 1 && (run.charge > 0 || run.stream) {
+        if lane == 1 && (run.charge > 0 || run.stream.is_some()) {
             stream::start_uploads(shared);
         }
         return;

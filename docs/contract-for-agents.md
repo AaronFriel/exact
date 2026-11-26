@@ -1437,7 +1437,7 @@ A long poll (`/changes?since=…&wait=…`) is a stream too: add
 `exactLongPoll: { cursor: 'since', from: 'seq' }` beside `exactStream`, and the
 host asks again with each reply's cursor, skipping heartbeats and backing off
 on failures (`docs/reference.md`, LLP 1016.000 D8). Re-read on each event with
-`resource view = load() with live.seq`. A native app has 16 stream slots in all. Each `exactLongPoll`, streaming child and other open `exactStream` uses one.
+`resource view = load() with live.seq`. A native app has 16 network stream slots. Long polls, event feeds, WebSockets, listeners and running uploads each use one. Use one poll carrying changes for all open documents. Desktop apps have 16 additional slots for streaming children.
 
 A bidirectional WebSocket uses a resource's TypeScript
 `fetch(url, { exactStream(event, socket) { … } })` (LLP 1016.000 D7).
@@ -2541,7 +2541,7 @@ if (!res.ok) throw new Error((await res.json()).message);
 
 ### Child processes (`@exact/child-process`)
 
-A desktop app's data code starts a program with Node's names (LLP 1133.007). Each streaming child takes one of the app’s 16 native stream slots, shared with long polls and other streams. A refused spawn starts no child. When room opens, refresh the resource to retry.
+A desktop app's data code starts a program with Node's names (LLP 1133.007). Each streaming child takes one of the app’s 16 child slots. Network streams have 16 slots of their own. Each streaming child and network stream also reserves its response ceiling against the independent lane’s byte budget. One-shot processes have 16 slots and a separate 64 MiB budget. A single one-shot can exceed that byte budget when it runs alone (LLP 1133.007 D3). A refused spawn starts no child. When room opens, refresh the resource to retry.
 A resource answers `spawn(program, args, {exactStream})`: the child lives
 while the resource holds it, and its mapper hears `spawn`, `stdout`,
 `stderr`, `exit`, `close`, `drain`, `ready` and `ready-timeout`, with the

@@ -1008,7 +1008,7 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
 
 ## Actions
 
-- **A new tab’s child fails to start.** One long-lived child per open document plus a long poll per background tab can exhaust the app’s 16 native streams. Share a child across documents or a poll across tabs so the combined count fits (design tool, #1759).
+- **A new tab’s child fails to start.** A desktop app can run 16 streaming children and hold 16 network streams at once. Share a child across documents when more than 16 documents need one. Use one poll carrying the changes for all documents (design tool, #1759).
 - **A command-line run ends while the data module still works on a thread.** A terminal entry run once from a shell (`--print`, or stdout a pipe) exits
   when nothing holds it: no request in flight, no one-shot timer armed and no
   node `aria-busy` (LLP 1101.003 D2). A thread the module started after

@@ -182,7 +182,7 @@ fn take_job(state: &mut State, lane: usize, index: usize) -> Option<(Job, AbortC
         abort: safe_to_forget(&job.request, job.class).then(|| abort.clone()),
         exchange: (!opaque(&job.work) && !job.request.stream).then(|| abort.clone()),
         forgotten: job.forgotten,
-        stream: job.request.stream,
+        stream: crate::StreamKind::of(&job.request),
         waiting: false,
         read: lane == 0 && safe_read(&job.request, opaque(&job.work), job.class),
         overlap: job.overlap,

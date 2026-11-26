@@ -151,7 +151,7 @@ fn settle_queued(
         outcome,
         bytes: job.charge,
         message: false,
-        stream: false,
+        stream: None,
         light: false,
         again: false,
         reply: false,
@@ -210,7 +210,7 @@ impl Core {
                             || explicit.contains(&job.ticket))
                     {
                         *counts -= 1;
-                        *streams -= usize::from(job.request.stream);
+                        streams.release(StreamKind::of(&job.request));
                         *bytes -= job.charge;
                         return false;
                     }
@@ -237,7 +237,7 @@ impl Core {
                         }
                         *light -= usize::from(done.light);
                         *agains -= usize::from(done.again);
-                        *streams -= usize::from(done.stream);
+                        streams.release(done.stream);
                         *bytes -= done.bytes;
                     }
                     false
@@ -248,7 +248,7 @@ impl Core {
                 let by_app = explicit.contains(&run.ticket);
                 if by_app || (!run.forgotten && !held(run.ticket)) {
                     run.forgotten = true;
-                    let stream = run.stream.then_some(run.ticket);
+                    let stream = run.stream.is_some().then_some(run.ticket);
                     let abort = if by_app {
                         run.exchange.clone()
                     } else {

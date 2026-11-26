@@ -400,7 +400,7 @@ fn deliver(
             // Charged to the running stream: its ceiling covers one message.
             bytes: 0,
             message: true,
-            stream: true,
+            stream: Some(crate::StreamKind::Network),
             light: false,
             again: false,
             reply,

@@ -23,13 +23,13 @@ pub(super) fn one_at_a_time() -> std::sync::MutexGuard<'static, ()> {
 }
 
 #[derive(Default)]
-struct Fixture {
+pub(super) struct Fixture {
     state: Mutex<(usize, bool, Vec<String>)>,
     requests: Mutex<Vec<(String, Option<Vec<u8>>)>>,
     ready: Condvar,
 }
 impl Fixture {
-    fn wait_held(&self, count: usize) {
+    pub(super) fn wait_held(&self, count: usize) {
         let guard = self.state.lock().unwrap();
         let (state, result) = self
             .ready
@@ -46,7 +46,7 @@ impl Fixture {
         self.ready.notify_all();
     }
 }
-struct Fake(Arc<Fixture>);
+pub(super) struct Fake(pub(super) Arc<Fixture>);
 impl Transport for Fake {
     fn open(
         &self,

@@ -9,7 +9,7 @@
 //! their room; one upload alone always fits. The executor records each
 //! upload that has begun to go out, for the runner to read when it lets
 //! one go.
-use super::super::{complete, failed, Core, Shared, StreamHost, BYTES, STREAMS};
+use super::super::{complete, failed, Core, Shared, StreamHost, StreamKind, BYTES, STREAMS};
 use exact_runner::{FailureKind, Message, Outcome, Request};
 use ibex2::stdlib::{
     abort::{AbortController, AbortSignal},
@@ -245,7 +245,11 @@ pub(in super::super) fn start(shared: &Arc<Shared>) {
         let mut budget = shared.uploads.0.lock().unwrap();
         while let Some(next) = budget.queue.front() {
             let room = budget.bytes == 0 || budget.bytes.saturating_add(next.need) <= budget.limit;
-            if state.retired || !room || budget.running >= RUNNING || state.streams >= STREAMS {
+            if state.retired
+                || !room
+                || budget.running >= RUNNING
+                || state.streams.network >= STREAMS
+            {
                 break;
             }
             let Some(run) = state.running.iter_mut().find(|r| r.ticket == next.ticket) else {
@@ -272,10 +276,10 @@ pub(in super::super) fn start(shared: &Arc<Shared>) {
             };
             let mut next = budget.pop().expect("a head");
             next.place = place;
-            (run.stream, run.waiting, run.charge) = (true, false, limit);
+            (run.stream, run.waiting, run.charge) = (Some(StreamKind::Network), false, limit);
             state.counts[lane] += 1;
             state.bytes[lane] += limit;
-            state.streams += 1;
+            state.streams.take(run.stream);
             budget.bytes += next.need;
             budget.running += 1;
             starting.push(next);

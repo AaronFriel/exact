@@ -1671,6 +1671,10 @@ sits on that list carries the trade it would take.
 - Check the half-point tolerance at the target minimum. A 43.6×44 pt iOS pressable with no slop clears the 44×44 check.
 
 - A drive's numeric `short` form can return a number for a record source. Give a source answering `{x:number}` the declaration `short:["x"]`, drive `prefer extension test.point=2`, then read it. The drive accepts the shorthand and the source answers `2`. Resolve the shorthand to the record it spells.
+- Run the full executor suite on macOS. Its nested async suite intermittently fails `a_forgotten_unsafe_waiter_is_sent_after_failure_drop_deadline_refusal_or_worker_panic` with “only 1 requests reached the server” on `ce68f8b91`.
+- Check whether a process ticket can be reused between completion and process cleanup. Pause the old worker after `complete`, admit a one-shot on that ticket, and check that its reservation survives the old worker’s cleanup.
+- A one-shot with room in its own budget can still hit the independent lane’s response-size check. At `a9aeb4f1a`, admit a stream with a 32 MiB response ceiling, then a one-shot with a 4 MiB response ceiling. The executor refuses it with 67,240,502 bytes held by open streams.
+- Run `cargo clippy -p exact-kernel --lib -- -D warnings`. The two `push_primitive` calls in `kernel/src/svg/scene/filter.rs` at lines 769 and 830 trigger `clippy::question_mark` on Rust 1.99.1.
 - A server-rendered declared source keeps the live reply at launch and reload under an HTTP fixture. Run `bun test ./scripts/agent-test.test.mjs -t 'declared rendered sources use HTTP fixtures'` in Chromium. The greeting reads “Live greeting” both times.
 - Run `bun test ./scripts/agent-test.test.mjs -t 'authored preferences use the drive parser'`. For `prefer unknown dark`, the drive suggests both `screen-reader unknown` and `prefers-color-scheme dark`; the test expects just the latter.
 

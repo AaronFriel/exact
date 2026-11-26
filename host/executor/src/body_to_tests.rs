@@ -781,7 +781,7 @@ fn a_queued_read_crowded_out_by_a_later_stream_is_refused() {
         {
             let state = core.shared.state.lock().unwrap();
             assert_eq!(state.counts, [0, 2]);
-            assert_eq!(state.streams, 1);
+            assert_eq!(state.streams.len(), 1);
             assert_eq!(
                 state.bytes[1],
                 state.running.iter().map(|r| r.charge).sum::<usize>()
@@ -809,7 +809,7 @@ fn a_queued_read_crowded_out_by_a_later_stream_is_refused() {
         let state = core.shared.state.lock().unwrap();
         assert_eq!(state.counts, [0, 0]);
         assert_eq!(state.bytes, [0, 0]);
-        assert_eq!(state.streams, 0);
+        assert_eq!(state.streams.len(), 0);
     }
 }
 
@@ -891,7 +891,7 @@ fn an_upload_reserving_room_wakes_queued_reads_before_its_first_event() {
             );
             let state = core.shared.state.lock().unwrap();
             assert_eq!(state.counts, [0, 2]);
-            assert_eq!(state.streams, 1);
+            assert_eq!(state.streams.len(), 1);
             assert_eq!(
                 state.bytes[1],
                 state.running.iter().map(|r| r.charge).sum::<usize>()
@@ -927,6 +927,6 @@ fn an_upload_reserving_room_wakes_queued_reads_before_its_first_event() {
         let state = core.shared.state.lock().unwrap();
         assert_eq!(state.counts, [0, 0]);
         assert_eq!(state.bytes, [0, 0]);
-        assert_eq!(state.streams, 0);
+        assert_eq!(state.streams.len(), 0);
     }
 }

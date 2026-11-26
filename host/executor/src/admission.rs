@@ -1,6 +1,63 @@
 //! Admission and the bounded ordered fence (LLP 1041 §8.4, LLP 1162 D1).
 use super::*;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum StreamKind {
+    Network,
+    Child,
+}
+
+impl StreamKind {
+    pub(super) fn of(request: &Request) -> Option<Self> {
+        request.stream.then(|| {
+            if request.is_process() {
+                Self::Child
+            } else {
+                Self::Network
+            }
+        })
+    }
+}
+
+#[derive(Default)]
+pub(super) struct StreamCounts {
+    pub(super) network: usize,
+    children: usize,
+}
+
+impl StreamCounts {
+    pub(super) fn len(&self) -> usize {
+        self.network + self.children
+    }
+
+    fn counter(&mut self, kind: StreamKind) -> &mut usize {
+        match kind {
+            StreamKind::Network => &mut self.network,
+            StreamKind::Child => &mut self.children,
+        }
+    }
+
+    pub(super) fn take(&mut self, kind: Option<StreamKind>) {
+        if let Some(kind) = kind {
+            *self.counter(kind) += 1;
+        }
+    }
+
+    pub(super) fn release(&mut self, kind: Option<StreamKind>) {
+        if let Some(kind) = kind {
+            *self.counter(kind) -= 1;
+        }
+    }
+
+    fn admit(&self, kind: StreamKind) -> Result<(), String> {
+        match kind {
+            StreamKind::Network => budget("network streams", self.network, 1, STREAMS)
+                .map_err(|why| format!("{why}. Long polls, event feeds, WebSockets, listeners and running uploads each use a network slot")),
+            StreamKind::Child => budget("streaming child processes", self.children, 1, STREAMING_CHILDREN),
+        }
+    }
+}
+
 pub(super) fn budget_message(name: &str, used: usize, additional: usize, maximum: usize) -> String {
     let requested = used.saturating_add(additional);
     format!("{requested} {name} requested ({used} in use, maximum {maximum})")
@@ -43,7 +100,7 @@ pub(super) fn stream_room(state: &State, lane: usize, limit: usize) -> Result<()
         let streams = state
             .running
             .iter()
-            .filter(|run| run.lane == lane && run.stream)
+            .filter(|run| run.lane == lane && run.stream.is_some())
             .map(|run| run.charge)
             .sum();
         let maximum = BYTES[lane];
@@ -159,17 +216,15 @@ impl Core {
         // A process one-shot runs on a thread of its own with room of its
         // own, so a slow one leaves the lane's requests theirs (LLP 1133.007 D3).
         let one_shot = r.request.is_process() && !r.request.stream;
+        let slot = StreamKind::of(&r.request).filter(|_| !waits);
         let admitted = (|| {
             let (lane, charge, limit) = checked?;
             if !r.request.stream {
                 stream_room(&state, lane, limit)?;
             }
             let charge = if r.request.stream {
-                if !waits && state.streams >= STREAMS {
-                    return Err(format!(
-                        "{}. Streaming children, long polls and other open streams each use one slot in the app",
-                        budget_message("streams", state.streams, 1, STREAMS)
-                    ));
+                if let Some(kind) = slot {
+                    state.streams.admit(kind)?;
                 }
                 limit
             } else if one_shot {
@@ -177,7 +232,7 @@ impl Core {
             } else if lane == 1 {
                 budget(
                     "independent requests",
-                    state.counts[1] - state.streams,
+                    state.counts[1] - state.streams.len(),
                     1,
                     COUNTS[1],
                 )?;
@@ -279,15 +334,15 @@ impl Core {
             // thread with its own transport, and reads there (LLP 1067 D3).
             // An upload takes its place and thread once its budget has room.
             // A process request runs on a thread of its own, and only a
-            // child's stream takes a stream's place (LLP 1133.007).
+            // streaming child holds its own kind of slot (LLP 1133.007 D3).
             let upload = r.request.upload_progress;
-            let stream = r.request.stream && !upload;
+            let stream = slot.is_some();
             let exchange = if r.request.is_process() {
                 !stream
             } else {
                 stream && r.request.listen.is_none() && r.request.long_poll.is_none()
             };
-            state.streams += usize::from(stream);
+            state.streams.take(slot);
             let abort = AbortController::new();
             state.running.push(Running {
                 started: std::time::Instant::now(),
@@ -299,7 +354,7 @@ impl Core {
                 abort: Some(abort.clone()),
                 exchange: exchange.then(|| abort.clone()),
                 forgotten,
-                stream,
+                stream: slot,
                 waiting: waits || one_shot,
                 read: false,
                 overlap: false,

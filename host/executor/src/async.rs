@@ -639,7 +639,7 @@ impl Machine {
                 .then(|| abort.clone()),
             exchange: http.then(|| abort.clone()),
             forgotten: job.forgotten,
-            stream: false,
+            stream: None,
             waiting: false,
             read: lane == 0
                 && super::reads::safe_read(
@@ -1190,7 +1190,7 @@ fn settle(state: &mut State, run: Run, outcome: Outcome) {
             // Charged to the running job until its physical end.
             bytes: 0,
             message: false,
-            stream: false,
+            stream: None,
             light: read,
             again: false,
             reply: false,
@@ -1333,7 +1333,7 @@ impl Drop for Ended {
 pub(super) fn cancel(run: &mut Running, by_app: bool) -> bool {
     let open = !run.terminal && run.claim == Claim::None;
     let exchange = run.abort.is_some() || (by_app && run.exchange.is_some());
-    let cancels = open && exchange && !run.stream && !run.waiting;
+    let cancels = open && exchange && run.stream.is_none() && !run.waiting;
     if cancels {
         run.claim = Claim::Cancelled;
     }

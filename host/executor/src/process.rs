@@ -897,7 +897,7 @@ pub(crate) fn deliver(shared: &Shared, ticket: u64, message: Message, wait: bool
             outcome: Outcome::Message(message),
             bytes: 0,
             message: true,
-            stream: true,
+            stream: Some(crate::StreamKind::Child),
             light: false,
             again: false,
             reply: false,
