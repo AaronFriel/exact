@@ -82,16 +82,21 @@ const LINE_LIMIT: usize = 1 << 20;
 /// How many inverses it keeps; the oldest goes first.
 const ISSUED_LIMIT: usize = 256;
 
-/// `contract forma serve --stdio <app dir>`.
+/// `contract forma serve --stdio [--wait-lock] <app dir>`.
 pub fn run(args: &[String]) -> ExitCode {
-    let dir = match args {
-        [flag, dir] | [dir, flag] if flag == "--stdio" => PathBuf::from(dir),
+    let (dir, wait_lock) = match args {
+        [flag, dir] | [dir, flag] if flag == "--stdio" && dir != "--wait-lock" => {
+            (PathBuf::from(dir), false)
+        }
+        [stdio, wait, dir] if stdio == "--stdio" && wait == "--wait-lock" => {
+            (PathBuf::from(dir), true)
+        }
         _ => {
-            eprintln!("usage: contract forma serve --stdio <app dir>");
+            eprintln!("usage: contract forma serve --stdio [--wait-lock] <app dir>");
             return ExitCode::from(2);
         }
     };
-    let mut server = match Server::start(&dir) {
+    let mut server = match Server::start(&dir, wait_lock) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("contract forma serve: {e}");
@@ -317,7 +322,7 @@ fn refuse_former_state(dir: &Path) -> Result<(), String> {
 }
 
 impl Server {
-    fn start(dir: &Path) -> Result<Server, String> {
+    fn start(dir: &Path, wait_lock: bool) -> Result<Server, String> {
         if !cfg!(unix) {
             return Err(
                 "the forma server runs on macOS and Linux: its commit flushes directories".into(),
@@ -382,11 +387,50 @@ impl Server {
         let lock = no_follow(OpenOptions::new().create(true).truncate(false).write(true))
             .open(state.join("forma.lock"))
             .map_err(|e| format!("the lock: {e}"))?;
-        if lock.try_lock().is_err() {
-            return Err(format!(
-                "another forma server writes {} (its lock is .exact/forma.lock)",
-                dir.display()
-            ));
+        #[cfg(unix)]
+        let mut reported = false;
+        #[cfg(not(unix))]
+        let _ = wait_lock;
+        loop {
+            match lock.try_lock() {
+                Ok(()) => break,
+                #[cfg(unix)]
+                Err(std::fs::TryLockError::WouldBlock) if wait_lock => {
+                    if !reported {
+                        reported = true;
+                        println!(r#"{{"event":"writer-busy"}}"#);
+                    }
+                    // EOF on the dev loop's pipe cancels the wait even when its launcher was killed.
+                    let mut pipe = libc::pollfd {
+                        fd: libc::STDIN_FILENO,
+                        events: libc::POLLIN,
+                        revents: 0,
+                    };
+                    // SAFETY: poll writes one pollfd in the live local variable.
+                    let result = unsafe { libc::poll(&mut pipe, 1, 0) };
+                    if pipe.revents & (libc::POLLHUP | libc::POLLERR | libc::POLLNVAL) != 0 {
+                        return Err(
+                            "the dev loop closed its pipe while waiting for the writer".into()
+                        );
+                    }
+                    if result < 0
+                        && std::io::Error::last_os_error().kind() != ErrorKind::Interrupted
+                    {
+                        return Err(format!(
+                            "the dev loop's pipe: {}",
+                            std::io::Error::last_os_error()
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                }
+                Err(std::fs::TryLockError::WouldBlock) => {
+                    return Err(format!(
+                        "another forma server writes {} (its lock is .exact/forma.lock)",
+                        dir.display()
+                    ))
+                }
+                Err(std::fs::TryLockError::Error(e)) => return Err(format!("the lock: {e}")),
+            }
         }
         let started = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

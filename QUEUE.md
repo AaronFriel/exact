@@ -2243,3 +2243,4 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - Keep a terminal draft across input that only validates (#1733). Bind a terminal input to `"4"`, store its input in a separate label and type `-` then `2`. The label shows `4-` then `42`; the field shows `4` after both keys.
 - Read the live editor in Apple authored field assertions (#1733). On macOS, bind a field to `"A"`, let its input action only validate, type `abc` and `expect text` on the field. Both revisions report `A`. On iOS the reporter’s assertions passed even when its keyboard showed the rejected text.
 - Run `bun test ./scripts/completion-inventory.test.mjs` at 0fa23a7fe. Its two ownership assertions report a stale classification of `Presenter::drag_of` in `drag_out.rs`.
+- Run `bun test scripts/forma-server.test.mjs -t 'no web build ships inspect'`. The assertion rejects a reference to `inspect-dev.js` in the builder's source even when the release artifact omits it.

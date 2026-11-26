@@ -535,7 +535,7 @@ mod tests {
         let source = format!("component App\n  view\n    column\n{instances}      view width=\"measure.late\"\ncomponent Card\n  view\n    column\n{rows}");
         std::fs::write(dir.join("app.contract"), source).unwrap();
         std::fs::write(dir.join("app.forma"), &design).unwrap();
-        let mut server = Server::start(&dir).unwrap();
+        let mut server = Server::start(&dir, false).unwrap();
         let request = |value: &str| {
             json!({"id": 1, "method": "propose", "ops": [
                 {"op": "set-token", "name": "measure.late", "value": value}

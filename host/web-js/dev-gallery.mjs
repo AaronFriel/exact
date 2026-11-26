@@ -243,6 +243,7 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
 
   return {
     cache,
+    reconnect() { for (const res of clients) res.end(); },
     /** Whether the request was the gallery's, answered. */
     async handle(req, res, url) {
       if (url.pathname !== base && !url.pathname.startsWith(base + '/')) return false;
@@ -392,6 +393,7 @@ export function frameLoops(options) {
       }
       return loops.get(name).handle(req, res, url);
     },
+    reconnect() { for (const loop of loops.values()) loop.reconnect(); },
     changed() { for (const loop of loops.values()) loop.schedule(); },
     async stop() {
       await Promise.all([...loops.values()].map(loop => loop.stop()));

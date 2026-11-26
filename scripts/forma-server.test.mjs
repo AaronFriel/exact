@@ -161,6 +161,24 @@ test('hello says live, and a slow write is answered, not timed out', async () =>
   forma.close();
 });
 
+test('a writer waiting longer than the wire timeout keeps answering busy until its first reply', async () => {
+  const port = 8803, host = `127.0.0.1:${port}`;
+  const gate = developmentGate([{ origin: 'http://' + host }], port);
+  const child = fakeServe();
+  child.stdin.pause();
+  const forma = formaServer({ appDir: '/nowhere', spawnServe: () => child, answerMs: 5, log: () => {} });
+  const hello = () => ask(forma, gate, { path: '/__forma', method: 'POST', headers: { host, 'x-exact-forma-token': forma.token }, body: '{"method":"hello"}' });
+  try {
+    child.stdout.write('{"event":"writer-busy"}\n');
+    await forma.writerBusy;
+    await new Promise(ok => setTimeout(ok, 30));
+    expect((await hello()).status).toBe(503);
+    child.stdin.resume();
+    await forma.ready;
+    expect((await hello()).status).toBe(200);
+  } finally { await forma.close(); }
+});
+
 // LLP 1122 T2c: a map per plan digest. Each build is joined and outlined
 // from its own plan's map; a build on a plan with no map here is sent none.
 test('each build is joined and outlined from its own plan\'s map', async () => {

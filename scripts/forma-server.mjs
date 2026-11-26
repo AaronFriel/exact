@@ -132,8 +132,8 @@ const notFound = res => json(res, 404, { message: 'Not found.' });
 /** `contract forma serve --stdio <app>`, through cargo as the dev loops run
  * the compiler, in a process group of its own so stopping it stops the
  * compiler cargo starts. */
-function spawnContract(appDir) {
-  return spawn('cargo', ['run', '-q', '-p', 'contract', '--', 'forma', 'serve', '--stdio', appDir], { cwd: ROOT, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+function spawnContract(appDir, waitLock) {
+  return spawn('cargo', ['run', '-q', '-p', 'contract', '--', 'forma', 'serve', '--stdio', ...(waitLock ? ['--wait-lock'] : []), appDir], { cwd: ROOT, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
 }
 
 /** The wire for one app: `handle(req, res, url, access)` answers the
@@ -154,7 +154,7 @@ function spawnContract(appDir) {
  * run's paired clients, for stage 10 C's gateway (`lookup`, `onEnd`); `canvas(pairing)`
  * makes that gateway (scripts/forma-canvas.mjs; null for none), which
  * `canvas` answers once its port is open (`openCanvas`). */
-export function formaServer({ appDir, spawnServe = spawnContract, watchDir = watch, log = console.log, settle = 50, toolDir = TOOL_DIST, live = false, answerMs = ANSWER_MS, scrub = null, scrubIdleMs, scopeOf = () => 'write', page = null, sourceMap = () => null, designServed = () => null, pairTtlMs = PAIR_TTL_MS, clock = Date.now, remote = () => [], canvas = pairing => canvasGateway({ pairing }), importLimits }) {
+export function formaServer({ appDir, spawnServe = spawnContract, waitLock = false, waiterLost, watchDir = watch, log = console.log, settle = 50, toolDir = TOOL_DIST, live = false, answerMs = ANSWER_MS, scrub = null, scrubIdleMs, scopeOf = () => 'write', page = null, sourceMap = () => null, designServed = () => null, pairTtlMs = PAIR_TTL_MS, clock = Date.now, remote = () => [], canvas = pairing => canvasGateway({ pairing }), importLimits }) {
   const token = randomBytes(32).toString('hex');
   // This run's name on every event: a number from another run means nothing.
   const epoch = randomBytes(8).toString('hex');
@@ -169,7 +169,7 @@ export function formaServer({ appDir, spawnServe = spawnContract, watchDir = wat
   const exported = [];
   // Each file's digest as last announced: what a later change is told from.
   const known = new Map();
-  let next = 0, seq = 0, out = '', stderr = '', down = null, writing = 0, again = false, timer = null, first = true, proposalCount = 0;
+  let next = 0, seq = 0, out = '', stderr = '', down = null, lockBusy = false, writing = 0, again = false, timer = null, first = true, proposalCount = 0;
   // What `commit` needs of the session, and who last changed each file.
   const session = designSession(appDir), lastBy = new Map(), replacedIds = replacedProposals(); // (held ids since replaced, 1.17)
   const design = basename(designPath(appDir) ?? 'app.forma');
@@ -334,6 +334,7 @@ export function formaServer({ appDir, spawnServe = spawnContract, watchDir = wat
   const fail = message => {
     if (down) return;
     down = message;
+    if (lockBusy) waiterLost?.();
     log(`forma: ${message}`);
     for (const reply of waiting.values()) reply({ error: { message } });
     waiting.clear();
@@ -342,7 +343,7 @@ export function formaServer({ appDir, spawnServe = spawnContract, watchDir = wat
     for (const res of subscribers) res.end();
     subscribers.clear();
   };
-  const child = spawnServe(appDir);
+  const blocked = Promise.withResolvers(), child = spawnServe(appDir, waitLock);
   child.on('error', e => fail(`the design server did not start: ${e.message}`));
   child.on('exit', code => fail(stderr.trim().split('\n').pop() || `the design server exited ${code}`));
   child.stdin.on('error', () => {});
@@ -356,6 +357,7 @@ export function formaServer({ appDir, spawnServe = spawnContract, watchDir = wat
       if (!text.trim()) continue;
       let v; try { v = JSON.parse(text); } catch { continue; }
       // A write's event is published from its reply (below), in order.
+      if (v.event === 'writer-busy') { lockBusy = true; blocked.resolve(); }
       if (v.event) continue;
       // The server answers in order: a reply it could not tie to a request
       // (a line it could not read) is the oldest one's.
@@ -473,7 +475,8 @@ export function formaServer({ appDir, spawnServe = spawnContract, watchDir = wat
     void refresh();
   };
   watchAll([], false);
-  const ready = refresh();
+  const ready = refresh().finally(() => { lockBusy = false; });
+  const available = Promise.race([ready, blocked.promise]);
   // Paired clients (stage 10 A2, scripts/forma-pairing.mjs). A burn or a
   // rate-limit hit is logged with its peer and told to the clients without
   // it, never with a code.
@@ -539,9 +542,10 @@ export function formaServer({ appDir, spawnServe = spawnContract, watchDir = wat
     // (forma-remote.mjs) clears only once the body has ended.
     const early = access.remote ? body(req, res) : null;
     // Over the limit, answered at once (not behind a server still starting, past refuseBody's 5 s); a client gone, nothing.
-    const first = early && await earlyAnswer(early, ready);
+    const first = early && await earlyAnswer(early, available);
     if (first === 'over' || first === 'gone') { if (first === 'over' && !res.destroyed) json(res, 413, { error: { message: 'a request is at most 1 MiB' } }); return true; }
-    await ready;
+    await available;
+    if (lockBusy) { json(res, 503, { error: { message: 'another Forma writer holds the project lock' } }); return true; }
     // The client left while the server started.
     if (res.destroyed || res.writableEnded) return true;
     // The local token's body may be 16 MiB (a CLI import's sources, forma/1.17), judged from its header before a byte is read; every other client's 1 MiB.
@@ -1215,7 +1219,7 @@ export function formaServer({ appDir, spawnServe = spawnContract, watchDir = wat
   // `compete()`: the dev loop's build of an edit the watcher does not see
   // (a Contract source's), which ends a scrub as a hand edit does.
   // `pairing`: the run's paired clients, for stage 10 C's gateway (`lookup`, `onEnd`; scripts/forma-pairing.mjs).
-  return { handle, close, ready, channel, pairing: pairs, canvas: gateway, relayCanvas: g => { relayGateway = g; }, compete: () => scrubs.compete(), get token() { return token; }, get down() { return down; } };
+  return { handle, close, ready, writerBusy: blocked.promise, channel, pairing: pairs, canvas: gateway, relayCanvas: g => { relayGateway = g; }, compete: () => scrubs.compete(), get token() { return token; }, get down() { return down; } };
 }
 
 /** The app directory an argument names (a directory, or a file in it). */

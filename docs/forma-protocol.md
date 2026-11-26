@@ -220,7 +220,8 @@ on macOS and Linux.
 - **In the dev loop.** Both dev loops (`host/web/dev.mjs`, `host/web-js/dev.mjs`) mount the server
   at their own origin when the app has a design. The JS loop's resident `--serve-as` producer
   mounts none: it relays the main loop's batches and commands to its devices (see the build
-  channel).
+  channel). The JS loop mounts Forma when the design file appears. Removing it releases the
+  writer and returns its Forma routes to 404. Open pages reconnect to the new channel.
 - **Framed by the design tool.** Every HTML response a dev loop sends (the page, its install
   pages, the auth callback, `/__dev/open`) carries
   `Content-Security-Policy: frame-ancestors 'self' http://127.0.0.1:7740` (*1.3*): the tool's
@@ -231,10 +232,12 @@ on macOS and Linux.
   URL as the iframe source. No `X-Frame-Options`. Development only; the tool never scripts the frame.
 - **Alone.** `bun exact.mjs forma serve <app> [--port <n>] [--lan] [--remote <host:port>] [--trust-tunnel <port>]` runs it with no app running.
   It binds loopback unless `--lan`, and a client reaching it over the LAN still can't get the token.
-- **One writer per project.** The design process holds `.exact/forma.lock`. When a second server
+- **One writer per project.** The design process holds `.exact/forma.lock`. When a standalone server
   for the same app can't take the lock, its design process exits. Its `POST /__forma` and
   `/__forma/subscribe` then answer 503 with the lock error, and its long poll answers as in
-  "The change stream".
+  "The change stream". The JS dev loop waits for the writer to release the lock and takes
+  over automatically. While it waits, the local token endpoint answers 200. Authenticated
+  requests to `/__forma`, `/__forma/subscribe` and `/__forma/events` answer 503.
 - **Layers.** `scripts/forma-server.mjs` is the HTTP wire. It speaks JSON lines to
   `contract forma serve --stdio <app>`, which owns the files: the digests, the lock, the journal
   and every write. The wire writes no design file itself.

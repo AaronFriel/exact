@@ -31,7 +31,7 @@ import { localInstaller } from '../web/local-install.mjs';
 import { attachDevControls, createLaunchGate } from '../web/dev-keys.mjs';
 import { designPath, frameOnlyByTool, formaServer } from '../../scripts/forma-server.mjs';
 import { pluginOnLoopback } from '../../scripts/forma-remote.mjs';
-import { openRemoteCanvas } from '../../scripts/forma-canvas.mjs';
+import { projectCanvas } from '../../scripts/forma-canvas.mjs';
 import { mapCard, pullMap } from '../../scripts/forma-inspect.mjs';
 import { serveCommands, serveReport, streamFrame } from '../../scripts/forma-builds.mjs';
 import { EXE, depInfoOf, fresh, freshCompiler, webCompiler, webCompilerFrom } from './module.mjs';
@@ -338,7 +338,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // Ready lines wait for the server to answer (and its doors), as a test or an agent connects on them.
   let listening = false; const held = [], sayReady = (line) => { if (listening) console.log(line); else held.push(line); };
   // The design server's wire, once made below (a rebuild may come first).
-  let forma = null, doors = null;
+  let mounting = false, forma = null, doors = null, mounted = null, wanted = null, changing = Promise.resolve();
   const clients = new Set();
   // A batch to a page behind waits, then the latest design's notice goes instead (forma-builds.mjs).
   const push = (m) => { for (const res of clients) if (m.kind === 'forma-batch') streamFrame(res, JSON.stringify(m), () => snapshot && notice(snapshot)); else res.write(`data: ${JSON.stringify(m)}\n\n`); };
@@ -617,6 +617,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     // (or fails) builds. Only the app's own design: another .forma may be
     // any build's input.
     const file = designPath(app.dir);
+    if (mounting) void mountForma(file).catch(failedMount);
     const fast = designOnly && design && designs.every((path) => path === file);
     // A value-only edit reads its design and sends its batch whatever builds
     // meanwhile (that build is set aside); any other waits for it.
@@ -1124,8 +1125,6 @@ for(;;){
   const installer = localInstaller({ app: () => app, origins, port, gate, listener: { host, port }, launchGate });
   // An agent attached to a tab a person has open here, once they allow it there (LLP 1012.000 D2).
   const attach = devAttach({ port, root });
-  // The design server's wire (LLP 1121 D13), when the app has a design.
-  // `page`: this loop's own origin, which the design tool frames (LLP 1122 T2).
   // The source maps of the plans the resident loop serves the natives
   // (LLP 1122 T2c), by plan digest. The child says each plan it publishes,
   // and its map's card, on a pipe this loop gave it for that alone (fd 3:
@@ -1150,20 +1149,44 @@ for(;;){
       await new Promise((ok) => setTimeout(ok, 250));
     }
   };
-  try {
-    forma = designPath(app.dir) ? formaServer({ appDir: app.dir, pairTtlMs, remote: () => doors?.list() ?? [], live: true, page: `http://127.0.0.1:${port}`, sourceMap: (digest) => (digest ? residentMaps.get(digest) ?? pageMaps.get(digest) ?? gallery.map(digest) : residentMaps.get(residentPlan)) ?? null, designServed: () => (scrubbed ? null : served), scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: (frame) => { released = scrubbed != null && (frame ?? true); }, inline: inlineWhy } }) : null;
-  } catch (e) { console.error(e.message); process.exit(2); }
-  // A polled stream (Linux, the resident loop's relay) is told the design to run.
-  forma?.channel.greet(() => snapshot && notice(snapshot));
+  // Serialize lock and listener handover across deletion, recreation and manifest changes.
+  function mountForma(path) {
+    if (wanted === path && !forma?.down) return changing;
+    wanted = path;
+    changing = changing.catch(() => {}).then(async () => {
+      if (mounted === wanted && !forma?.down) return;
+      const previous = forma, oldDoors = doors;
+      forma = doors = mounted = null;
+      if (previous) {
+        for (const owner of previous.channel.owners()) previous.channel.clear(owner);
+        await Promise.all([previous.close(), oldDoors?.close()]);
+      }
+      if (wanted && !stopping) {
+        forma = formaServer({ appDir: app.dir, waitLock: true, waiterLost: () => { if (!stopping && forma?.down) void mountForma(designPath(app.dir)).catch(failedMount); }, pairTtlMs, remote: () => doors?.list() ?? [], live: true, page: `http://127.0.0.1:${port}`, sourceMap: (digest) => (digest ? residentMaps.get(digest) ?? pageMaps.get(digest) ?? gallery.map(digest) : residentMaps.get(residentPlan)) ?? null, designServed: () => (scrubbed ? null : served), scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: (frame) => { released = scrubbed != null && (frame ?? true); }, inline: inlineWhy } });
+        mounted = wanted;
+        forma.channel.greet(() => snapshot && notice(snapshot));
+        doors = projectCanvas(forma, remoteAsked, `http://127.0.0.1:${port}`, listening, listening ? e => console.error(`Forma remote: ${e.message}`) : failedMount);
+      }
+      // EventSource reconnects with this channel's nonce while the document keeps its state.
+      for (const res of clients) res.end();
+      gallery.reconnect(); frames.reconnect();
+    }).catch(error => { if (wanted === path) wanted = undefined; throw error; });
+    return changing;
+  }
   const server = createServer({ maxHeaderSize: 128 * 1024 }, async (req, res) => {
     // Every HTML answer is framed by the design tool only (LLP 1122 T2).
     frameOnlyByTool(res);
     // A sandboxed page's (a Figma plugin's) wire request, with --allow-plugin-origin (stage 10b): the wire's, before the gate.
-    if (remoteAsked.plugin && forma && await pluginOnLoopback(forma, req, res)) return;
-    const access = gate.check(req);
-    if (!access.allowed) { res.writeHead(421, { 'cache-control': 'no-store' }); res.end(); return; }
     const url = webRequestURL(req.url);
-    if (!url) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
+    const wire = url && (url.pathname === '/__forma' || url.pathname.startsWith('/__forma/'));
+    const access = gate.check(req);
+    if (wire && !stopping && (access.allowed || remoteAsked.plugin)) {
+      try { await mountForma(designPath(app.dir)); }
+      catch (error) { console.error(error.message); res.writeHead(503); res.end(); return; }
+    }
+    if (remoteAsked.plugin && forma && await pluginOnLoopback(forma, req, res)) return;
+    if (!access.allowed) { res.writeHead(421, { 'cache-control': 'no-store' }); res.end(); return; }
+    if (!url || (wire && !forma)) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
     if (forma && await forma.handle(req, res, url, access)) return;
     if (await installer.handle(req, res, url, access)) return;
     if (await attach.handle(req, res, url)) return;
@@ -1388,12 +1411,14 @@ for(;;){
     for (const entry of packageEntries.values()) entry.watch.close();
     for (const w of watchers) w.close(); residentChild?.kill('SIGTERM'); server.close(); server.closeAllConnections?.();
     // The design server lets go of its lock before this exits.
+    await changing.catch(() => {});
     await Promise.all([buildExit, forma?.close(), doors?.close(), gallery.stop(), frames.stop(), controls?.stop()]);
     // A local iOS build in flight is stopped and waited for, as the resident loop does.
     const install = installer.child;
     if (install && install.exitCode === null && install.signalCode === null) { const exit = new Promise((ok) => install.once('exit', ok)); install.kill('SIGTERM'); await exit; }
     process.exit(process.exitCode ?? 0);
   })();
+  const failedMount = e => { console.error(`cannot mount Forma: ${e.message}`); if (!listening) { process.exitCode = 1; void stop(); } };
   startup.handoff(stop);
   watchLauncher(stop);
   await listenDelay();
@@ -1401,7 +1426,9 @@ for(;;){
   const six = await alsoOnIPv6Loopback(server, port).catch(async (e) => { console.error(`cannot listen on [::1]:${port}: ${e.code} (another server there would answer a localhost URL; --port <n> picks another)`); stopping = true; stopGroup(tool.child); stopGroup(tool.cleaner); await forma?.close(); process.exit(1); });
   await new Promise((ok, fail) => { server.on('error', fail); server.listen(port, host, ok); })
     .catch(async (e) => { console.error(`cannot listen on ${host}:${port}: ${e.code ?? e.message}${e.code === 'EADDRINUSE' ? ' (another dev loop? --port <n> picks another)' : ''}`); six?.close(); stopping = true; stopGroup(tool.child); stopGroup(tool.cleaner); await forma?.close(); process.exit(1); });
-  doors = forma ? await openRemoteCanvas(forma, remoteAsked, `http://127.0.0.1:${port}`).catch(async (e) => { console.error(`cannot listen: ${e.message}`); process.exitCode = 1; await stop(); }) : null;
+  mounting = true;
+  await mountForma(designPath(app.dir)).catch(failedMount);
+  if (remoteAsked.remote || remoteAsked.tunnel != null || remoteAsked.relay) await doors?.ready;
   const urls = origins.map((o) => `${o.origin}/`);
   console.log(urls.join('\n'));
   console.log(urls.map(url => `  Open in native: ${url}__dev/open`).join('\n'));
