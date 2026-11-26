@@ -65,11 +65,11 @@ async function fetchJar(version) {
 }
 
 /** Each `object` (and `enum class`) of a generated tokens file: its members' value text, joined across lines. */
-function parseObjects(text) {
+export function parseObjects(text) {
   const out = {};
   for (const m of text.matchAll(/^internal (?:object|enum class) (\w+)\s*\{([\s\S]*?)^\}/gm)) {
     const members = {};
-    const body = m[2];
+    const body = m[2].replace(/\/\/[^\r\n]*/g, '');
     const decls = [...body.matchAll(/^ {4}(?:const )?val (\w+)\s*=\s*/gm)];
     decls.forEach((d, i) => {
       const end = i + 1 < decls.length ? decls[i + 1].index : body.length;
@@ -119,7 +119,7 @@ export function materialWeight(expression) {
 }
 
 /** Each Material row of the schema against its source. True when all agree. */
-function check({ files, objects }) {
+export function check({ files, objects }) {
   const schema = JSON.parse(readFileSync(join(root, 'kernel/tables/schema.json'), 'utf8'));
   const material = Object.fromEntries(schema.metrics.filter((r) => r.length === 7 && r[6] !== 'unset').map((r) => [r[0], r[6]]));
   const { rows } = JSON.parse(readFileSync(join(here, 'rows.json'), 'utf8'));
@@ -166,11 +166,11 @@ function check({ files, objects }) {
   // A text style's Material cell names its `TypeScaleTokens` key: its size, line height and weight there.
   for (const [name, , , , , , , [key, size, line, weight]] of schema.textStyles) {
     const sp = (part) => resolveToken(objects, `TypeScaleTokens.${key}${part}`).sp;
-    const { expr, number } = resolveToken(objects, `TypeScaleTokens.${key}Weight`);
-    for (const [part, want, got] of [['Size', size, sp('Size')], ['LineHeight', line, sp('LineHeight')], ['Weight', weight, materialWeight(expr)]]) {
+    const weightValue = resolveToken(objects, `TypeScaleTokens.${key}Weight`);
+    for (const [part, want, got] of [['Size', size, sp('Size')], ['LineHeight', line, sp('LineHeight')], ['Weight', weight, materialWeight(weightValue.expr)]]) {
       const same = got === want;
       ok &&= same;
-      const unexpected = part === 'Weight' ? expr ?? number : undefined;
+      const unexpected = part === 'Weight' ? weightValue.expr ?? weightValue.number ?? JSON.stringify(weightValue) : undefined;
       const source = got ?? (unexpected === undefined ? 'not found' : `unrecognized ${unexpected}`);
       console.log(`  ${same ? 'ok' : 'DIFFERS'} ${name} ${part}: schema ${want}, source ${source}   TypeScaleTokens.${key}${part}`);
     }
