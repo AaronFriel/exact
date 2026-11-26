@@ -670,3 +670,30 @@ fn a_glass_group_reads_every_overflow_row_and_arm() {
         assert_eq!(e.id, "lower-glass-group", "{overflow}: {e}");
     }
 }
+
+/// A border written as a template splits at its literal spaces: the width and
+/// colour compute, the line style is a literal, and a change to the state
+/// restyles the node.
+#[test]
+fn a_border_template_computes_its_width_and_colour() {
+    let mut r = boot(
+        "component A\n  state w = 2\n  state c = \"#ff0000\"\n  action wider\n    w = 5\n  view\n    column\n      button testId=\"wider\" press=wider width=10 height=10\n      box testId=\"b\" border=`${w}px dashed ${c}` width=20 height=20\n",
+    );
+    let b = style_of(&r, "b");
+    assert_eq!(b.border_widths(), [2.0; 4]);
+    assert_eq!(b.border_style_top, BorderStyle::Dashed);
+    assert_eq!(painted(&r, "b"), [fixed("#ff0000"); 4]);
+    let wider = {
+        let k = r.kernel();
+        k.node_by_key(k.find_by_test_id("wider")[0]).unwrap().id
+    };
+    r.dispatch(wider, Event::Press).unwrap();
+    assert_eq!(style_of(&r, "b").border_widths(), [5.0; 4]);
+    // The line style stays a literal, and the words stay in CSS's order.
+    for src in [
+        "component A\n  state s = \"solid\"\n  view\n    box border=`1px ${s} red`\n",
+        "component A\n  state c = \"red\"\n  view\n    box border=`1px ${c}`\n",
+    ] {
+        assert_eq!(contract::compile(src).unwrap_err().id, "lower-css-shorthand");
+    }
+}

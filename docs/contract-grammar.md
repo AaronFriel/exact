@@ -183,6 +183,12 @@ A part on another native control, or (for `:active`, `:hover` and
 row beside the same paint's `-exact-press-` row is `lower-state-press-paint`.
 The node's block wins over its class's, row by row.
 
+A `border` shorthand (or one side's) may be a template of three words, a width, a
+line style and a colour in that order, split at its literal spaces:
+``border=`${width}px solid ${color}` ``. The width and colour words may interpolate;
+the line style is a literal keyword. Other computed strings cannot be split into
+longhands (`lower-css-shorthand`).
+
 A length attribute's string is CSS's own text, read by the kernel: a px or
 other absolute length, a percentage, a viewport length, `auto`,
 `env(safe-area-inset-*)`, `env(viewport-segment-* x y)`,

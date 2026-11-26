@@ -77,6 +77,12 @@ pub(crate) fn component(value: &Expr, name: &str, index: usize) -> Result<Expr, 
             let i = if name == "text-box-edge" { 1 } else { index };
             out = Expr::Str(text_box(name, text, *span)?[i].clone(), *span);
         }
+        // A template splits at its literal spaces: `border=`${w}px solid ${c}``
+        // is a width, a line style and a colour, in that order, each its own
+        // word (a word may interpolate, the line style may not).
+        Expr::Template(parts, span) if name.starts_with("border") => {
+            out = template_border(name, parts, *span)?.swap_remove(index % 3);
+        }
         Expr::Ternary(_, yes, no, _) => {
             **yes = component(yes, name, index)?;
             **no = component(no, name, index)?;
@@ -1108,4 +1114,64 @@ fn template_words(parts: &[TemplatePart], span: Span) -> Option<Vec<Expr>> {
         });
     }
     Some(out)
+}
+
+/// A border shorthand written as a template: three words, width, line style
+/// and colour, split at the template's literal spaces. A word that is one
+/// interpolation is that expression; a word of several parts is a template; a
+/// literal width is read as a CSS length. The line style is a literal keyword
+/// the kernel paints.
+fn template_border(name: &str, parts: &[TemplatePart], span: Span) -> Result<Vec<Expr>, LowerError> {
+    let mut words: Vec<Vec<TemplatePart>> = vec![Vec::new()];
+    for part in parts {
+        match part {
+            TemplatePart::Text(text) => {
+                let mut pieces = text.split(' ').peekable();
+                while let Some(piece) = pieces.next() {
+                    if !piece.is_empty() {
+                        words.last_mut().unwrap().push(TemplatePart::Text(piece.to_string()));
+                    }
+                    if pieces.peek().is_some() && !words.last().unwrap().is_empty() {
+                        words.push(Vec::new());
+                    }
+                }
+            }
+            TemplatePart::Expr(e) => words.last_mut().unwrap().push(TemplatePart::Expr(e.clone())),
+        }
+    }
+    if words.last().is_some_and(|w| w.is_empty()) {
+        words.pop();
+    }
+    if words.len() != 3 {
+        return err(
+            "lower-css-shorthand",
+            format!("`{name}` computed from a template takes three space-separated words, a width, a line style and a colour, e.g. `${{w}}px solid ${{c}}`"),
+            span,
+        );
+    }
+    let literal = |word: &[TemplatePart]| -> Option<String> {
+        word.iter().map(|p| match p { TemplatePart::Text(t) => Some(t.as_str()), TemplatePart::Expr(_) => None }).collect()
+    };
+    let mut out = Vec::new();
+    for (i, word) in words.iter().enumerate() {
+        let expr = match (literal(word), word.as_slice()) {
+            (Some(text), _) if i == 0 => {
+                let width = border(name, &format!("{text} solid black"), span)?[0].clone();
+                if exact_kernel::style::relative::named_length(&width).is_some() {
+                    Expr::Str(width, span)
+                } else {
+                    let pt = width.ends_with("pt");
+                    let value: f64 = width.strip_suffix("px").or_else(|| width.strip_suffix("pt")).unwrap_or(&width).parse().unwrap();
+                    Expr::Number(value * if pt { 4.0 / 3.0 } else { 1.0 }, span)
+                }
+            }
+            (Some(text), _) if i == 1 => Expr::Str(border(name, &format!("1px {text} black"), span)?[1].clone(), span),
+            (Some(text), _) => Expr::Str(text, span),
+            (None, [TemplatePart::Expr(e)]) if i != 1 => e.clone(),
+            (None, _) if i != 1 => Expr::Template(word.clone(), span),
+            (None, _) => return err("lower-css-shorthand", format!("`{name}`'s line style is a literal keyword, not a computed value"), span),
+        };
+        out.push(expr);
+    }
+    Ok(out)
 }
