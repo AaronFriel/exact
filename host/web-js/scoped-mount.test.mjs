@@ -25,7 +25,23 @@ ${head}      text \`${title} \${n}\` id="label" testId="label"
         text "bump"
       input id="field" testId="field"
 ${extra}`;
+// A view that reads a value the page owns through a source (`pageTone`), beside state of its own.
+const themed = `shape Look
+  tone: string
+
+component App
+  state n = 0
+  resource look = pageTone() as shape Look else empty()
+  action bump
+    n = n + 1
+  view
+    column testId="themed-root"
+      text \`\${look.tone} \${n}\` testId="label"
+      button press=bump testId="bump"
+        text "bump"
+`;
 const apps = {
+  themed,
   alpha: view('Alpha'),
   beta: view('Beta'),
   // Everything a view can do to its page that a Contract can spell: the title, a name the page owns, and focus.
@@ -38,6 +54,7 @@ for (const [name, src] of Object.entries(apps)) {
   writeFileSync(resolve(stage, 'app.json'), JSON.stringify({ name, short_name: name, id: `dev.exact.${name}`, app: { id: `dev.exact.${name}`, name }, host: { web: {} } }));
   writeFileSync(resolve(stage, 'package.json'), '{"name":"v","private":true,"type":"module"}');
   writeFileSync(resolve(stage, 'app.ts'), "export const grants = '';\nexport const answer = () => { throw Error('no sources'); };\n");
+  if (name === 'themed') writeFileSync(resolve(stage, 'app.ts'), "export const grants = '';\nexport const answer = (source: string) => { if (source === 'pageTone') return (globalThis as any).pageTone(); throw Error('no source ' + source); };\n");
   const built = spawnSync(bun, ['host/web-js/build.mjs', stage, '--scoped', '--render', 'none', '--out', resolve(scratch, name, 'out')], { cwd: root, encoding: 'utf8' });
   if (built.status !== 0) throw Error(`${name}: ${built.stderr.slice(-600)}`);
 }
@@ -80,6 +97,30 @@ test('three views mount in one page, each in its own shadow tree, and work indep
   await p.evaluate(() => document.getElementById('a').shadowRoot.querySelector('[data-testid="bump"]').click());
   await new Promise(r => setTimeout(r, 300));
   expect(await text('a')).toContain('Alpha 2'); expect(await text('b')).toContain('Beta 0');
+  await p.close();
+});
+
+test('a value the page owns reaches a mounted view through refresh, without a remount', async () => {
+  const p = await browser.newPage();
+  await p.goto(`http://127.0.0.1:${server.port}/`);
+  await p.evaluate(async origin => {
+    const { mount } = await import(`${origin}/v/alpha/scoped-mount.mjs`);
+    window.tone = 'dark';
+    window.themed = await mount(document.getElementById('a'), { base: `${origin}/v/themed/`, scope: 'themed', mode: 'open', globals: { pageTone: async () => ({ tone: window.tone }) } });
+  }, `http://127.0.0.1:${server.port}`);
+  const label = () => p.evaluate(() => document.getElementById('a').shadowRoot?.querySelector('[data-testid="label"]')?.textContent);
+  await p.waitForFunction(() => document.getElementById('a').shadowRoot?.querySelector('[data-testid="label"]')?.textContent === 'dark 0');
+  await p.evaluate(() => document.getElementById('a').shadowRoot.querySelector('[data-testid="bump"]').click());
+  await p.waitForFunction(() => document.getElementById('a').shadowRoot.querySelector('[data-testid="label"]').textContent === 'dark 1');
+  // The page's value changes; nothing reaches the view until the page says so, then only the resource reading that source is asked again.
+  await p.evaluate(() => { window.tone = 'light'; });
+  await new Promise(r => setTimeout(r, 200));
+  expect(await label()).toBe('dark 1');
+  await p.evaluate(() => { window.themed.refresh('otherSource'); });
+  await new Promise(r => setTimeout(r, 200));
+  expect(await label()).toBe('dark 1');
+  await p.evaluate(() => { window.themed.refresh('pageTone'); });
+  await p.waitForFunction(() => document.getElementById('a').shadowRoot.querySelector('[data-testid="label"]').textContent === 'light 1');
   await p.close();
 });
 

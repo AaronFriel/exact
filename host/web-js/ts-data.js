@@ -252,6 +252,9 @@ globalThis.__exact_module = body => {
   finally { answering.call = before; }
 };
 (globalThis.exact ??= {}).announceModule = topic => announce(topic, 'module');
+// The page asks again every resource that reads source `name`, in the same commit: a value the page holds and the source
+// answers (a theme, a locale) reaches a mounted view without a remount, and state, scroll and focus stay as they are.
+globalThis.exact.refreshSource = source => commit(() => { for (const r of Resources) if (!r.gone && r.source === source) changed(r, `source ${source}`); }, `refresh ${source}`);
 globalThis.exact.moduleReaders = key => Resources.filter(r => moduleWatched.get(key)?.has(r.source)).map(r => r.name);
 // The documents the answers watch, for the agent's `state.watches`, as the runner lists them: a development page
 // names it (build.mjs), since the agent drives only that, and a production page does not link it.
