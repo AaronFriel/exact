@@ -8,7 +8,6 @@
 - Run `cargo test -p contract --test it auth:: -- --test-threads=1`. Five auth callback tests fail when arming a sign-in or logout for the Android browser.
 - Run `cargo test -p contract --bin contract docs_card_md_is_what_vocab_prints`. The compiler lists the `edges` idiom and the checked-in `docs/card.md` omits it.
 - Check the public API for resolving the Screenshot app's custom destination. On macOS, set a custom destination in Screenshot and open a picker with `startIn="screenshots"`. LLP 1173's resolver reads the Screenshot app's `location-screenshot` preference.
-- Build a game with `bun exact.mjs android --release` at 5bcb16f10. Four public methods in `host/painted/src/canvas/present.rs` fail the missing documentation lint on Android.
 - Export `qu"oted.contract` from a package manifest and resolve its `Card.inset` param in the Forma server. The quote in the path makes the name substitution produce invalid JSON and the reply exposes the internal `param.f…` name. Substitute names in JSON string values with proper escaping.
 - In a Forma server for an app importing a package and using `color="var(--ink)"`, `describe`, rename only the `ink` token to `paper` and `describe` again. The warm reply still lists the package. A fresh server drops it after the app fails to load. Include design facts that affect validation in the params cache key.
 - Pass `var(--missing, 1px)` to a component argument consumed by `width`. The build succeeds silently. Writing the same value directly on `width` emits `lower-var-undeclared`. Carry the warning back to the argument.

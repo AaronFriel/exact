@@ -70,6 +70,7 @@ pub struct StreamDedup {
 }
 
 impl StreamDedup {
+    /// An empty deduplicator: the next paint is delivered.
     pub const fn new() -> Self {
         Self {
             last: Vec::new(),
@@ -78,17 +79,20 @@ impl StreamDedup {
         }
     }
 
+    /// Forgets everything delivered, so the next paint is delivered whole.
     pub fn clear(&mut self) {
         self.last.clear();
         self.moved.clear();
         self.drawn = None;
     }
 
+    /// Called after a move-only frame, so the next full paint is delivered.
     pub fn reset_moved(&mut self) {
         self.last.clear();
         self.drawn = None;
     }
 
+    /// The ops to deliver for this frame, or `None` when the reader already shows them.
     pub fn emit(&mut self, ops: Vec<u32>) -> Option<&mut [u32]> {
         if ops.first() == Some(&22) {
             self.reset_moved();
