@@ -173,8 +173,8 @@ and `-exact-tint-color`, and fold into the node's own rows, `:checked` under
 absolute target), `:hover` and `:focus-visible` take `background-color`,
 `color`, `border-color`, `opacity`, `box-shadow` and `scale` (which stands in for the
 node's and moves on its `transition`). Active targets may compute or clear
-with `none`; hover and focus targets are literals (`lower-state-literal`; a
-token's name is one). Another row is `lower-state-row`;
+with `none`; hover and focus rows may compute too, and are sent again when what
+they read changes. Another row is `lower-state-row`;
 native buttons and list rows accept `:active` and keep their other native states.
 A host rejects properties its projected native component cannot express, names
 them in the journal and keeps the native component.

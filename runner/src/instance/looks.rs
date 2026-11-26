@@ -3,8 +3,9 @@
 //! (in the node's tuple, a token's name to its value) and sent whole as
 //! `Op::SetLooks`, which each host composes over the base on its own
 //! tracking. Resolved again when the node mounts, when its tuple moves (a
-//! mode, a pin) and, through [`super::theme::ThemeIndex`], when a token a
-//! look read takes a new value.
+//! mode, a pin), when a row that computes reads something that changed and,
+//! through [`super::theme::ThemeIndex`], when a token a look read takes a new
+//! value.
 
 use super::{InstanceError, NodeInst, Update};
 use crate::bridge;
@@ -86,7 +87,15 @@ impl NodeInst {
             .iter()
             .take_while(|l| l.node == self.node)
             .count();
-        if rows == 0 || !(fresh || moved) {
+        // A look that computes is sent again when what it reads changed.
+        let stale = rows > 0
+            && plan.looks[at..at + rows].iter().any(|look| {
+                look.bindings.iter().any(|b| {
+                    let reads = &u.sites.deps.bindings[b.0 as usize];
+                    !reads.is_constant() && u.stale(reads)
+                })
+            });
+        if rows == 0 || !(fresh || moved || stale) {
             return Ok(());
         }
         let mut states = Vec::with_capacity(rows);

@@ -15,7 +15,8 @@
 //!   its `:active` span; the host's one press shows them.
 //! - `:hover` and `:focus-visible` are recorded for the hosts to apply on
 //!   their own tracking: their rows by longhand ([`Folded::looks`]).
-//! - Hover and focus looks are literal; active targets may compute.
+//! - Hover, focus and active rows may compute; a host reads a computed look
+//!   again when what it reads changes.
 //! - Paint rows only. List rows and native buttons admit active properties;
 //!   other native controls keep their platform states.
 
@@ -133,10 +134,9 @@ fn admitted(name: &str, state: &str) -> bool {
 }
 
 /// Why `state` refuses `row` (its row as written, its span the part's): a
-/// row it takes none of, or, with `values`, a host-known state's computed
-/// value; what the fold refuses and the element lint says alike (the lint,
-/// before a component's params are put in, without `values`).
-pub(crate) fn refusal(state: &str, row: &Attr, values: bool) -> Option<LowerError> {
+/// row it takes none of, or a `color` that inherits; what the fold
+/// refuses and the element lint says alike.
+pub(crate) fn refusal(state: &str, row: &Attr) -> Option<LowerError> {
     let host = !matches!(state, "disabled" | "checked");
     if !admitted(&row.name, state) {
         let rows: Vec<&str> = match state {
@@ -177,13 +177,6 @@ pub(crate) fn refusal(state: &str, row: &Attr, values: bool) -> Option<LowerErro
                 });
             }
         }
-    }
-    if values && look && !matches!(row.value, Expr::Str(..) | Expr::Number(..) | Expr::Bool(..)) {
-        return Some(LowerError {
-            id: "lower-state-literal",
-            message: format!("`{}` in `:{state}` is computed: the host applies its state on its own, with no round trip to the runner, so its rows are literals (a token's name is one)", row.name),
-            span: row.value.span(),
-        });
     }
     None
 }
@@ -470,7 +463,7 @@ impl Lowerer<'_> {
                 let fns = &self.fns;
                 shorthands::computed_list(&row.name, &row.value, &|f| fns.get(f).map(|(_, b)| *b))?;
             }
-            if let Some(e) = refusal(state, row, true) {
+            if let Some(e) = refusal(state, row) {
                 return Err(e);
             }
         }

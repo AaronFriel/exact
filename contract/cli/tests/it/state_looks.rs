@@ -337,10 +337,9 @@ fn hover_scale_is_a_presentation_row_and_leaves_the_base_unchanged() {
 }
 
 /// Issue #151: `:focus-visible` takes its own `scale` beside `:hover`'s, and
-/// the base keeps its own. A computed one is refused as any look's row is,
-/// and a runner-known state still takes none.
+/// the base keeps its own. A runner-known state still takes none.
 #[test]
-fn a_focus_scale_stands_beside_the_hovers_and_a_computed_one_is_refused() {
+fn a_focus_scale_stands_beside_the_hovers() {
     let view = "component Hover\n  view\n    button appearance=\"none\" scale=1 transition=\"scale 150ms ease\" testId=\"card\"\n      :hover\n        scale=1.08\n      :focus-visible\n        scale=1.12\n      text \"Hide controls\"\n";
     let r = booted(contract::compile(view).unwrap_or_else(|e| panic!("{e}")));
     let k = r.kernel();
@@ -354,7 +353,6 @@ fn a_focus_scale_stands_beside_the_hovers_and_a_computed_one_is_refused() {
     assert_eq!(scale(exact_kernel::LOOK_FOCUS_VISIBLE), 1.12);
     assert_eq!(node.style.scale, 1.0);
     for (part, id) in [
-        (":hover\n        scale=k", "lower-state-literal"),
         (":disabled\n        scale=0.9", "lower-state-row"),
         (":hover\n        rotate=\"5deg\"", "lower-state-row"),
     ] {
@@ -362,4 +360,31 @@ fn a_focus_scale_stands_beside_the_hovers_and_a_computed_one_is_refused() {
         let e = contract::compile(&src).expect_err(part).to_string();
         assert!(e.contains(id), "{part}: {e}");
     }
+}
+
+/// A `:hover` row that computes reaches the kernel resolved and is sent again
+/// when what it reads changes, with the node kept.
+#[test]
+fn a_computed_hover_row_follows_what_it_reads() {
+    let view = "component App\n  state on = false\n  state k = 1\n  action flip\n    on = !on\n  action grow\n    k = k + 1\n  view\n    column\n      box scale=1 testId=\"card\"\n        :hover\n          scale=(0.5 + k)\n          background-color=(on ? \"#000000\" : \"#ffffff\")\n        text \"c\"\n      button press=flip testId=\"flip\"\n        text \"f\"\n      button press=grow testId=\"grow\"\n        text \"g\"\n";
+    let mut r = booted(contract::compile(view).unwrap_or_else(|e| panic!("{e}")));
+    let hover = |r: &Runner<NoData>| {
+        let k = r.kernel();
+        let node = k.node_by_key(k.find_by_test_id("card")[0]).unwrap();
+        let (_, look) = node.looks().iter().find(|(s, _)| *s == LOOK_HOVER).unwrap();
+        (look.scale, look.background_color)
+    };
+    let press = |r: &mut Runner<NoData>, id: &str| {
+        let k = r.kernel();
+        let view = k.node_by_key(k.find_by_test_id(id)[0]).unwrap().id;
+        r.dispatch(view, exact_runner::Event::Press).unwrap();
+    };
+    let (scale, white) = hover(&r);
+    assert_eq!(scale, 1.5);
+    press(&mut r, "grow");
+    let (scale, still) = hover(&r);
+    assert_eq!(scale, 2.5);
+    assert_eq!(still, white);
+    press(&mut r, "flip");
+    assert_ne!(hover(&r).1, white);
 }

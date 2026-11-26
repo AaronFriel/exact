@@ -382,6 +382,13 @@ impl Deps {
                     for b in node.bindings.iter() {
                         reads.union(&deps.bindings[b.0 as usize], 0);
                     }
+                    // A computed state look is read again when what it reads changes.
+                    let at = plan.looks.partition_point(|l| l.node.0 < n.0);
+                    for look in plan.looks[at..].iter().take_while(|l| l.node == n) {
+                        for b in look.bindings.iter() {
+                            reads.union(&deps.bindings[b.0 as usize], 0);
+                        }
+                    }
                     if let Some(surface) = node.surface {
                         for a in plan.surface(surface).args.iter() {
                             reads.union(&deps.surface_args[a.0 as usize], 0);

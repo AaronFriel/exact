@@ -193,12 +193,6 @@ fn a_state_part_is_refused_where_it_cannot_be() {
         "lower-state-row"
     );
     assert_eq!(
-        refused(&node(
-            ":hover\n          background-color=(on ? \"#000000\" : \"#ffffff\")"
-        )),
-        "lower-state-literal"
-    );
-    assert_eq!(
         refused(&node(":pressed\n          opacity = 0.5")),
         "syntax-state"
     );

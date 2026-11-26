@@ -673,7 +673,7 @@ fn lint_components(file: &File, checked: impl Fn(usize) -> bool) -> Vec<LowerErr
                                         name: name.to_string(),
                                         ..a.clone()
                                     };
-                                    if let Some(e) = crate::states::refusal(state, &written, false)
+                                    if let Some(e) = crate::states::refusal(state, &written)
                                     {
                                         errors.push(e);
                                         continue;
