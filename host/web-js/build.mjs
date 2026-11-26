@@ -30,12 +30,11 @@ import { namesStream } from './stream-names.mjs';
 import { bundleHostModule, localImports, stageHostGlue, writeFalse } from './glue.mjs';
 import { gateAgent } from './agent-gate.mjs';
 import { contentName, contentNames, inlineScript, languageHead, splitLanguages } from './content-names.mjs';
-import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, moduleSources, undeclaredRustData, fresh, frameAnswer, frameFixture, frameURL, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp, sizeWarning, entrySizeReport } from './module.mjs';
+import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, moduleSources, undeclaredRustData, fresh, recordFrameAssets, frameAnswer, frameFixture, frameURL, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp, sizeWarning, entrySizeReport } from './module.mjs';
 import { appDigest, developmentStore } from '../../scripts/agent-launch.mjs';
 import { productionManifestImports, settingLines } from '../../js/bake/src/__exact_env.mjs';
 import { colorSchemeMeta, interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from '../web/look.mjs';
 import { copyStaticTreeIfPresent } from '../web/serve.mjs';
-
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
 const args = process.argv.slice(2);
@@ -54,7 +53,8 @@ try { installedFileDependencies(appDir); } catch (error) { console.error(`error:
 const manifest = readManifest(appDir, app);
 const framePath = opt('--frame');
 const frame = framePath && !framePath.startsWith('--') && resolve(appDir, framePath);
-const siteBase = frame && args.includes('--serve-frame') ? frameURL(basename(frame, '.contract')) + '/' : manifest.host?.web?.base ?? "/";
+const servedFrame = frame && args.includes('--serve-frame');
+const siteBase = servedFrame ? frameURL(basename(frame, '.contract')) + '/' : manifest.host?.web?.base ?? "/";
 if (siteBase !== "/" && opt("--plan")) throw new Error("host.web.base: native update bakes require /; build the standalone JS site without --plan");
 // Bun's runtime transpiler cache keys a module by its text and keeps the
 // imports this build's mount resolver gives it (below), so the same file at
@@ -84,7 +84,7 @@ const out = resolve(opt('--out') ?? defaultOut);
 const sizes = args.includes('--sizes');
 // `--dev` (host/web-js/dev.mjs): typed state checkpoint hooks that ordinary
 // and production builds neither emit nor link.
-const devReload = args.includes('--dev');
+const devReload = args.includes('--dev') || !!servedFrame;
 if (production && devReload) { console.error('--production and --dev are mutually exclusive'); process.exit(2); }
 // Its app.ts copy loses a development build's only grant lines (`configure`), which reads the trust.
 if (production && (process.env.EXACT_UPDATE_TRUST ?? 'production') !== 'production') { console.error(`--production builds under EXACT_UPDATE_TRUST=production, not ${process.env.EXACT_UPDATE_TRUST}`); process.exit(2); }
@@ -197,12 +197,14 @@ const { gpuModules, webGpuArtifacts, copyShaders, shaderWatchRoots } = await imp
 const { gpuView, gpuWorkspaceInputs, unregisteredSurfaces } = await import('../../scripts/app-shells.mjs');
 const declaredGpu = gpuModules(manifest, 'web');
 const hasGpuArtifacts = existsSync(gpuLib) || declaredGpu.length > 0;
+const frameGpuCrates = [];
 let gpuSurfaces = existsSync(gpuLib) ? null : [];
 if (hasGpuArtifacts && prerequisitesOnly) webGpuArtifacts(resolveApp(app), null, { check: true });
 if (hasGpuArtifacts && !checkOnly && !prerequisitesOnly) {
   const target = resolveApp(app), cache = resolve(target.target, 'web-js-gpu', target.name);
   const crates = [...(existsSync(gpuLib) ? [['gpu', target.crate('gpu')]] : []),
     ...declaredGpu.map(({ name }) => [`gpu/${name}`, target.crate(`gpu-${name}`)])];
+  if (servedFrame) frameGpuCrates.push(...crates.map(([, crate]) => crate));
   const gpuInputs = shaderWatchRoots(target).filter(existsSync);
   try {
     for (const module of [...(existsSync(gpuLib) ? [null] : []), ...declaredGpu]) {
@@ -1389,14 +1391,13 @@ if (pageModules) {
     devLogic.push(['native', createHash('sha256').update(JSON.stringify(files.sort(([a], [b]) => a.localeCompare(b)))).digest('hex')]);
   }
 }
-copyStaticTreeIfPresent(resolve(appDir, 'assets'), resolve(out, 'assets'));
-// Copy each imported package's declared web assets from the capture, to /assets/<package>/<path> (LLP 1154 D2;
-// js/bake/src/typescript.mjs `capturedSources`).
+if (servedFrame) await recordFrameAssets(gen, appDir, manifest, rustLinked && builtModule(), frameGpuCrates);
+else for (const tree of ['assets', 'deck']) copyStaticTreeIfPresent(resolve(appDir, tree), resolve(out, tree));
+// Copy each imported package's declared web assets from the capture, to /assets/<package>/<path> (LLP 1154 D2).
 if (ts) for (const { name, path, file } of (await import(resolve(root, 'js/bake/src/typescript.mjs'))).capturedAssets(tsStage)) {
   mkdirSync(dirname(resolve(out, 'assets', name, path)), { recursive: true });
   cpSync(file, resolve(out, 'assets', name, path));
 }
-copyStaticTreeIfPresent(resolve(appDir, 'deck'), resolve(out, 'deck'));
 if (devReload) writeFileSync(resolve(out, '.exact-dev-logic.json'), JSON.stringify({ version: 1, modules: devLogic.sort(([a], [b]) => a.localeCompare(b)) }) + '\n');
 if (storageLazy) writeLazyModules(storageLazy);
 // The plan beside the pages: a render server (either renderer) reads it.

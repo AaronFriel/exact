@@ -131,7 +131,15 @@ Run `bun exact.mjs web` from the app directory and open
 `/__dev/frames/card/` on the dev server. Each `frames/<name>.contract` has
 its own URL. Editing a frame refreshes the pages whose compiled content
 changes. An error appears in the affected frame, which keeps its last good
-view while you edit.
+view while you edit. The server builds up to half the available CPU count in
+parallel (at least one frame), with open pages first. The app builds
+independently. On a shared 12-core M4 Pro, opening 20 frames with six builders
+took 6–13 s and peaked at 1.5–1.7 GiB. An unbounded run took 8.9 s and
+peaked at 3.3 GiB. The limit can delay the last frame on a busy machine. A change
+to an input with unknown readers rebuilds every active frame. Frame URLs
+serve the app’s public `assets/` and `deck/` files on request. A changed
+public asset refreshes the frames that name or requested it. A file whose
+bytes enter the compiled output rebuilds its readers.
 
 To supply sample data, place a TypeScript module named `card.fixture.mts`
 beside `card.contract`. Export an object keyed by the app's TypeScript

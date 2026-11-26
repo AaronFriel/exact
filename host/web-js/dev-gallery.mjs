@@ -7,11 +7,12 @@ import { designPath } from '../../scripts/forma-design-path.mjs';
 import { streamFrame } from '../../scripts/forma-builds.mjs';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
+import { availableParallelism, tmpdir } from 'node:os';
 import { builtSettings, sourceInputChanges } from '../../js/bake/src/__exact_env.mjs';
 import { changedContractReads, contractReadReceipt } from '../../scripts/web-build.mjs';
+import { filesystemRead } from '../../scripts/filesystem.mjs';
 import { within } from '../../scripts/paths.mjs';
 import { compilerFrom, freshCompiler, toolEnv } from '../../scripts/tools.mjs';
 import { watchDirectoryInputs } from '../web/dev-watch.mjs';
@@ -54,7 +55,20 @@ const children = new Set();
 function killChildren() {
   for (const child of children) { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } }
 }
-function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, onIdle, onBuilt, channel = () => null, client, tableTool = () => null, compiler = () => null, design: designNow = () => null, env = process.env, log = console.log, idleMs = 60_000 }) {
+async function sharedFile(root, rest) {
+  let path;
+  try { path = decodeURIComponent(rest.slice(1)).replace(/\/$/, ''); } catch { /* invalid escape */ }
+  if (path && !/%2f/i.test(rest) && path.split('/').every(part => part && !part.startsWith('.') && !/[\\:\x00-\x1f]/.test(part))) {
+    for (const file of [path, path + '/index.html']) {
+      try {
+        const body = Buffer.from(await filesystemRead({ op: 'get', root, path: file }), 'base64');
+        return { route: '/' + file, body };
+      } catch { /* try the directory index, then a miss */ }
+    }
+  }
+  return null;
+}
+function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, queue, onIdle, onBuilt, channel = () => null, client, tableTool = () => null, compiler = () => null, design: designNow = () => null, env = process.env, log = console.log, idleMs = 60_000 }) {
   const controls = frame ? base + '/__dev' : base;
   const source = resolve(cache, 'source'), live = resolve(cache, 'live'), stage = resolve(cache, 'stage'), dist = resolve(cache, 'dist');
   const clients = new Set(), maps = new Map(), tables = new Map(), procs = new Set();
@@ -62,6 +76,8 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
   // idle stop; `run` counts stops, so what a stopped run finishes says nothing.
   let seq = 0, built = false, active = false, failed = null, busy = false, again = false, idle = null, run = 0, design = null;
 
+  let publicAssets = new Set(), capturedAssets = new Set(), publicDirty = false, queued = false;
+  const requestedAssets = new Set();
   let generation = 0, committedSource = null, fingerprint = null, timer = null, committed = null, shownDesign = null, snapshot = null;
   const notice = () => snapshot && { kind: 'forma-batch', structure: snapshot.structure, base: snapshot.design, design: snapshot.design, tokens: [], scrub: snapshot.scrub };
   function showDesign(next, scrub) {
@@ -132,9 +148,15 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
   }
 
   /** Publish a complete preview and notify the pages waiting on its stream. */
-  async function refresh() {
+  function refresh() {
     if (busy) { again = true; return; }
-    busy = true;
+    if (queue) { queued = true; queue.add(build, () => clients.size > 0); }
+    else void build();
+  }
+
+  async function build() {
+    clearTimeout(timer); timer = null;
+    queued = false; busy = true;
     const mine = run;
     // The design it builds on: one kept since is news, this one isn't. A failure before is taken up by this run.
     design = designNow();
@@ -144,9 +166,11 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
       if (mine !== run) return;
       // The JS target's build, rendering no pages, into its own stage: nothing of the app's build is shared.
       rmSync(stage, { recursive: true, force: true });
+      if (frame) log(`${shown}: building`);
       const started = Date.now(), webCompiler = env.EXACT_WEB_COMPILER || compiler();
       const entry = frame ? [app.dir, '--frame', frame, '--serve-frame'] : [live];
       const buildEnv = { ...env };
+      if (frame) buildEnv.BUN_RUNTIME_TRANSPILER_CACHE_PATH = '0';
       if (webCompiler) buildEnv.EXACT_WEB_COMPILER = webCompiler;
       if (!frame && !(webCompiler && freshCompiler(webCompiler)) &&
         !compilerFrom('exact-web-js', resolve(target, `debug/exact-web-js${EXE}`), env)) {
@@ -159,14 +183,16 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
         if (again || timer) return;
       }
       if (out.code !== 0) { rmSync(stage, { recursive: true, force: true }); return fail(out.output.split('\n').filter((l) => l.trim() && !/^\s*(Compiling|Finished|Running|warning)/.test(l)).slice(-20).join('\n') || `${shown} build exited ${out.code}`); }
-      // Every public byte a frame can display, including same-name assets. A map
-      // can move after an unrelated edit without changing the page already open.
+      // A map can move without changing the page already open.
       const next = frame && JSON.stringify(buildFileCards(stage).filter(f => f.name !== 'app.plan.map.json'));
       replaceBuild(stage, dist);
       keepMap();
       failed = null;
       if (frame) {
         ++generation;
+        const graph = JSON.parse(readFileSync(resolve(dist, '.gen/dev-sources.json')));
+        publicAssets = new Set(graph.publicAssets);
+        capturedAssets = new Set(graph.captured);
         const wasCommitted = shownDesign === committed;
         try {
           committed = JSON.parse(readFileSync(resolve(dist, '.gen/dev-design.json')));
@@ -176,8 +202,8 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
         if (!built || fingerprint !== next || wasCommitted) { shownDesign = committed; snapshot = null; }
         onBuilt?.();
       }
-      if (frame && built && fingerprint === next) { if (previousError) push({ error: null }); return; }
-      fingerprint = next;
+      if (frame && built && fingerprint === next && !publicDirty) { if (previousError) push({ error: null }); log(`${shown}: kept its build`); return; }
+      publicDirty = false; fingerprint = next;
       seq += 1; built = true;
       log(`${shown}: built in ${Date.now() - started} ms · ${clients.size} page${clients.size === 1 ? '' : 's'}`);
       push({ reload: seq, revision: null, ...(previousError ? { error: null } : {}) });
@@ -221,6 +247,7 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
   function stop() {
     clearTimeout(timer); timer = null;
     active = false;
+    queue?.remove(build); queued = publicDirty = false;
     inputs?.forget(schedule);
     clearTimeout(idle); idle = null; run += 1; again = false; tables.clear();
     return Promise.all([...procs].map((c) => {
@@ -269,8 +296,20 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
 
   const send = (req, res, found, body) => sendStaticBody(req, res, body ?? readFileSync(found.path), { 'content-type': webContentType(found.route), 'cache-control': 'no-store' });
 
+  async function publicFile(req, res, rest) {
+    const captured = built && await buildTreeFile(dist, rest, '');
+    if (captured) { send(req, res, captured); return true; }
+    const found = await sharedFile(app.dir, rest);
+    if (found) {
+      requestedAssets.add(found.route.slice(1));
+      send(req, res, found, found.route.endsWith('.html') ? found.body.toString() + client(seq) : found.body);
+      return true;
+    }
+    res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return true;
+  }
+
   return {
-    cache,
+    cache, publicFile, observed: name => requestedAssets.add(name),
     reconnect() { for (const res of clients) res.end(); },
     /** Whether the request was the gallery's, answered. */
     async handle(req, res, url) {
@@ -297,7 +336,8 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
         return true;
       }
       ensure();
-      // Its assets are served from the app's dist.
+      if (frame && /^\/(assets|deck)\//.test(rest)) return publicFile(req, res, rest);
+      // Gallery assets come from the app's published build.
       if (!frame && rest.startsWith('/assets/')) {
         const found = await buildTreeFile(appDist, rest, req.headers.accept);
         if (!found) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return true; }
@@ -325,6 +365,11 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
     /** The app published a reload: the gallery made and built again, if a page asked for it since its last stop. */
     appChanged() { if (active) refresh(); },
     schedule, fail,
+    publicChanged(names) {
+      if (!active || !built || !names.some(name => !capturedAssets.has(name) && (publicAssets.has(name) || requestedAssets.has(name)))) return;
+      if (busy || timer || queued) publicDirty = true;
+      else push({ reload: ++seq, revision: null });
+    },
     designRead() {
       if (!committed || !active || failed) return null;
       return { generation, entry: frame, plan: resolve(dist, 'app.plan'), base: committed.tokens.map(t => [t.name, t.slices.length ? t.slices : [t.value]]) };
@@ -376,11 +421,13 @@ function frameInputs(appDir) {
     return before;
   }
   return {
-    begin(frame, notify) { subscribe(notify, new Set([frame, frameFixturePath(frame)])); },
+    knows: path => directories.get(dirname(path))?.files.has(basename(path)),
+    begin(frame, notify) { subscribe(notify, new Set([frame, frameFixturePath(frame), resolve(appDir, 'app.json')])); },
     read(frame, notify, stage, began, succeeded) {
       let graph;
       try { graph = JSON.parse(readFileSync(resolve(stage, '.gen/dev-sources.json'), 'utf8')); } catch { graph = {}; }
-      const contractPaths = [frame, frameFixturePath(frame), ...(graph.sources ?? []), ...(graph.shallow ?? []).map(([dir, name]) => resolve(dir, name))].map(p => resolve(p));
+      const receipt = succeeded || existsSync(resolve(stage, '.gen/app.plan.map.json')) ? contractReadReceipt(resolve(stage, '.gen')) : {};
+      const contractPaths = [frame, frameFixturePath(frame), resolve(appDir, 'app.json'), ...Object.keys(receipt), ...(graph.baked ?? []), ...(graph.sources ?? []), ...(graph.shallow ?? []).map(([dir, name]) => resolve(dir, name))].map(p => resolve(p));
       // The app watcher sends its design through the frame design reader before scheduling a build.
       const design = designPath(appDir);
       const designs = new Set(design ? [design, realpathSync(design)] : []);
@@ -391,14 +438,16 @@ function frameInputs(appDir) {
       // Staging directories sit on the checker's lookup path and move when the build is published.
       const staged = sourceInputs && realpathSync(stage);
       const reads = (sourceInputs?.reads ?? []).filter(input => !within(staged, input.path));
+      const packages = resolve(stage, '.gen/typescript/__exact_packages.json');
+      if (existsSync(packages)) for (const [, , path, digest] of JSON.parse(readFileSync(packages)).files) reads.push({ kind: 'file', path, digest });
       for (const input of reads) if (!designs.has(input.path)) paths.add(input.path);
       if (!succeeded) for (const p of owners.get(notify) ?? []) paths.add(p);
       const before = subscribe(notify, paths);
-      if (succeeded && (changedContractReads(contractReadReceipt(resolve(stage, '.gen'))).length || sourceInputChanges({ reads }).length)) return true;
+      if (succeeded && (changedContractReads(receipt).length || sourceInputChanges({ reads }).length)) return true;
       // A newly discovered source could already have moved since the compiler read it.
       for (const path of contractPaths) if (!before.has(path)) {
         const stat = statSync(path, { throwIfNoEntry: false });
-        if (stat?.isFile() && stat.mtimeMs >= began) return true;
+        if ((stat?.isFile() && stat.ctimeMs >= began) || (!stat && succeeded && graph.baked?.includes(path))) return true;
       }
       return false;
     },
@@ -406,9 +455,43 @@ function frameInputs(appDir) {
   };
 }
 
+/** A waiting frame has one place regardless of how many edits it sees. Check
+ * for an open stream at dispatch, since pages can join or leave while waiting. */
+export function frameBuildQueue(limit = Math.max(1, Math.floor(availableParallelism() / 2))) {
+  const waiting = new Map();
+  let running = 0, overtakes = 0;
+  function drain() {
+    while (running < limit && waiting.size) {
+      const oldest = waiting.keys().next().value;
+      const priority = overtakes < limit ? [...waiting].find(([, open]) => open()) : null;
+      const build = priority?.[0] ?? oldest;
+      overtakes = build === oldest ? 0 : overtakes + 1;
+      waiting.delete(build);
+      ++running;
+      void build().finally(() => { --running; drain(); });
+    }
+  }
+  return {
+    add(build, open) { waiting.set(build, open); drain(); },
+    remove(build) { waiting.delete(build); },
+  };
+}
+
 /** Each file in frames/ runs on its own stream, after the first request for it. */
 export function frameLoops(options) {
-  const loops = new Map(), inputs = frameInputs(options.app.dir), root = realpathSync(options.app.dir);
+  const loops = new Map(), queue = frameBuildQueue(), inputs = frameInputs(options.app.dir), root = realpathSync(options.app.dir);
+  const identity = name => {
+    const info = statSync(resolve(root, name), { throwIfNoEntry: false });
+    return info?.isFile() ? [info.dev, info.ino, info.size, info.ctimeMs].join('/') : null;
+  };
+  const publicFiles = new Map();
+  for (const { name } of options.files ?? []) if (/^(assets|deck)\//.test(name)) {
+    const id = identity(name);
+    if (id) publicFiles.set(name, id);
+  }
+  let entries;
+  try { entries = readdirSync(resolve(root, 'frames')); } catch { entries = []; }
+  const frameSources = new Set(entries.filter(name => /(?:\.contract|\.fixture\.mts)$/.test(name)).map(name => resolve(root, 'frames', name)));
   let commitRevision = 0, previewRevision = 0, preview = null, pendingPreview = null, released = null, lastText = null;
   async function read(request, entries = [...loops.values()], connected = false) {
     const eligible = loop => connected ? loop.state().pages > 0 : loop.state().active;
@@ -442,7 +525,17 @@ export function frameLoops(options) {
   let folder;
   return {
     async handle(req, res, url) {
-      if (!url.pathname.startsWith('/__dev/frames/')) return false;
+      if (!url.pathname.startsWith('/__dev/frames/')) {
+        if (/^\/(assets|deck)\//.test(url.pathname) && req.headers.referer) {
+          try {
+            const ref = new URL(req.headers.referer);
+            const part = ref.pathname.match(/^\/__dev\/frames\/([^/]+)/);
+            const loop = ref.host === req.headers.host && part && loops.get(decodeURIComponent(part[1]));
+            if (loop) return loop.publicFile(req, res, url.pathname);
+          } catch { /* not a frame referrer */ }
+        }
+        return false;
+      }
       const missing = () => { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return true; };
       const part = url.pathname.slice('/__dev/frames/'.length).split('/')[0];
       let name;
@@ -461,7 +554,7 @@ export function frameLoops(options) {
         folder ??= mkdtempSync(resolve(tmpdir(), 'exact-dev-frames-'));
         const cache = mkdtempSync(resolve(folder, 'frame-'));
         const loop = previewLoop({ ...options, frame: entry,
-          onBuilt: () => { if (preview || pendingPreview) void replay(loop); }, base, label: name, cache, inputs,
+          onBuilt: () => { if (preview || pendingPreview) void replay(loop); }, base, label: name, cache, inputs, queue,
           client: seq => options.client(seq, base + '/__dev'),
           onIdle: stopped => {
             loops.delete(name);
@@ -470,6 +563,21 @@ export function frameLoops(options) {
         loops.set(name, loop);
       }
       return loops.get(name).handle(req, res, url);
+    },
+    async unattributedFile(req, pathname) {
+      if (req.headers.referer || !loops.size || !/^\/(assets|deck)\//.test(pathname)) return null;
+      let name;
+      try { name = decodeURIComponent(pathname.slice(1)); } catch { return null; }
+      if (!publicFiles.has(name) && !publicFiles.has(name.replace(/\/?$/, '/index.html'))) return null;
+      // An absolute URL without a referrer has the app's package overlay. The request could belong to any open frame.
+      const stage = resolve(options.appDist, '.gen/typescript');
+      if (existsSync(resolve(stage, '__exact_packages.json'))) {
+        const { capturedAssets } = await import('../../js/bake/src/typescript.mjs');
+        if (capturedAssets(stage).some(asset => name === 'assets/' + asset.name + '/' + asset.path)) return null;
+      }
+      const found = await sharedFile(root, pathname);
+      for (const loop of loops.values()) loop.observed(found?.route.slice(1) ?? name);
+      return found ?? { status: 404 };
     },
     async designEdit(text) {
       if (text === lastText && !released) return;
@@ -515,7 +623,26 @@ export function frameLoops(options) {
     restore(mark) { ++previewRevision; preview = released = null; for (const loop of loops.values()) loop.restore(mark); },
     released(mark) { released = mark ?? true; },
     reconnect() { for (const loop of loops.values()) loop.reconnect(); },
-    changed() { for (const loop of loops.values()) loop.schedule(); },
+    changed(paths) {
+      let unknown = !paths;
+      const publicChanges = [];
+      for (const path of paths ?? []) {
+        const name = relative(root, path).split(sep).join('/');
+        const known = inputs.knows(path) || frameSources.has(path) || publicFiles.get(name);
+        if (!known) unknown = true;
+        if (/^frames\/[^/]+(?:\.contract|\.fixture\.mts)$/.test(name)) {
+          if (existsSync(path)) frameSources.add(path); else frameSources.delete(path);
+        }
+        if (!/^(assets|deck)\//.test(name)) continue;
+        const id = identity(name);
+        if (publicFiles.get(name) !== id) publicChanges.push(name);
+        publicFiles.set(name, id);
+      }
+      for (const loop of loops.values()) {
+        if (unknown || loop.state().failed) loop.schedule();
+        loop.publicChanged(publicChanges);
+      }
+    },
     async stop() {
       await Promise.all([...loops.values()].map(loop => loop.stop()));
       loops.clear();

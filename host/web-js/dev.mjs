@@ -201,18 +201,20 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
           rmSync(stage, { recursive: true, force: true }); done({ error: null, logic, packages, design, designSource, kept: true, warnings: compilerWarnings(log) });
         });
       }
+      let filesBuilt;
       try {
         // `sources` as host/web/build.mjs records it: null when a file came or went while it built.
         const after = appSources(app.dir, resolve(dist)).digest;
+        filesBuilt = buildFileCards(stage);
         writeFileSync(resolve(stage, '.exact-build.json'), JSON.stringify({ exactBuild: 1, target: 'js', app: { id: app.id, name: app.displayName },
-          manifestSha256: appManifestDigest(app), files: buildFileCards(stage), sources: after === sources ? after : null,
+          manifestSha256: appManifestDigest(app), files: filesBuilt, sources: after === sources ? after : null,
           reads: { contract: contractReadReceipt(resolve(stage, '.gen')), cargo }, ...builtSettings(stage) }) + '\n');
       } catch (error) { rmSync(stage, { recursive: true, force: true }); return done({ packages, error: error.message }); }
       // Once more after the watchers' events queued meanwhile are taken.
       setImmediate(() => {
         if (moved() || changedContractReads(cargo).length) return setAside();
         replaceBuild(stage, dist);
-        done({ error: null, logic, packages, design, designSource, warnings: compilerWarnings(log) });
+        done({ error: null, logic, packages, design, designSource, files: filesBuilt, warnings: compilerWarnings(log) });
       });
     }, hold)));
   });
@@ -592,7 +594,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   };
   const gallery = galleryLoop({ ...previewOptions,
     client: n => client(n, null, { base: '/__dev/gallery', stream: '/__dev/gallery/stream', page: 'gallery' }) });
-  const frames = frameLoops({ ...previewOptions, readDesigns: async request => {
+  const frames = frameLoops({ ...previewOptions, files: built.files, readDesigns: async request => {
     const answer = await patcherAsk(request);
     if (!answer.fallback || stopping) return answer;
     const read = await runReader(['frame-designs', resolve(app.dir, 'app.contract')], { text: JSON.stringify(request) });
@@ -629,7 +631,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     const pendingEdits = [...edited], pendingAppeared = [...appeared];
     if (designOnly && file && designs.every(path => path === file)) {
       try { void frames.designEdit(readFileSync(file, 'utf8')); } catch { frames.changed(); }
-    } else if (pendingEdits.some(path => !path.endsWith('.contract'))) frames.changed();
+    } else frames.changed(pendingEdits);
     edited.clear(); appeared.clear();
     // Whatever waited for the reader is this pass's now (a build that fails keeps it for the next edit, as any).
     readerWait = false;
@@ -832,7 +834,10 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     // file is newer than nothing, and its target's time says nothing of it.
     if (fresh && name && !backendMoved && !movedSince(path, since)) return;
     // Frame Contract files have their own dependency watches. An app may also import one.
-    if (base === app.dir && (name === 'frames' || (name?.startsWith('frames/') && (name.endsWith('.contract') || name.endsWith('.fixture.mts')))) && !compilerInput(path)) return;
+    if (base === app.dir && (name === 'frames' || (name?.startsWith('frames/') && (name.endsWith('.contract') || name.endsWith('.fixture.mts')))) && !compilerInput(path)) {
+      if (name !== 'frames') frames.changed([path]);
+      return;
+    }
     if (!timer) saved = Date.now();
     edited.add(path);
     // A resident start that failed is tried again at the next request after
@@ -1273,7 +1278,7 @@ for(;;){
     if (discovery || url.pathname === '/__dev' || url.pathname === '/__dev/open' || url.pathname.startsWith('/__dev/generation/')) { forward(req, res, discovery); return; }
     // From the build the page booted (host/web/generations.mjs): a document names its generation in its base, and
     // its scripts, chunks and plan are read from that build while the next one is put in place.
-    const served = await servedFile(dist, url.pathname, req.headers.accept);
+    const served = await frames.unattributedFile(req, url.pathname) ?? await servedFile(dist, url.pathname, req.headers.accept);
     if (served.status === 301) { res.writeHead(301, { location: served.location + url.search, 'cache-control': 'no-store' }); res.end(); return; }
     if (served.status === 410 || served.status === 400 || served.status === 503) { res.writeHead(served.status, { 'cache-control': 'no-store', ...(served.status === 503 ? { 'retry-after': '1' } : {}) }); res.end(); return; }
     // A miss is a 404, with the build's page for one where it has one (serve.mjs `buildTreeFile`).

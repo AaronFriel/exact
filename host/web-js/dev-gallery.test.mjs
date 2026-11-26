@@ -15,7 +15,7 @@ import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { suiteBrowser } from '../../scripts/agent-launch.mjs';
-import { galleryCache } from './dev-gallery.mjs';
+import { frameBuildQueue, galleryCache } from './dev-gallery.mjs';
 import { FRAME_ANCESTORS } from '../../scripts/forma-server.mjs';
 import { fileURLToPath } from 'node:url';
 
@@ -497,3 +497,105 @@ test('two frame clients pin independently, pick their own source and take their 
     rmSync(dir, { recursive: true, force: true });
   }
 }, 300_000);
+
+test('a frame rebuilds for a sound baked into its plan, both retry an unknown input, and public assets stay current without a frame build', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-frame-inputs-'));
+  const entry = 'component Frame\n  view\n    text "Preview"\n';
+  mkdirSync(join(dir, 'frames'));
+  mkdirSync(join(dir, 'assets'));
+  writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    text "App"\n');
+  writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Inputs', app: { name: 'Inputs', id: 'test.frame-inputs' } }));
+  writeFileSync(join(dir, 'frames/a.contract'), 'sound "assets/click.wav"\n\n' + entry);
+  writeFileSync(join(dir, 'frames/b.contract'), entry);
+  const sound = join(dir, 'assets/click.wav'), note = join(dir, 'assets/card.svg');
+  const card = width => `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="12"/>`;
+  cpSync(join(ROOT, 'apps/metronome/assets/click-high.wav'), sound);
+  writeFileSync(note, card(17));
+  let loop, browser;
+  const streams = [];
+  try {
+    loop = await devLoop(dir);
+    const pages = ['a', 'b'].map(name => loop.base + '/__dev/frames/' + name + '/');
+    streams.push(...pages.map(url => frames(url + '__dev/stream')));
+    await until(() => streams.every(s => s.got.some(m => m.reload === 1)));
+    const plans = () => Promise.all(pages.map(async url => Buffer.from(await (await fetch(url + 'app.plan')).arrayBuffer())));
+    const before = await plans();
+    browser = await suiteBrowser('chromium');
+    const page = await (await browser.newContext()).newPage();
+    await page.addInitScript(() => addEventListener('DOMContentLoaded', () => {
+      const image = document.body.appendChild(new Image());
+      image.id = 'dynamic-asset';
+      image.src = ['/assets/card', 'svg'].join('.');
+    }));
+    await page.goto(pages[0]);
+    const displayed = width => page.waitForFunction(w => document.getElementById('dynamic-asset')?.naturalWidth === w, width);
+    await displayed(17);
+    const mark = () => loop.said().length;
+    const started = at => [...loop.said().slice(at).matchAll(/^([ab]): building$/gm)].map(m => m[1]).sort();
+    let at = mark();
+    writeFileSync(note, card(23));
+    await displayed(23);
+    expect(await Promise.all(pages.map(async url => (await fetch(url + 'assets/card.svg')).text()))).toEqual([card(23), card(23)]);
+    await until(() => loop.said().slice(at).includes('edit → plan ready'));
+    expect(started(at)).toEqual([]);
+    await until(() => streams[0].got.some(m => m.reload === 2));
+
+    at = mark();
+    const oldSound = readFileSync(sound);
+    cpSync(join(ROOT, 'apps/metronome/assets/click-low.wav'), sound);
+    const servedSounds = () => Promise.all(pages.map(async url => Buffer.from(await (await fetch(url + 'assets/click.wav')).arrayBuffer())));
+    expect(await servedSounds()).toEqual([oldSound, readFileSync(sound)]);
+    await until(async () => !(await plans())[0].equals(before[0]));
+    expect(await servedSounds()).toEqual([readFileSync(sound), readFileSync(sound)]);
+    await until(() => loop.said().slice(at).includes('edit → plan ready'));
+    expect(started(at)).toEqual(['a']);
+    expect((await plans())[1]).toEqual(before[1]);
+
+    at = mark();
+    writeFileSync(join(dir, 'new-input.dat'), 'new');
+    await until(() => started(at).length >= 2);
+    expect(started(at)).toEqual(['a', 'b']);
+  } catch (error) {
+    throw new Error(`${error.message}\n${loop?.said() ?? ''}`, { cause: error });
+  } finally {
+    await browser?.close();
+    for (const stream of streams) stream.close();
+    await loop?.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test('fifty frames share build slots, favor open streams and read the latest waiting edit once', async () => {
+  const queue = frameBuildQueue(3), builds = [], finish = [], values = new Map(), held = new Set();
+  let active = 0, peak = 0;
+  const jobs = Array.from({ length: 50 }, (_, id) => async () => {
+    peak = Math.max(peak, ++active);
+    builds.push([id, values.get(id)]);
+    await new Promise(resolve => finish.push(resolve));
+    --active;
+  });
+  const ask = id => queue.add(jobs[id], () => held.has(id));
+  jobs.forEach((_, id) => ask(id));
+  await until(() => builds.length === 3);
+  held.add(49);
+  for (let value = 1; value <= 5; ++value) { values.set(49, value); ask(49); }
+  queue.remove(jobs[9]);
+  finish.shift()();
+  await until(() => builds.length === 4);
+  expect(builds[3]).toEqual([49, 5]);
+  while (active) { finish.splice(0).forEach(done => done()); await Bun.sleep(0); }
+  expect(peak).toBe(3);
+  expect(builds.map(([id]) => id).sort((a, b) => a - b)).toEqual(jobs.map((_, id) => id).filter(id => id !== 9));
+});
+
+test('a streamless request advances while a connected frame keeps asking to build', async () => {
+  const queue = frameBuildQueue(1), calls = [];
+  let release;
+  queue.add(async () => { await new Promise(done => { release = done; }); }, () => true);
+  queue.add(async () => { calls.push('waiting'); }, () => false);
+  const edit = async () => { calls.push('editing'); if (calls.length < 5) queue.add(edit, () => true); };
+  queue.add(edit, () => true);
+  release();
+  await until(() => calls.includes('waiting'));
+  expect(calls.slice(0, 2)).toEqual(['editing', 'waiting']);
+});
