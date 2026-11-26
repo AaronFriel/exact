@@ -28,7 +28,7 @@ import AppKit
 extension Picker {
     /// `showOpenFilePicker(id[, multiple])`, `showDirectoryPicker(id)`,
     /// `showSaveFilePicker(id, suggestedName)`, from any action, each with a
-    /// trailing `startIn` when the call names one (LLP 1173 D2).
+    /// trailing `startIn` and Mac panel message when given.
     func document(_ name: String, _ args: [Any]) {
         let ruling = session.runtime.command(PickerRequests.document(name, args, agent: ExactEnv.agentMode))
         let view = (ruling["view"] as? NSNumber)?.uint32Value
@@ -38,7 +38,7 @@ extension Picker {
         if let ticket = (ruling["ticket"] as? NSNumber)?.uint64Value { documentTickets[view] = (ticket, issued) }
         presentDocument(name, view: view, multiple: ruling["multiple"] as? Bool ?? false,
                         suggestedName: ruling["suggestedName"] as? String ?? "",
-                        startIn: startFolder(ruling["startIn"] as? String, name), issued: issued)
+                        message: ruling["apple.message"] as? String, startIn: startFolder(ruling["startIn"] as? String, name), issued: issued)
     }
 
     /// Where a picker or save panel opens for `startIn` (LLP 1173 D2): a
@@ -154,7 +154,7 @@ extension Picker {
 
 #if os(tvOS)
 extension Picker {
-    func presentDocument(_ name: String, view: UInt32, multiple _: Bool, suggestedName _: String, startIn _: URL?, issued: SessionLease? = nil) {
+    func presentDocument(_ name: String, view: UInt32, multiple _: Bool, suggestedName _: String, message _: String?, startIn _: URL?, issued: SessionLease? = nil) {
         // tvOS has no document picker.
         session.log("\(name): refused: no document picker"); documentCancelled(view, name, issued: issued)
     }
@@ -163,7 +163,7 @@ extension Picker {
 #elseif canImport(UIKit)
 extension Picker {
     @discardableResult
-    func presentDocument(_ name: String, view: UInt32, multiple: Bool, suggestedName: String, startIn: URL?, issued: SessionLease? = nil) -> UIDocumentPickerViewController? {
+    func presentDocument(_ name: String, view: UInt32, multiple: Bool, suggestedName: String, message _: String? = nil, startIn: URL?, issued: SessionLease? = nil) -> UIDocumentPickerViewController? {
         let issued = issued ?? SessionLease(session)
         guard let controller = ViewPresentation.presenter(for: session.presenter.views[view] ?? session.presenter.root) else {
             session.log("\(name): refused: no window"); documentCancelled(view, name, issued: issued); return nil
@@ -239,8 +239,7 @@ extension Picker {
     /// AppKit's panels are never shown beside a hold: no drive shows them (`--touch platform` is iOS's).
     func closeDocument(_: UInt32) {}
 
-    func presentDocument(_ name: String, view: UInt32, multiple: Bool, suggestedName: String, startIn: URL?, issued: SessionLease? = nil) {
-        let issued = issued ?? SessionLease(session)
+    static func documentPanel(_ name: String, multiple: Bool, suggestedName: String, message: String?, startIn: URL?) -> NSSavePanel {
         let panel: NSSavePanel
         if name == "showSaveFilePicker" {
             panel = NSSavePanel()
@@ -257,6 +256,13 @@ extension Picker {
             panel = open
         }
         if let startIn { panel.directoryURL = startIn }
+        if let message { panel.message = message }
+        return panel
+    }
+
+    func presentDocument(_ name: String, view: UInt32, multiple: Bool, suggestedName: String, message: String?, startIn: URL?, issued: SessionLease? = nil) {
+        let issued = issued ?? SessionLease(session)
+        let panel = Self.documentPanel(name, multiple: multiple, suggestedName: suggestedName, message: message, startIn: startIn)
         let finish: (NSApplication.ModalResponse) -> Void = { [weak self, weak panel] response in
             guard let self, let panel else { return }
             let urls = response == .OK ? ((panel as? NSOpenPanel)?.urls ?? panel.url.map { [$0] } ?? []) : nil

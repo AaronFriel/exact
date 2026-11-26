@@ -107,7 +107,8 @@ pub fn command_args<'e>(name: &str, args: &'e [Expr]) -> Vec<Option<&'e Expr>> {
     // suggestedName, none, startIn)` or `(id, none, suggestedName, text,
     // startIn)`, and trails each picker's: `(id, multiple, startIn)`
     // (`multiple` `none` when absent), `(id, startIn)`, `(id,
-    // suggestedName, startIn)`. A call without it lowers as before.
+    // suggestedName, startIn)`. The optional `apple.message` follows
+    // `startIn`, which gets a `none` slot when only the message is supplied.
     let start_in = named("startIn");
     if name == "saveFile" {
         let mut positional = args.iter().filter(|a| !matches!(a, Expr::NamedArg(..)));
@@ -131,9 +132,13 @@ pub fn command_args<'e>(name: &str, args: &'e [Expr]) -> Vec<Option<&'e Expr>> {
             .filter(|a| !matches!(a, Expr::NamedArg(..)))
             .map(Some)
             .collect();
-        if start_in.is_some() {
+        let message = named("apple.message");
+        if start_in.is_some() || message.is_some() {
             out.resize(if name == "showDirectoryPicker" { 1 } else { 2 }, None);
             out.push(start_in);
+            if message.is_some() {
+                out.push(message);
+            }
         }
         return out;
     }
@@ -244,7 +249,7 @@ pub(crate) fn compile(
         Expr::NamedArg(_, _, span) => {
             return err(
                 "lower-named-argument",
-                "named arguments go to a component use, a shape's call (`Row(title=…)`), `empty(…)`, `t(…)`, a canvas `surface=` binding and `share`, `scrollIntoView`, `saveFile` and the file pickers' `startIn=`; another call's arguments are positional",
+                "named arguments go to a component use, a shape's call (`Row(title=…)`), `empty(…)`, `t(…)`, a canvas `surface=` binding and `share`, `scrollIntoView`, `saveFile` and the file pickers' `startIn=` and `apple.message=`; another call's arguments are positional",
                 *span,
             )
         }

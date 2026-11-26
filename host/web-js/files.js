@@ -265,7 +265,9 @@ const PICKERS = { showOpenFilePicker: ['open-file', 'showOpenFilePicker takes (i
 for (const [name, [capability, usage]] of Object.entries(PICKERS)) Hosts[name] = (...args) => {
   const refuse = (why, el) => { say(`${name}: refused: ${why}`); if (el) el.dispatchEvent(new Event('cancel')); };
   // `startIn=` trails the arguments: `(id, multiple, startIn)`, `multiple` none when absent.
-  const named = args.length === (capability === 'open-directory' ? 2 : 3);
+  const withStart = capability === 'open-directory' ? 2 : 3;
+  if (args.length === withStart + 1 && typeof args[withStart] === 'string') args.pop(); // apple.message
+  const named = args.length === withStart;
   let startIn = named ? args.pop() : undefined;
   if (named && capability === 'open-file' && args[1] == null) args.pop();
   const [id, second] = args, rest = args.slice(1);

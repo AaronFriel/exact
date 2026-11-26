@@ -796,10 +796,10 @@ comparison semantics. Logical operators short-circuit; ternary/match evaluates
 only its selected arm. Conditions require booleans.
 
 Named arguments are accepted only by the corresponding constructs: component
-uses, a native module's sources and sends (the only place a dotted name,
-`apple.desiredAccuracy=`, is one), record construction/copy, localization (`t`), placeholders (`empty`),
+uses, a native module's sources and sends (including dotted names such as
+`apple.desiredAccuracy=`), record construction/copy, localization (`t`), placeholders (`empty`),
 canvas `surface=` bindings, `dataTransfer=DataTransfer(…)` (LLP 1094.000),
-and specialized host commands (`share`, `scrollIntoView`). Ordinary function calls are positional. Arrow expressions are admitted
+and specialized host commands such as `share`, `scrollIntoView` and the three document pickers (which take `apple.message=`). Ordinary function calls are positional. Arrow expressions are admitted
 as the callbacks to `map` and `filter`, with at most item and index parameters;
 they are not first-class values or event handlers.
 
@@ -3489,6 +3489,7 @@ argument validation. Use the working implementation when selecting arguments:
 | `showOpenFilePicker(id[, multiple])` | [file-picker corpus](../contract/corpus/file-pickers.contract) |
 | `showDirectoryPicker(id)` | Same corpus |
 | `showSaveFilePicker(id, suggestedName)` | Same corpus |
+| `apple.message=` on the three document pickers takes a string expression, for example `showDirectoryPicker("folder", apple.message=t("choose-project"))`. macOS shows it above the file list. The iOS picker has no message line and other hosts ignore the option. | [picker tests](../contract/cli/tests/it/picker.rs) |
 | `startIn=` on the three pickers and `saveFile`: where the panel opens, the File System Access API's option. A well-known folder, `"desktop"`, `"documents"`, `"downloads"`, `"music"`, `"pictures"`, `"videos"` or `"screenshots"`, or a `doc:/` path the person chose earlier (its folder, or a chosen file's folder). A literal outside the names fails the build (`type-file-picker-argument`, `type-save-file-argument`); at run time a value that is neither, or a handle the session does not hold, is journalled (`<command>: startIn: refused: …`) and the panel opens where it would. macOS opens the folder each time, Linux's portal and Chromium likewise (Chromium's `screenshots` is `pictures`), and iOS opens a handle's folder and ignores a name (LLP 1173 D2) | Same corpus, [picker tests](../contract/cli/tests/it/picker.rs) |
 | `requestPermission(id, path, mode)`: a kept document's access asked for again, `mode` `"read"` or `"readwrite"`, from a press (the web asks the browser under its activation; a native host answers `granted` for a document that resolves); `change` at `id` hears `granted` or `denied` ([documents kept across launches](reference.md#documents-the-person-chose-doc)) | No app fixture; [the web's kept documents test](../host/web/documents-kept.test.mjs) |
 | `cancelReorder(id)` cancels an active reorder from the list with that string id. The ghost springs home, the previews close, and the list receives no `reorderdrop`. With no active reorder from that list, or while a sent drop awaits its answer, the command does nothing. | LLP 1094 D8 |

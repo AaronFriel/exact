@@ -1018,6 +1018,9 @@ names no take; `:focus-within` remains out.
   replacing or removing through these namespaces, photo-library and Android
   MediaStore access through them, and `doc.keep` on Windows. These lines are
   declared at build; the refusal of every other durable grant stands.
+- **AR7 (panel, 2026-11-25).** LLP 1069.010 D2 admits `apple.message=` on
+  the three document pickers for the macOS panel's message line. A portable
+  `message=` and a button title remain out.
 - ~~Snapback / update economy.~~ Moved 2026-09-03 (Charlie: "you can pull out snapback
   for now"), in LLP 1026 D11's minimal form only: an installed app fetches a signed
   bundle of static files from a baked-in origin, after first pixel, into an on-disk

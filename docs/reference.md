@@ -6052,6 +6052,15 @@ them; under the agent they remain held pickers. Open and Save offer the
 `file_handlers` types, as the table above says. File inputs copy the
 chosen files into `app:/tmp/picked/` and leave the originals in place.
 
+**A message in the Mac panel.** All three document pickers accept a string,
+for example `showDirectoryPicker("folder", apple.message=t("choose-project"))`.
+macOS shows it above the file list. The iOS document picker has no message
+line, and the option is inert outside macOS. Keep the familiar Open panel
+for ordinary opens and add a short explanation when the choice serves a
+different task, such as linking a project folder.
+[Apple’s file management guidelines](https://developer.apple.com/design/human-interface-guidelines/file-management)
+and [panel message](https://developer.apple.com/documentation/appkit/nssavepanel/message).
+
 **Where a picker opens** (LLP 1173 D2). The three pickers and `saveFile`
 take the File System Access API's `startIn=`: a well-known folder by name,
 or a `doc:` path the person chose earlier.

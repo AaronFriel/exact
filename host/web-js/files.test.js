@@ -44,6 +44,29 @@ test('held document and export validators accept fully qualified Windows paths',
   expect(checker('type an absolute file path')('C:/folder/')).toContain('absolute file path');
 });
 
+test('the web pickers ignore the Mac message and keep the shared options', () => {
+  const el = { closest: () => null, getAttribute: () => null, isConnected: true };
+  const previous = globalThis.document;
+  globalThis.document = { getElementById: () => el, contains: n => n === el };
+  try {
+    for (const [name, args, expected] of [
+      ['showDirectoryPicker', ['folder', null, 'Choose a project'], { id: 'folder' }],
+      ['showOpenFilePicker', ['open', true, 'downloads', 'Choose files'], { id: 'open', multiple: true, startIn: 'downloads' }],
+      ['showSaveFilePicker', ['save', 'a.png', null, 'Save a copy'], { id: 'save', suggestedName: 'a.png' }],
+    ]) {
+      rt.Hosts[name](...args);
+      expect(holds().at(-1).device.args).toEqual(expected);
+    }
+    rt.Hosts.showDirectoryPicker('folder', null, 42);
+    expect(rt.journal.at(-1)).toContain('showDirectoryPicker: refused:');
+  } finally {
+    el.isConnected = false;
+    holds();
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  }
+});
+
 test('file input accept admits any type only when unrestricted', () => {
   const absent = tokens({ getAttribute: () => null });
   const empty = tokens({ getAttribute: () => '' });
