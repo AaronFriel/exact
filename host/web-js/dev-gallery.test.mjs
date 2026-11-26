@@ -72,7 +72,7 @@ function frames(url) {
 
 const until = async (what, ms = 300_000) => {
   const end = Date.now() + ms;
-  while (!what()) { if (Date.now() > end) throw new Error('timed out'); await Bun.sleep(100); }
+  while (!await what()) { if (Date.now() > end) throw new Error('timed out'); await Bun.sleep(100); }
 };
 
 test('the gallery: made only once a page asks through the gate, its own build, stream and registration; a kept design edit is a batch to the app and a build to the gallery, never crossing; stopped when idle and with the loop', async () => {
@@ -377,6 +377,123 @@ export default { caption: ([title]) => prefix + title } satisfies Partial<TypeSc
   } finally {
     await browser?.close();
     await loop?.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 300_000);
+
+test('two frame clients pin independently, pick their own source and take their own value batches', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-frame-channel-'));
+  mkdirSync(join(dir, 'frames'));
+  writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Canvas', app: { name: 'Canvas', id: 'test.frame-channel' } }));
+  writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    text "App"\n');
+  const theme = join(dir, 'app.forma'), source = 'forma canvas\n\naxes\n  tone = warm | cool\n\ntheme\n  ink = #123456\n';
+  writeFileSync(theme, source);
+  const frame = 'component Frame\n  view\n    text "Pick me" margin-top=50 color="ink" testId="pick"\n      :hover\n        opacity=0.5\n';
+  for (const [name, prefix] of [['a', ''], ['b', '// Frame B\n'], ['late', '']]) writeFileSync(join(dir, 'frames', name + '.contract'), prefix + frame);
+  const loop = await devLoop(dir);
+  let browser;
+  try {
+    browser = await suiteBrowser('chromium');
+    const context = await browser.newContext();
+    const paths = ['/__dev/frames/a/', '/__dev/frames/b/', '/'];
+    const messages = [[], []];
+    const app = await context.newPage(), cdp = await context.newCDPSession(app), streams = new Map();
+    await cdp.send('Network.enable');
+    cdp.on('Network.requestWillBeSent', ({ requestId, request }) => {
+      const i = paths.slice(0, 2).findIndex(path => request.url === loop.base + path + '__dev/stream');
+      if (i >= 0) streams.set(requestId, i);
+    });
+    cdp.on('Network.eventSourceMessageReceived', ({ requestId, data }) => {
+      if (streams.has(requestId)) messages[streams.get(requestId)].push(JSON.parse(data));
+    });
+    await app.goto(loop.base);
+    await app.getByText('App', { exact: true }).waitFor();
+    await app.evaluate(paths => {
+      for (const [i, src] of paths.entries()) document.body.append(Object.assign(document.createElement('iframe'), { src, name: 'frame' + i }));
+    }, paths.slice(0, 2));
+    await until(() => app.frame('frame0') && app.frame('frame1'));
+    const a = app.frame('frame0'), b = app.frame('frame1');
+    await Promise.all([a, b].map(f => f.getByText('Pick me', { exact: true }).waitFor({ timeout: 120_000 })));
+    const { token } = await (await fetch(loop.base + '/__forma/token')).json();
+    const call = async (body, path = '/__forma') => (await (await fetch(loop.base + path, { method: 'POST',
+      headers: { 'x-exact-forma-token': token }, body: JSON.stringify(body) })).json());
+    let builds;
+    await until(async () => { builds = (await call({ method: 'hello' })).ok.builds; return paths.every(p => builds.some(row => row.status?.location === p)); }, 10_000);
+    const id = path => builds.find(row => row.status.location === path).id;
+    const digest = builds.find(r => r.id === id(paths[1])).planDigest;
+    expect(digest).toBeString();
+    expect(builds.find(r => r.id === id(paths[0])).planDigest).toBe(digest);
+    const size = page => page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+    await call({ after: 0, wait: false, client: 'tool' }, '/__forma/events');
+    const otherSizes = await Promise.all([size(b), size(app)]);
+    expect((await call({ method: 'pin', client: 'tool', build: id(paths[0]), pin: { rootFontSize: 29 } })).ok).toBeTruthy();
+    await until(async () => await size(a) === '29px');
+    expect(await Promise.all([size(b), size(app)])).toEqual(otherSizes);
+    expect((await call({ method: 'preview', client: 'tool', build: id(paths[1]), axis: 'tone', value: 'cool' })).ok).toBeTruthy();
+    await until(() => messages[1].some(m => m.kind === 'pin' && m.pin?.mode?.tone === 'cool'));
+    expect(messages[0].some(m => m.pin?.mode?.tone === 'cool')).toBe(false);
+    for (const [i, page] of [a, b].entries()) {
+      await page.evaluate(() => { window.originalFrame = true; });
+      messages[i].length = 0;
+    }
+    writeFileSync(theme, source.replace('#123456', '#654321'));
+    await until(() => loop.said().includes('the batch stands'), 30_000);
+    for (const [i, page] of [a, b].entries()) {
+      await until(async () => await page.getByTestId('pick').evaluate(el => getComputedStyle(el).color) === 'rgb(101, 67, 33)', 30_000);
+      expect(messages[i].some(m => m.kind === 'forma-batch' && m.tokens.some(t => t.name === 'ink'))).toBe(true);
+      expect(messages[i].some(m => m.reload)).toBe(false);
+      expect(await page.evaluate(() => window.originalFrame)).toBe(true);
+    }
+    const files = (await call({ method: 'hello' })).ok.files;
+    const scrub = await call({ method: 'scrub', client: 'tool', files, ops: [{ op: 'set-token', name: 'ink', value: '#123123' }] });
+    expect(scrub.ok?.scrub).toBeString();
+    const color = page => page.getByTestId('pick').evaluate(el => getComputedStyle(el).color);
+    await until(async () => (await Promise.all([color(a), color(b)])).every(c => c === 'rgb(18, 49, 35)'));
+    const late = await context.newPage();
+    await late.goto(loop.base + '/__dev/frames/late/');
+    await late.getByTestId('pick').waitFor();
+    await until(async () => await color(late) === 'rgb(18, 49, 35)', 8_000);
+    await late.close();
+    expect((await call({ method: 'scrub-cancel', client: 'tool', scrub: scrub.ok.scrub })).ok?.ended).toBe('cancelled');
+    await until(async () => (await Promise.all([color(a), color(b)])).every(c => c === 'rgb(101, 67, 33)'));
+    const keep = await call({ method: 'scrub', client: 'tool', files, ops: [{ op: 'set-token', name: 'ink', value: '#123123' }] });
+    const snapshot = async i => (await fetch(loop.base + paths[i] + '__dev/design')).json();
+    const beforeRelease = await Promise.all([snapshot(0), snapshot(1)]);
+    expect((await call({ method: 'scrub-release', client: 'tool', scrub: keep.ok.scrub })).ok?.scrub).toBe(keep.ok.scrub);
+    await until(async () => readFileSync(theme, 'utf8').includes('#123123') && (await Promise.all([color(a), color(b)])).every(c => c === 'rgb(18, 49, 35)'));
+    for (const [i, page] of [a, b].entries()) {
+      await until(async () => (await snapshot(i)).scrub?.rev > beforeRelease[i].scrub.rev, 8_000);
+      const { structure, design, tokens } = beforeRelease[i];
+      expect(await snapshot(i)).toMatchObject({ structure, design, tokens });
+      const cursor = await call({ after: 0, wait: false, client: 'tool' }, '/__forma/events');
+      const build = id(paths[i]);
+      expect((await call({ method: 'inspect', client: 'tool', build, on: true })).ok).toBeTruthy();
+      await page.locator('#exact-inspect').waitFor();
+      const table = await (await fetch(loop.base + paths[i] + '__dev/dev-inspect.json')).json();
+      expect(table.plan).toBe(digest);
+      await page.getByTestId('pick').scrollIntoViewIfNeeded();
+      const box = await page.getByTestId('pick').boundingBox();
+      await app.mouse.click(box.x + 3, box.y + box.height / 2);
+      let picked;
+      await until(async () => { const e = await call({ after: cursor.seq, epoch: cursor.epoch, wait: false, client: 'tool' }, '/__forma/events'); return picked = e.events?.find(e => e.event === 'selection' && e.build === build); }, 8_000);
+      expect(picked.readOnly).toBeNull();
+      expect(picked.source).toMatchObject({ file: 'frames/' + ['a','b'][i] + '.contract', line: 3 + i, component: 'Frame' });
+      expect(picked.source.col).toBeGreaterThan(0);
+      const at = [{ file: picked.source.file, line: picked.source.line, col: picked.source.col }];
+      const outlined = await call({ method: 'outline', client: 'tool', at });
+      expect(outlined.ok?.builds).toContain(build);
+      const site = await page.getByTestId('pick').getAttribute('data-site');
+      expect((await call({ method: 'hold', client: 'tool', build, site: Number(site), state: 'hover', plan: digest })).ok?.held).toBe(true);
+      await until(async () => (await call({ method: 'hello' })).ok.builds.find(b => b.id === build)?.held?.state === 'hover', 5_000);
+      expect((await call({ method: 'hold', client: 'tool', build, state: null })).ok?.held).toBe(true);
+    }
+    const survivors = [id(paths[0]), id('/')].sort();
+    await app.locator('iframe[name="frame1"]').evaluate(node => node.remove());
+    await until(async () => (await call({ method: 'hello' })).ok.builds.length === 2);
+    expect((await call({ method: 'hello' })).ok.builds.map(row => row.id).sort()).toEqual(survivors);
+  } finally {
+    await browser?.close();
+    await loop.stop();
     rmSync(dir, { recursive: true, force: true });
   }
 }, 300_000);

@@ -2,6 +2,9 @@
 // generated library examples. Frames build authored entries with the app's
 // data. Each preview owns its build, error stream and open pages, and stops
 // after its last page disconnects.
+import { same, sameShape } from './dev-inline.mjs';
+import { designPath } from '../../scripts/forma-design-path.mjs';
+import { streamFrame } from '../../scripts/forma-builds.mjs';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -51,7 +54,7 @@ const children = new Set();
 function killChildren() {
   for (const child of children) { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } }
 }
-function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, onIdle, channel = () => null, client, tableTool = () => null, compiler = () => null, design: designNow = () => null, env = process.env, log = console.log, idleMs = 60_000 }) {
+function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, onIdle, onBuilt, channel = () => null, client, tableTool = () => null, compiler = () => null, design: designNow = () => null, env = process.env, log = console.log, idleMs = 60_000 }) {
   const controls = frame ? base + '/__dev' : base;
   const source = resolve(cache, 'source'), live = resolve(cache, 'live'), stage = resolve(cache, 'stage'), dist = resolve(cache, 'dist');
   const clients = new Set(), maps = new Map(), tables = new Map(), procs = new Set();
@@ -59,7 +62,18 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
   // idle stop; `run` counts stops, so what a stopped run finishes says nothing.
   let seq = 0, built = false, active = false, failed = null, busy = false, again = false, idle = null, run = 0, design = null;
 
-  let fingerprint = null, timer = null;
+  let generation = 0, committedSource = null, fingerprint = null, timer = null, committed = null, shownDesign = null, snapshot = null;
+  const notice = () => snapshot && { kind: 'forma-batch', structure: snapshot.structure, base: snapshot.design, design: snapshot.design, tokens: [], scrub: snapshot.scrub };
+  function showDesign(next, scrub) {
+    const from = shownDesign;
+    shownDesign = next;
+    snapshot = { kind: 'forma-snapshot', structure: next.shape, base: null, design: next.digest, tokens: next.tokens, scrub };
+    const tokens = next.tokens.filter((t, i) => !same(t, from.tokens[i]));
+    if (!tokens.length && !scrub) return;
+    const batch = JSON.stringify({ ...snapshot, kind: 'forma-batch', base: from.digest, tokens });
+    const text = Buffer.byteLength(batch) > 32 * 1024 ? JSON.stringify(notice()) : batch;
+    for (const res of clients) streamFrame(res, text, notice);
+  }
   const schedule = () => {
     if (!active) return;
     clearTimeout(timer);
@@ -151,6 +165,17 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
       replaceBuild(stage, dist);
       keepMap();
       failed = null;
+      if (frame) {
+        ++generation;
+        const wasCommitted = shownDesign === committed;
+        try {
+          committed = JSON.parse(readFileSync(resolve(dist, '.gen/dev-design.json')));
+          const path = designPath(app.dir), receipt = contractReadReceipt(resolve(dist, '.gen'));
+          committedSource = path && (receipt[path] ?? receipt[realpathSync(path)] ?? null);
+        } catch { committed = committedSource = null; }
+        if (!built || fingerprint !== next || wasCommitted) { shownDesign = committed; snapshot = null; }
+        onBuilt?.();
+      }
       if (frame && built && fingerprint === next) { if (previousError) push({ error: null }); return; }
       fingerprint = next;
       seq += 1; built = true;
@@ -228,9 +253,12 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
   function stream(req, res) {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
     res.write(':\n\n');
-    const opened = channel()?.open((frame) => res.write(json(frame))) ?? null;
+    const opened = channel()?.open((frame) => res.write(json(frame)), { map: digest => maps.get(digest),
+      ...(frame ? { design: () => shownDesign === committed && committed ? { digest: committed.digest, source: committedSource } : null } : {}) }) ?? null;
     res.write(json({ ...(failed ? { error: failed } : {}), reload: seq, revision: null, ...(opened?.nonce ? { nonce: opened.nonce } : {}) }));
+    if (snapshot) res.write(json(notice()));
     clients.add(res);
+    if (frame && built && clients.size === 1) onBuilt?.();
     quiet();
     // Ended once, by whichever close comes first (under Bun a request on a handed-off socket never fires req 'close').
     let done = false;
@@ -249,6 +277,10 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
       if (url.pathname !== base && !url.pathname.startsWith(base + '/')) return false;
       const rest = url.pathname.slice(base.length) || '/';
       if (url.pathname === controls + '/stream') { ensure(); stream(req, res); return true; }
+      if (frame && url.pathname === controls + '/design' && snapshot) {
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(JSON.stringify(snapshot)); return true;
+      }
       // No live design: the gallery is built again for a kept edit (a page asking for the design hears none).
       if (url.pathname === controls + '/design' || url.pathname === controls + '/reloaded') { res.writeHead(204, { 'cache-control': 'no-store' }); res.end(); return true; }
       // Nothing of a gallery page is carried across its reloads: it loads afresh.
@@ -292,7 +324,19 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
     },
     /** The app published a reload: the gallery made and built again, if a page asked for it since its last stop. */
     appChanged() { if (active) refresh(); },
-    schedule,
+    schedule, fail,
+    designRead() {
+      if (!committed || !active || failed) return null;
+      return { generation, entry: frame, plan: resolve(dist, 'app.plan'), base: committed.tokens.map(t => [t.name, t.slices.length ? t.slices : [t.value]]) };
+    },
+    accepts: next => !!sameShape(committed, next),
+    publishDesign(next, mark, source, show) {
+      if (source) { committed = next; committedSource = source; }
+      if (show) showDesign(next, mark);
+    },
+    shown: () => shownDesign,
+    generation: () => generation,
+    restore(mark) { if (committed && shownDesign) showDesign(committed, mark); },
     /** The app's committed design is `digest` (a kept edit or a scrub's end, never a scrub's frame): built again
      * when it moved. */
     designKept(digest) { if (digest === design) return; design = digest; if (active) refresh(); },
@@ -305,7 +349,7 @@ function previewLoop({ app, root, appDist, base, label, cache, frame, inputs, on
 }
 
 /** Subscribe by source name so a shared package has one directory watch across all open frames. */
-function frameInputs() {
+function frameInputs(appDir) {
   const owners = new Map(), directories = new Map();
   function subscribe(notify, paths) {
     const before = owners.get(notify) ?? new Set(), moved = new Set();
@@ -337,14 +381,17 @@ function frameInputs() {
       let graph;
       try { graph = JSON.parse(readFileSync(resolve(stage, '.gen/dev-sources.json'), 'utf8')); } catch { graph = {}; }
       const contractPaths = [frame, frameFixturePath(frame), ...(graph.sources ?? []), ...(graph.shallow ?? []).map(([dir, name]) => resolve(dir, name))].map(p => resolve(p));
-      const paths = new Set(contractPaths);
+      // The app watcher sends its design through the frame design reader before scheduling a build.
+      const design = designPath(appDir);
+      const designs = new Set(design ? [design, realpathSync(design)] : []);
+      const paths = new Set(contractPaths.filter(path => !designs.has(path)));
       const { sourceInputs } = builtSettings(stage);
       // The checked capture names imported helpers, package code and type declarations.
       // Its resolver also records missing candidates that could take precedence after an edit.
       // Staging directories sit on the checker's lookup path and move when the build is published.
       const staged = sourceInputs && realpathSync(stage);
       const reads = (sourceInputs?.reads ?? []).filter(input => !within(staged, input.path));
-      for (const input of reads) paths.add(input.path);
+      for (const input of reads) if (!designs.has(input.path)) paths.add(input.path);
       if (!succeeded) for (const p of owners.get(notify) ?? []) paths.add(p);
       const before = subscribe(notify, paths);
       if (succeeded && (changedContractReads(contractReadReceipt(resolve(stage, '.gen'))).length || sourceInputChanges({ reads }).length)) return true;
@@ -361,7 +408,37 @@ function frameInputs() {
 
 /** Each file in frames/ runs on its own stream, after the first request for it. */
 export function frameLoops(options) {
-  const loops = new Map(), inputs = frameInputs(), root = realpathSync(options.app.dir);
+  const loops = new Map(), inputs = frameInputs(options.app.dir), root = realpathSync(options.app.dir);
+  let commitRevision = 0, previewRevision = 0, preview = null, pendingPreview = null, released = null, lastText = null;
+  async function read(request, entries = [...loops.values()], connected = false) {
+    const eligible = loop => connected ? loop.state().pages > 0 : loop.state().active;
+    const targets = entries.filter(eligible).map(loop => [loop, loop.designRead()]).filter(([, input]) => input);
+    if (!targets.length) return [];
+    const { designs } = await options.readDesigns({ ...request, frames: targets.map(([, input]) => input) });
+    return targets.filter(([loop, input], i) => {
+      input.next = designs?.[i];
+      return loop.generation() === input.generation && eligible(loop);
+    });
+  }
+  async function showPreview(request, mark, current, entries) {
+    const rows = await read(request, entries, true);
+    if (!current()) return { error: 'the design changed while the frame previews were read' };
+    if (rows.some(([loop, input]) => !loop.accepts(input.next))) {
+      return request.patch ? { fallback: true } : { error: 'the edit changes a frame’s structure and requires a rebuild' };
+    }
+    for (const [loop, input] of rows) loop.publishDesign(input.next, mark, null, true);
+    return {};
+  }
+  async function replay(loop) {
+    await pendingPreview;
+    const p = preview;
+    if (!p || !loop.state().pages) return;
+    const current = () => preview === p && !pendingPreview;
+    try {
+      const result = await showPreview(p.request, p.mark, current, [loop]);
+      if (current() && (result.error || result.fallback)) loop.fail(result.error ?? 'the frame cannot apply this scrub');
+    } catch (error) { if (current()) loop.fail(error.message); }
+  }
   let folder;
   return {
     async handle(req, res, url) {
@@ -383,7 +460,8 @@ export function frameLoops(options) {
         if (!within(root, path) || !statSync(path, { throwIfNoEntry: false })?.isFile()) return missing();
         folder ??= mkdtempSync(resolve(tmpdir(), 'exact-dev-frames-'));
         const cache = mkdtempSync(resolve(folder, 'frame-'));
-        const loop = previewLoop({ ...options, frame: entry, base, label: name, cache, inputs,
+        const loop = previewLoop({ ...options, frame: entry,
+          onBuilt: () => { if (preview || pendingPreview) void replay(loop); }, base, label: name, cache, inputs,
           client: seq => options.client(seq, base + '/__dev'),
           onIdle: stopped => {
             loops.delete(name);
@@ -393,6 +471,49 @@ export function frameLoops(options) {
       }
       return loops.get(name).handle(req, res, url);
     },
+    async designEdit(text) {
+      if (text === lastText && !released) return;
+      lastText = text;
+      const at = ++commitRevision, mark = released;
+      if (mark) { ++previewRevision; preview = released = null; }
+      for (const loop of loops.values()) if (!loop.designRead()) loop.schedule();
+      let rows;
+      try { rows = await read({ text }); }
+      catch {
+        if (at === commitRevision) { lastText = null; for (const loop of loops.values()) loop.schedule(); }
+        return;
+      }
+      if (at !== commitRevision) return;
+      const source = createHash('sha256').update(text).digest('hex');
+      for (const [loop, input] of rows) {
+        if (loop.accepts(input.next)) loop.publishDesign(input.next, mark, source, !preview);
+        else loop.schedule();
+      }
+    },
+    async preview(request, mark, current) {
+      const at = ++previewRevision;
+      const work = showPreview(request, mark, () => previewRevision === at && current());
+      pendingPreview = work;
+      try {
+        const result = await work;
+        if (previewRevision === at && !result.error && !result.fallback) preview = { request, mark };
+        return result;
+      } finally { if (pendingPreview === work) pendingPreview = null; }
+    },
+    async inlineWhy(text) {
+      const rows = await read({ text }, undefined, true);
+      const blocked = rows.find(([loop, input]) => !loop.accepts(input.next));
+      return blocked ? `the design cannot be applied in place in ${basename(blocked[1].entry)}` : null;
+    },
+    async verify(text) {
+      const at = previewRevision;
+      const rows = await read({ text }, undefined, true);
+      if (at !== previewRevision) return {};
+      const differs = rows.find(([loop, input]) => JSON.stringify(loop.shown()) !== JSON.stringify(input.next));
+      return differs ? { mismatch: `the patched frame differs from its compile: ${basename(differs[1].entry)}` } : {};
+    },
+    restore(mark) { ++previewRevision; preview = released = null; for (const loop of loops.values()) loop.restore(mark); },
+    released(mark) { released = mark ?? true; },
     reconnect() { for (const loop of loops.values()) loop.reconnect(); },
     changed() { for (const loop of loops.values()) loop.schedule(); },
     async stop() {

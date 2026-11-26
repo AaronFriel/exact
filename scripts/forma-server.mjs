@@ -217,24 +217,24 @@ export function formaServer({ appDir, spawnServe = spawnContract, waitLock = fal
   // generation's). A map can change under one plan digest (an edit that moves only source locations), so the dev loop
   // is asked each time; its bytes are parsed once.
   const parsed = new WeakMap(), copied = new WeakMap(); // (copied: each map's copies, 1.17)
-  const mapOf = (digest) => {
+  const mapOf = (digest, id) => {
     let raw = null, map = null;
-    try { raw = sourceMap(digest); } catch { raw = null; }
+    try { raw = (channel.sources(id)?.map ?? sourceMap)(digest); } catch { raw = null; }
     if (!raw || typeof raw !== 'object') return null;
     if (parsed.has(raw)) map = parsed.get(raw);
     else { try { map = JSON.parse(Buffer.from(raw).toString('utf8')); } catch { map = null; } parsed.set(raw, map); }
     return map?.nodes && typeof map.digest === 'string' && (!digest || map.digest === digest) ? map : null;
   };
-  const channel = buildChannel({ copiesFor: digest => { const m = mapOf(digest); if (!m) return null; if (!copied.has(m)) copied.set(m, copiesOf(m) ?? false); return copied.get(m); },
+  const channel = buildChannel({ copiesFor: (digest, id) => { const m = mapOf(digest, id); if (!m) return null; if (!copied.has(m)) copied.set(m, copiesOf(m) ?? false); return copied.get(m); },
     // A build that reports no selection (inspect mode left) has none to read.
     send: e => { if (e.event === 'selected' && e.selected == null) lastSelection.delete(e.build); send({ ...e, seq: ++seq, epoch }); }, log,
     // A held site in a build's new plan (LLP 1122 D8): the one site at the
     // old site's source location and call-site chain, by the two plans'
     // maps (a component called twice is two sites there); none otherwise.
-    correspond: (from, to, site) => {
-      const b = mapOf(to);
+    holdMap: mapOf, correspond: (from, to, site, id, heldMap) => {
+      const b = mapOf(to, id);
       // (A map it cannot read through is no correspondence: cleared, said so.)
-      try { return b && !staleMap(b, readFileSync, appDir) ? correspondingSite(mapOf(from), b, site) : null; } catch (e) { log(`forma: no correspondence for a hold: ${e.message}`); return null; }
+      try { return b && !staleMap(b, readFileSync, appDir) ? correspondingSite(heldMap ?? mapOf(from, id), b, site) : null; } catch (e) { log(`forma: no correspondence for a hold: ${e.message}`); return null; }
     },
     selected: (build, report, ask) => {
       if (!current(build, report)) {
@@ -246,12 +246,12 @@ export function formaServer({ appDir, spawnServe = spawnContract, waitLock = fal
       }
       refreshed.delete(build.id);
       // (A selection that does not name its plan joins with no map: read-only.)
-      const map = report.selected.planDigest ? mapOf(report.selected.planDigest) : null;
+      const map = report.selected.planDigest ? mapOf(report.selected.planDigest, build.id) : null;
       // A plan the params were not read for (a package's component changed,
       // which moves no file of the app's): read again, its names kept
       // meanwhile and no alias offered.
       if (report.selected.planDigest && report.selected.planDigest !== params.plan) learnParams(null, report.selected.planDigest);
-      const selection = join(build, report.selected, map, { served: designServed(), design: designPath(appDir), params: params.map, app: appDir, own: known.size ? new Set(ownContracts()) : null });
+      const selection = join(build, report.selected, map, { served: (channel.sources(build.id)?.design ?? designServed)(), design: designPath(appDir), params: params.map, app: appDir, own: known.size ? new Set(ownContracts()) : null });
       send({ event: 'selection', seq: ++seq, epoch, ...selection });
       remember(build.id, namedPaths(selection, appDir));
       // Outlined as the client that owns inspect mode on that build, naming
@@ -263,10 +263,10 @@ export function formaServer({ appDir, spawnServe = spawnContract, waitLock = fal
       if (selection.source) {
         const at = new Map();
         channel.outline(channel.inspector(build.id) ?? 'inspect', b => {
-          const m = b.planDigest ? mapOf(b.planDigest) : mapOf();
+          const m = mapOf(b.planDigest, b.id);
           if (!m) return null;
-          if (!at.has(m.digest)) at.set(m.digest, staleMap(m, readFileSync, appDir) ? null : sitesAt(m, selection.source));
-          return at.get(m.digest) ? { sites: at.get(m.digest), plan: m.digest } : null;
+          if (!at.has(m)) at.set(m, staleMap(m, readFileSync, appDir) ? null : sitesAt(m, selection.source));
+          return at.get(m) ? { sites: at.get(m), plan: m.digest } : null;
         }, report.click ?? null);
       }
       return { publish: published(report.selected, params.map) };
@@ -277,7 +277,7 @@ export function formaServer({ appDir, spawnServe = spawnContract, waitLock = fal
   // restore(frame)}`, each frame its batch's mark), one at a time, each end
   // told.
   const scrubs = scrubSessions({
-    ask: r => ask(r),
+    ask: r => r.method === 'propose' && scrub?.inline ? proposeHere(r) : ask(r),
     write: r => write(r),
     patch: scrub?.patch ? (values, frame, files) => scrub.patch(values, frame, files) : null,
     verify: scrub?.verify ? texts => scrub.verify(texts) : null,
@@ -815,7 +815,7 @@ export function formaServer({ appDir, spawnServe = spawnContract, waitLock = fal
    * on the developer's screens. */
   function inspect(request, scope) {
     // (forma/1.16 `select`, forma-builds.mjs: the sites n call sites up from the last selection, by its map; write, as `on` is.)
-    if (request.select !== undefined) return !allows(scope, 'write') ? refusal('inspect', scope, 'write') : selectRequest(channel, request, (id, up) => { const s = lastSelection.get(id), plan = channel.list().find(b => b.id === id)?.planDigest, map = plan ? mapOf(plan) : null; return map && Number.isSafeInteger(s?.site) ? { levels: levelsUp(map, s.site, up), plan, from: s.site, instance: s.instance ?? [] } : null; });
+    if (request.select !== undefined) return !allows(scope, 'write') ? refusal('inspect', scope, 'write') : selectRequest(channel, request, (id, up) => { const s = lastSelection.get(id), plan = channel.list().find(b => b.id === id)?.planDigest, map = plan ? mapOf(plan, id) : null; return map && Number.isSafeInteger(s?.site) ? { levels: levelsUp(map, s.site, up), plan, from: s.site, instance: s.instance ?? [] } : null; });
     if (!allows(scope, 'write')) {
       const build = request.build ?? null;
       if (build !== null && typeof build !== 'string') return { status: 400, error: { message: '`build` is a registered build\'s id' } };
@@ -845,8 +845,8 @@ export function formaServer({ appDir, spawnServe = spawnContract, waitLock = fal
     let mapless = 0;
     // A location's file and the map's, each named by the one rule (`pathName`), so a file outside the app round-trips and two packages' files stay apart.
     const places = request.at.map(a => ({ ...a, file: pathName(a.file, appDir) }));
-    const sitesOf = (m) => { if (!at.has(m.digest)) { const stale = staleMap(m, readFileSync, appDir); if (stale) why.add(stale); at.set(m.digest, stale ? null : [...new Set(places.flatMap(a => sitesAt(namedMap(m), a)))]); } return at.get(m.digest); };
-    const builds = channel.outline(request.client, b => { const m = b.planDigest ? mapOf(b.planDigest) : map; if (!m) mapless += 1; const s = m && sitesOf(m); return s ? { sites: s, plan: m.digest } : null; });
+    const sitesOf = (m) => { if (!at.has(m)) { const stale = staleMap(m, readFileSync, appDir); if (stale) why.add(stale); at.set(m, stale ? null : [...new Set(places.flatMap(a => sitesAt(namedMap(m), a)))]); } return at.get(m); };
+    const builds = channel.outline(request.client, b => { const m = mapOf(b.planDigest, b.id); if (!m) mapless += 1; const s = m && sitesOf(m); return s ? { sites: s, plan: m.digest } : null; });
     if (!builds.length && (why.size || mapless || !map)) return why.size ? { status: 409, error: { message: [...why].join('; ') } } : { status: 503, error: { message: 'no source map here for the plans the builds run (yet)' } };
     const sites = (map && sitesOf(map)) ?? [];
     log(`forma: ${request.client} outlined ${request.at.length} location(s) on ${builds.length} build(s)`);

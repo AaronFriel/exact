@@ -528,6 +528,29 @@ test('a stream behind takes no frames until it drains, then the latest design\'s
   expect(written.at(-1)).toBe('data: {"n":4}\n\n');
 });
 
+test('a frame keeps its held map through idle cleanup and receives only its own design stream', () => {
+  const first = '1'.repeat(64), second = '2'.repeat(64);
+  const channel = buildChannel({
+    holdMap: (plan, id) => channel.sources(id)?.map(plan),
+    correspond: (_from, to, site, id, heldMap) => heldMap[site] === channel.sources(id)?.map(to)?.[4] ? 4 : null,
+  });
+  const frames = [], before = channel.open(f => frames.push(f), { map: plan => plan === first ? ['Button'] : null });
+  const registerFrame = (stream, planDigest) => report(channel, { nonce: stream.nonce, kind: 'register', id: 'frame', host: 'web', capabilities: ['hold'], planDigest });
+  registerFrame(before, first);
+  channel.hold('tool', 'frame', { site: 0, instance: [], state: 'hover' });
+  before.close();
+  const after = channel.open(f => frames.push(f), { map: plan => plan === second ? [null, null, null, null, 'Button'] : null });
+  registerFrame(after, second);
+  expect(frames.at(-1)).toMatchObject({ kind: 'hold', plan: second, hold: { site: 4 } });
+  const polled = channel.openPolled(), batch = { kind: 'forma-batch', tokens: [] };
+  channel.broadcast(batch);
+  expect(frames.some(f => f.kind === 'forma-batch')).toBe(false);
+  expect(channel.poll(polled.nonce).frames).toContainEqual(batch);
+  channel.clear('tool');
+  expect(frames.at(-1)).toMatchObject({ kind: 'hold', hold: null });
+  after.close(); polled.close();
+});
+
 // LLP 1122 D8, LLP 1121 stage 8 E (*1.11*): a hold, one a build and its
 // client's, sent as a command frame; refused where it is malformed and told
 // where the build holds no state; its build's `held` reports go to every

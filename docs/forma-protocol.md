@@ -1544,6 +1544,9 @@ A write reaches every running development build at once. Release builds take non
 ## The build channel (LLP 1122 D4, *1.2*)
 
 The dev loop's running development builds register with it, report up and take commands down.
+An authored frame at `/__dev/frames/<name>/` registers on its own `__dev/stream` under that page.
+Its client ID addresses that frame. Selections resolve through its own plan map, and value
+batches and snapshots carry the tokens and sheet properties its frame compiled.
 The tool drives no input into an app; a command changes only what `prefer` would.
 
 - **Registration.** A build's dev stream hello (`/__dev`; the JS target's `/__dev/page`) carries

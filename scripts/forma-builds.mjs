@@ -151,7 +151,7 @@ function reportRefused(r) {
  * `hold-cleared`). `correspond(from, to, site)` is the one site of plan `to`
  * that site `site` of plan `from` is, by their source maps, or null.
  * `timers` (`{set, clear}`, a test's clock) wait out a design-only status. */
-export function buildChannel({ send = () => {}, log = () => {}, selected = null, correspond = () => null, copiesFor = () => null, timers = { set: setTimeout, clear: clearTimeout } } = {}) {
+export function buildChannel({ send = () => {}, log = () => {}, selected = null, correspond = () => null, holdMap = () => null, copiesFor = () => null, timers = { set: setTimeout, clear: clearTimeout } } = {}) {
   // Its plan's copies (forma/1.17, `copiesFor(planDigest)`: their encoding, null with no map read yet, false past the
   // copies limit), for `select` to walk by: once per plan per registration,
   // to a build that says it walks by them (the `copies` capability; a page of an older build gets none, and `levels`),
@@ -160,7 +160,7 @@ export function buildChannel({ send = () => {}, log = () => {}, selected = null,
   const copiesOf = id => {
     const b = builds.get(id), digest = b?.planDigest ?? null;
     if (!digest || !b.capabilities?.includes('copies') || copiesSent.get(id) === digest) return null;
-    const data = copiesFor(digest);
+    const data = copiesFor(digest, id);
     if (!data) return null; // (null: no map read yet; false: past the copies limit, which `selectUp` answers)
     copiesSent.set(id, digest);
     return { plan: digest, data };
@@ -275,9 +275,10 @@ export function buildChannel({ send = () => {}, log = () => {}, selected = null,
     const h = holds.get(id);
     if (!h) { if (always) sendHold(id, null); return; }
     // Held before the build named its plan: the first plan it names is the one held under.
-    if (!h.plan && plan && !always) { h.plan = plan; return; }
-    if (h.plan && plan && h.plan !== plan) {
-      const site = correspond(h.plan, plan, h.hold.site);
+    if (!h.plan && plan && !always) { h.plan = plan; h.map = holdMap(plan, id); return; }
+    const nextMap = plan && holdMap(plan, id);
+    if (h.plan && plan && (h.plan !== plan || (h.map && nextMap && h.map !== nextMap))) {
+      const site = correspond(h.plan, plan, h.hold.site, id, h.map);
       if (site == null) {
         sendHold(id, null);
         log(`forma: hold on ${id} cleared: no single site corresponds in its new plan`);
@@ -287,17 +288,17 @@ export function buildChannel({ send = () => {}, log = () => {}, selected = null,
       }
       h.hold = { ...h.hold, site };
     }
-    h.plan = plan ?? h.plan;
+    if (plan) { h.plan = plan; h.map = nextMap; }
     h.revision = sendHold(id, h.hold, h.plan);
   };
 
   return {
     /** A build's stream opened; `write(frame)` sends it one. Its nonce, for
      * its hello, and `close()` when the stream ends; null with 256 open. */
-    open(write) {
+    open(write, sources) {
       if (streams.size >= STREAMS) return null;
       const n = nonce();
-      streams.set(n, { write, build: null });
+      streams.set(n, { write, sources, build: null });
       return { nonce: n, close: () => close(n) };
     },
     /** A stream for a build that polls (Linux, the resident loop's relay):
@@ -540,6 +541,8 @@ export function buildChannel({ send = () => {}, log = () => {}, selected = null,
       }
       return { status: 204, body: null };
     },
+    /** The source resolver attached by the loop that opened this build's stream. */
+    sources: id => streams.get(builds.get(id)?.nonce)?.sources,
     /** The registered builds with an open stream. */
     list: () => { sweep(); return listed(); },
     /** Polled streams past their time closed (their builds announced gone):
@@ -599,7 +602,7 @@ export function buildChannel({ send = () => {}, log = () => {}, selected = null,
       // (unsupported, theme2's ruling; the tool greys its up control until it registers again), never stale, which
       // would have the tool ask again for good.
       const b = builds.get(id);
-      if (b.capabilities?.includes('copies') && b.planDigest && copiesFor(b.planDigest) === false) {
+      if (b.capabilities?.includes('copies') && b.planDigest && copiesFor(b.planDigest, id) === false) {
         const detail = 'this build cannot move its selection up (select): its plan is past the copies limit (2^20 sites, 512 KiB encoded); click the node instead';
         b.unsupported = { what: 'inspect', detail };
         send({ event: 'unsupported', build: id, what: 'inspect', detail });
@@ -664,7 +667,7 @@ export function buildChannel({ send = () => {}, log = () => {}, selected = null,
       if (!b.capabilities?.includes('hold')) return { unsupported: `build \`${id}\` (${b.host}) holds no state` };
       const held = plan ?? b.planDigest ?? null;
       const revision = sendHold(id, hold, held);
-      if (hold !== null) holds.set(id, { client, hold, revision, plan: held });
+      if (hold !== null) holds.set(id, { client, hold, revision, plan: held, map: held && holdMap(held, id) });
       log(`forma: ${client} ${hold ? `held ${hold.state} on site ${hold.site}` : 'let go'} on ${id} (hold ${revision})`);
       announce();
       return { build: id, revision };

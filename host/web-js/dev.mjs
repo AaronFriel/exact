@@ -32,7 +32,7 @@ import { attachDevControls, createLaunchGate } from '../web/dev-keys.mjs';
 import { designPath, frameOnlyByTool, formaServer } from '../../scripts/forma-server.mjs';
 import { pluginOnLoopback } from '../../scripts/forma-remote.mjs';
 import { projectCanvas } from '../../scripts/forma-canvas.mjs';
-import { mapCard, pullMap } from '../../scripts/forma-inspect.mjs';
+import { mapCard, residentPlanMaps } from '../../scripts/forma-inspect.mjs';
 import { serveCommands, serveReport, streamFrame } from '../../scripts/forma-builds.mjs';
 import { EXE, depInfoOf, fresh, freshCompiler, webCompiler, webCompilerFrom } from './module.mjs';
 import { RustMissing, launch, rustMissing, toolEnv } from '../../scripts/tools.mjs';
@@ -41,7 +41,7 @@ import { engagement } from '../web/engagement.js';
 import { schemeHead } from '../web/look.mjs';
 import { INSPECT_EVENTS } from './inspect-dev.js';
 import { frameLoops, galleryLoop } from './dev-gallery.mjs';
-import { inlineWhy as inlineWhyOf } from './dev-inline.mjs';
+import { inlineWhy as inlineWhyOf, same, sameShape } from './dev-inline.mjs';
 import { DEV_STATUS_TYPE, FAILED, PHASE, gist } from '../web/dev-phase.mjs';
 import { startupBuilds, stopBuildTree } from '../web/dev-startup.mjs';
 import { watchDirectoryInputs } from '../web/dev-watch.mjs';
@@ -250,7 +250,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // A verified tool set can supply the reader while the optimized build is
   // stale (LLP 1174 D5).
   const ownTool = resolve(process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : resolve(root, 'target'), `host-dev/exact-web-js${EXE}`);
-  const tool = { path: ownTool, ready: false, built: null, child: null, reading: null, cleaner: null };
+  const tool = { path: ownTool, ready: false, built: null, child: null, cleaner: null };
   const readerCompiler = () => webCompilerFrom(process.env, { rehash: true });
   let checkedUntil = 0, current = false;
   const toolCurrent = () => {
@@ -263,7 +263,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     return current;
   };
   const patcher = { child: null, path: null, identity: null, asks: null, n: 0 };
-  const toolExits = new Set(), inspections = new Set();
+  const toolExits = new Set(), readers = new Set();
   const stopGroup = child => {
     const exit = stopBuildTree(child);
     toolExits.add(exit);
@@ -271,7 +271,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     return exit;
   };
   const stopCompilers = () => {
-    for (const child of [building, tool.child, tool.reading, tool.cleaner, patcher.child, ...inspections]) stopGroup(child);
+    for (const child of [building, tool.child, tool.cleaner, patcher.child, ...readers]) stopGroup(child);
     return Promise.all(toolExits);
   };
   const startup = startupBuilds();
@@ -354,7 +354,6 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // instead, as the resident loop sends it (host/web/dev.mjs DESIGN_FRAME):
   // a native host's event frames are bounded (PlanURL.swift's 64 KiB).
   const framed = (batch) => (Buffer.byteLength(JSON.stringify(batch)) > 32 * 1024 ? notice(snapshot) : batch);
-  const same = (a, b) => a.value === b.value && a.slices.length === b.slices.length && a.slices.every((s, i) => s === b.slices[i]);
   // A scrub (LLP 1121 stage 4, commit 6): the design the pages run while it
   // previews, and the snapshot it put aside; the next build, or its end,
   // sends them on from it.
@@ -494,12 +493,8 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
       // The Cargo fallback can start compilers of its own.
       const child = spawn(compiler.cmd, [...compiler.pre, ...args], { cwd: root, env: compiler.env,
         stdio: inspect ? ['ignore', 'ignore', 'pipe'] : ['pipe', 'pipe', 'pipe'], detached: true });
-      if (inspect) inspections.add(child);
-      else tool.reading = child;
-      const untrack = () => {
-        if (inspect) inspections.delete(child);
-        else if (tool.reading === child) tool.reading = null;
-      };
+      readers.add(child);
+      const untrack = () => readers.delete(child);
       let out = '', err = '';
       child.once('error', error => { untrack(); failed(error); });
       child.once('close', code => {
@@ -555,8 +550,6 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // is in it) as a kept build requires, and each token's accent.
   // A token the page writes inline (`inline`: no property sets it in place,
   // LLP 1121 stage 6) builds when its value moves.
-  const sameShape = (from, next) => from && next && from.shape === next.shape && from.structure === next.structure && from.tokens.length === next.tokens.length
-    && next.tokens.every((t, i) => t.name === from.tokens[i].name && String(t.accent) === String(from.tokens[i].accent) && (!t.inline || same(t, from.tokens[i])));
   // A fast batch is checked by the full build after it (its verifying build): the
   // design's module inputs and its compile; a value-only edit during that
   // build is sent at once and checked after it.
@@ -599,8 +592,13 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   };
   const gallery = galleryLoop({ ...previewOptions,
     client: n => client(n, null, { base: '/__dev/gallery', stream: '/__dev/gallery/stream', page: 'gallery' }) });
-  const frames = frameLoops({ app, root, compiler: previewOptions.compiler, tableTool: previewOptions.tableTool,
-    client: (n, base) => client(n, null, { base, stream: base + '/stream' }) });
+  const frames = frameLoops({ ...previewOptions, readDesigns: async request => {
+    const answer = await patcherAsk(request);
+    if (!answer.fallback || stopping) return answer;
+    const read = await runReader(['frame-designs', resolve(app.dir, 'app.contract')], { text: JSON.stringify(request) });
+    try { return JSON.parse(read.out); } catch { return { fallback: true }; }
+  },
+    client: (n, base) => client(n, null, { base, stream: base + '/stream', key: base }) });
   const rebuild = async ({ force = false } = {}) => {
     // A burst a build already took (its timer still armed) is no edit.
     if (stopping || (!force && !edited.size)) return;
@@ -629,7 +627,9 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     }
     // Kept until a build lands: a failed one's edits are the next build's too.
     const pendingEdits = [...edited], pendingAppeared = [...appeared];
-    if (pendingEdits.some(path => !path.endsWith('.contract'))) frames.changed();
+    if (designOnly && file && designs.every(path => path === file)) {
+      try { void frames.designEdit(readFileSync(file, 'utf8')); } catch { frames.changed(); }
+    } else if (pendingEdits.some(path => !path.endsWith('.contract'))) frames.changed();
     edited.clear(); appeared.clear();
     // Whatever waited for the reader is this pass's now (a build that fails keeps it for the next edit, as any).
     readerWait = false;
@@ -944,7 +944,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // A reload waits while text composes, a pointer is down or a drag is under way, then takes the newest build
   // (`replacementBoundary`).
   // A gallery page's (dev-gallery.mjs): its own stream, design and checkpoint routes, `page: 'gallery'`, no `navigate`.
-  const client = (n, revision, { base = '/__dev', stream = '/__dev/page', page = null } = {}) => `<script>(()=>{const fetch=globalThis.fetch.bind(globalThis),seq=${n},logicRevision=${JSON.stringify(revision)},es=new EventSource('${stream}');let reloading=false,latest;const boundary=globalThis.__exactDevReplacement=(${replacementBoundary.toString()})(${engagement.toString()});Promise.resolve().then(()=>ready()).then(()=>Object.assign(globalThis.exact,{replacementBoundary:boundary,devError:show}));
+  const client = (n, revision, { base = '/__dev', stream = '/__dev/page', page = null, key = page } = {}) => `<script>(()=>{const fetch=globalThis.fetch.bind(globalThis),seq=${n},logicRevision=${JSON.stringify(revision)},es=new EventSource('${stream}');let reloading=false,latest;const boundary=globalThis.__exactDevReplacement=(${replacementBoundary.toString()})(${engagement.toString()});Promise.resolve().then(()=>ready()).then(()=>Object.assign(globalThis.exact,{replacementBoundary:boundary,devError:show}));
 let overlay;
 const errors=new Map(),show=(message,source='app')=>{
   if(message)errors.set(source,message);else if(!errors.delete(source))return;
@@ -962,13 +962,13 @@ const restored=document.querySelector('script[type="application/vnd.exact.dev-ch
 if(restored){const restoredSeq=Number(restored.dataset.seq);console.info('exact dev reload: restored',restoredSeq);const t=setInterval(()=>{const b=document.getElementById('exact-root')?.dataset.bootMs;if(b!=null){clearInterval(t);Promise.resolve(globalThis.exact?.ready).then(()=>{console.info('exact dev reload: runtime up',restoredSeq);fetch('${base}/reloaded?seq='+restoredSeq+'&boot='+b+'&at='+Date.now(),{method:'POST'})})}},2)}
 const ready=()=>globalThis.exact?Promise.resolve(globalThis.exact.ready):new Promise(ok=>{const t=setInterval(()=>{if(globalThis.exact){clearInterval(t);Promise.resolve(globalThis.exact.ready).then(ok)}},2)});
 let liveQ=Promise.resolve(),liveStatus=null;const live=m=>{liveQ=liveQ.then(async()=>{const x=await ready().then(()=>globalThis.exact),was=x?.designDigest;let sc=m.scrub;const out=x?.design?.(m);if(out?.live==='stale'){const r=await fetch('${base}/design',{cache:'no-store'});if(r.status===200){const f=await r.json();sc=f.scrub;x.design(f)}}if(x?.designDigest!==was&&ch.nonce){clearTimeout(liveStatus);if(sc)liveStatus=setTimeout(status,150);else status()}}).catch(e=>console.error('exact dev:',e))};
-const ch={nonce:null,registered:null,revision:null,before:null,told:null},cp=window!==parent&&/^exact-copy-\\d{1,2}$/.test(window.name),bk=${page ? `(cp?'exact.dev.build:'+window.name:'exact.dev.build')+':${page}'` : "cp?'exact.dev.build:'+window.name:'exact.dev.build'"},bid=(async()=>{const fresh=()=>'web-js-'+crypto.getRandomValues(new Uint32Array(2)).join('');let i;try{i=sessionStorage.getItem(bk)}catch{return fresh()}const t=typeof BroadcastChannel==='function'?new BroadcastChannel('exact.dev.build'):null;if(i&&t){const mine=i;if(await new Promise(done=>{t.onmessage=e=>{if(e.data==='taken:'+mine)done(true)};t.postMessage('who:'+mine);setTimeout(()=>done(false),60)}))i=null}i??=fresh();if(t){const own=i;t.onmessage=e=>{if(e.data==='who:'+own)t.postMessage('taken:'+own)}}try{sessionStorage.setItem(bk,i)}catch{}return i})(),post=(n,b,ms)=>fetch('/__dev/report',{method:'POST',body:JSON.stringify({nonce:n,...b}),...(ms?{signal:AbortSignal.timeout(ms)}:{})}),rep=b=>{const{nonce:n,registered:r}=ch;if(!n)return Promise.resolve();if(ch.queue?.n!==n)ch.queue={n,tail:Promise.resolve()};const q=ch.queue;return q.tail=q.tail.then(async()=>{if(!(await r)||ch.nonce!==n||ch.registered!==r)return;await post(n,b,10000).catch(()=>{})})};
+const ch={nonce:null,registered:null,revision:null,before:null,told:null},cp=window!==parent&&/^exact-copy-\\d{1,2}$/.test(window.name),bk=${key ? `(cp?'exact.dev.build:'+window.name:'exact.dev.build')+':${key}'` : "cp?'exact.dev.build:'+window.name:'exact.dev.build'"},bid=(async()=>{const fresh=()=>'web-js-'+crypto.getRandomValues(new Uint32Array(2)).join('');let i;try{i=sessionStorage.getItem(bk)}catch{return fresh()}const t=typeof BroadcastChannel==='function'?new BroadcastChannel('exact.dev.build'):null;if(i&&t){const mine=i;if(await new Promise(done=>{t.onmessage=e=>{if(e.data==='taken:'+mine)done(true)};t.postMessage('who:'+mine);setTimeout(()=>done(false),60)}))i=null}i??=fresh();if(t){const own=i;t.onmessage=e=>{if(e.data==='who:'+own)t.postMessage('taken:'+own)}}try{sessionStorage.setItem(bk,i)}catch{}return i})(),post=(n,b,ms)=>fetch('/__dev/report',{method:'POST',body:JSON.stringify({nonce:n,...b}),...(ms?{signal:AbortSignal.timeout(ms)}:{})}),rep=b=>{const{nonce:n,registered:r}=ch;if(!n)return Promise.resolve();if(ch.queue?.n!==n)ch.queue={n,tail:Promise.resolve()};const q=ch.queue;return q.tail=q.tail.then(async()=>{if(!(await r)||ch.nonce!==n||ch.registered!==r)return;await post(n,b,10000).catch(()=>{})})};
 const here=()=>{const at=location.pathname+location.search+location.hash;return at.length<=2048&&/^\\/(?![/\\\\])[\\x21-\\x5b\\x5d-\\x7e]*$/.test(at)?at:null};
 const asked=()=>{const p=ch.pin,k=globalThis.exact?.asked??{};if(!cp||!p)return null;const o={},val=f=>k[f]?.value;if(p.scheme&&val('scheme')!=null&&val('scheme')!==p.scheme)o.scheme=String(val('scheme')).slice(0,32);if(p.rootFontSize&&val('rootFontSize')!=null&&val('rootFontSize')!==p.rootFontSize)o.rootFontSize=String(val('rootFontSize')).slice(0,64);const md=Object.fromEntries(Object.keys(p.mode??{}).filter(a=>val('mode:'+a)!=null&&val('mode:'+a)!==p.mode[a]&&a.length<=64&&String(val('mode:'+a)).length<=64).map(a=>[a,val('mode:'+a)]));if(Object.keys(md).length&&new TextEncoder().encode(JSON.stringify(md)).length<=800)o.mode=md;return Object.keys(o).length?o:null};
 const facts=()=>{const s=getComputedStyle(document.documentElement),cs=s.colorScheme,x=globalThis.exact;return{kind:'status',scheme:/dark/.test(cs)&&!/light/.test(cs)?'dark':/light/.test(cs)&&!/dark/.test(cs)?'light':x?.systemScheme??(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),contrast:matchMedia('(prefers-contrast: more)').matches?'more':matchMedia('(prefers-contrast: less)').matches?'less':'no-preference',mode:x?.modes?.read?.()??null,rootFontSize:parseFloat(s.fontSize),plan:null,planDigest:x?.plan??null,design:x?.designDigest??null,revision:ch.revision,location:here(),app:asked()??undefined}},status=()=>{clearTimeout(liveStatus);liveStatus=null;const b=facts();ch.told=JSON.stringify(b);rep(b)};for(const q of['(prefers-color-scheme: dark)','(prefers-contrast: more)','(prefers-contrast: less)'])matchMedia(q).addEventListener?.('change',()=>{if(ch.nonce)status()});
-let gate=null,held=(()=>{try{return sessionStorage.getItem('exact.dev.inspect${page ? `:${page}` : ''}')!=null}catch{return false}})();const early=()=>{for(const id of['exact-inspect-early','exact-inspect-early-shield'])document.getElementById(id)?.remove()},letGo=exit=>{held=false;early();try{const k=sessionStorage.getItem('exact.dev.inspect${page ? `:${page}` : ''}');if(exit&&k)sessionStorage.setItem('exact.dev.inspect${page ? `:${page}` : ''}.left',k);sessionStorage.removeItem('exact.dev.inspect${page ? `:${page}` : ''}')}catch{}};if(held){const sh=document.head.appendChild(Object.assign(document.createElement('style'),{id:'exact-inspect-early-shield',textContent:'iframe, frame, embed, object { pointer-events: none !important; }'}));const c=Object.assign(document.createElement('div'),{id:'exact-inspect-early'});c.style.cssText='position:fixed;inset:0;z-index:2147483644;background:transparent;touch-action:none';(document.body??document.documentElement).append(c)}for(const ty of ${JSON.stringify([...INSPECT_EVENTS, 'pointermove', 'focusin'])})addEventListener(ty,e=>{if(gate)return gate(e);if(!held)return;if(ty==='keydown'&&e.key==='Escape')letGo(true);if((ty==='focusin'||ty==='blur')&&document.activeElement?.tagName==='IFRAME')document.activeElement.blur();e.preventDefault();e.stopImmediatePropagation()},{capture:true,passive:false});
+let gate=null,held=(()=>{try{return sessionStorage.getItem('exact.dev.inspect${key ? `:${key}` : ''}')!=null}catch{return false}})();const early=()=>{for(const id of['exact-inspect-early','exact-inspect-early-shield'])document.getElementById(id)?.remove()},letGo=exit=>{held=false;early();try{const k=sessionStorage.getItem('exact.dev.inspect${key ? `:${key}` : ''}');if(exit&&k)sessionStorage.setItem('exact.dev.inspect${key ? `:${key}` : ''}.left',k);sessionStorage.removeItem('exact.dev.inspect${key ? `:${key}` : ''}')}catch{}};if(held){const sh=document.head.appendChild(Object.assign(document.createElement('style'),{id:'exact-inspect-early-shield',textContent:'iframe, frame, embed, object { pointer-events: none !important; }'}));const c=Object.assign(document.createElement('div'),{id:'exact-inspect-early'});c.style.cssText='position:fixed;inset:0;z-index:2147483644;background:transparent;touch-action:none';(document.body??document.documentElement).append(c)}for(const ty of ${JSON.stringify([...INSPECT_EVENTS, 'pointermove', 'focusin'])})addEventListener(ty,e=>{if(gate)return gate(e);if(!held)return;if(ty==='keydown'&&e.key==='Escape')letGo(true);if((ty==='focusin'||ty==='blur')&&document.activeElement?.tagName==='IFRAME')document.activeElement.blur();e.preventDefault();e.stopImmediatePropagation()},{capture:true,passive:false});
 let at=null,am=null;const attacher=()=>am??=import('/__dev/attach.js').then(m=>m.install({fetch,doc:()=>at})).catch(e=>{am=null;throw e});addEventListener('keydown',e=>{if(at&&e.isTrusted&&e.altKey&&e.shiftKey&&e.code==='KeyA'){e.preventDefault();attacher().then(a=>a.toggle()).catch(e=>console.info('exact: Agent Attach: '+e))}},true);
-const inspector=ready().then(()=>import('/__dev/inspect.js')).then(m=>{m.install({${page ? `key:'exact.dev.inspect:${page}',` : ''}fetch,report:rep,status:async()=>status(),facts:()=>({plan:null,design:globalThis.exact?.designDigest??null,revision:ch.revision}),nonce:()=>ch.nonce});gate=m.gate;return m}).catch(e=>{letGo(false);throw e});
+const inspector=ready().then(()=>import('/__dev/inspect.js')).then(m=>{m.install({${key ? `key:'exact.dev.inspect:${key}',` : ''}fetch${key && !page ? `: (url,options)=>fetch(url==='dev-inspect.json'?'${base}/dev-inspect.json':url==='/__dev/design'?'${base}/design':url,options)` : ''},report:rep,status:async()=>status(),facts:()=>({plan:null,design:globalThis.exact?.designDigest??null,revision:ch.revision}),nonce:()=>ch.nonce});gate=m.gate;return m}).catch(e=>{letGo(false);throw e});
 let due=false;const moved=()=>{if(due||!ch.nonce)return;due=true;setTimeout(()=>{due=false;const b=facts();if(JSON.stringify(b)!==ch.told){ch.told=JSON.stringify(b);rep(b)}},0)},seen=new MutationObserver(moved);if(cp)ready().then(()=>{globalThis.exact.onAsked=moved});seen.observe(document.documentElement,{attributes:true,attributeFilter:['style','data-x-modes']});seen.observe(document.head,{childList:true,subtree:true,characterData:true});for(const k of['pushState','replaceState']){const w=history[k];history[k]=function(...a){const o=w.apply(this,a);moved();return o}}addEventListener('popstate',moved);addEventListener('hashchange',moved);
 const nav=m=>{liveQ=liveQ.then(async()=>{await ready();const mine=()=>m.stream===ch.nonce;if(!mine())return;const x=globalThis.exact,u=new URL(m.location,location.origin),to=u.pathname+u.search,no=d=>{if(mine())rep({kind:'unsupported',what:'navigate',detail:String(d).slice(0,1024),revision:m.seq})};if(u.origin!==location.origin||u.pathname.startsWith('//'))return no("the location is no path on this page's origin");const there=()=>history.state?.url===to||location.pathname+location.search===to,before=history.state?.url;try{if(!there()){const why=typeof x?.goTo==='function'?x.goTo(to):'this page has no router';if(why)return no(why)}for(let i=0;i<100&&!there()&&history.state?.url===before;i++)await new Promise(ok=>setTimeout(ok,10));if(mine()&&there()&&u.hash!==location.hash)history.replaceState(history.state,'',location.origin+location.pathname+location.search+u.hash)}catch(e){return no(String(e))}moved()}).catch(e=>console.error('exact dev:',e))};
 const pin=m=>{liveQ=liveQ.then(async()=>{await ready();const r=document.documentElement.style,p=m.pin,x=globalThis.exact,was=x.held;let rm=0;x.held=cp&&p?Object.fromEntries([['scheme',!!p.scheme],['rootFontSize',!!p.rootFontSize],...Object.keys(p.mode??{}).map(a=>['mode:'+a,true])]):null;ch.before??={fontSize:r.fontSize,hostFont:r.getPropertyValue('--exact-host-font-size'),mode:x?.modes?.read?.()??{}};const sh=document.getElementById('exact-dev-pin')??document.head.appendChild(Object.assign(document.createElement('style'),{id:'exact-dev-pin'}));const fx=document.querySelector('meta[name="color-scheme"]')?.content,sc=p?.scheme&&(cp||!['light','dark'].includes(fx))?p.scheme:null;sh.textContent=sc?':root{color-scheme:'+sc+(cp?'!important':'')+'}':'';if(cp)x.asked?.scheme?.apply();if((x.systemScheme??null)!==sc){x.systemScheme=sc;dispatchEvent(new Event('resize'))}r.removeProperty('font-size');if(cp&&p?.rootFontSize)r.setProperty('font-size',p.rootFontSize+'px','important');else r.fontSize=p?.rootFontSize?p.rootFontSize+'px':ch.before.fontSize;if(p?.rootFontSize)r.setProperty('--exact-host-font-size',r.fontSize);else if(ch.before.hostFont)r.setProperty('--exact-host-font-size',ch.before.hostFont);else r.removeProperty('--exact-host-font-size');const last=ch.pin?.mode??{},back=Object.fromEntries(Object.entries(ch.before.mode??{}).filter(([a])=>a in last&&!(a in(p?.mode??{}))&&!(cp&&x.asked?.['mode:'+a]))),mode=Object.entries(p?(cp?{...back,...(p.mode??{})}:{...ch.before.mode,...(p.mode??{})}):back);if(mode.length&&x?.modes?.set){const why=x.modes.set(mode);if(why){rm=1;rep({kind:'unsupported',what:'pin.mode',detail:why,revision:m.revision});if(!cp)x.modes.set(Object.entries(ch.before.mode));if(x.held){for(const k of Object.keys(x.held))if(k.startsWith('mode:'))delete x.held[k];for(const [k,on]of Object.entries(was??{}))if(on&&k.startsWith('mode:'))x.held[k]=true}}dispatchEvent(new Event('resize'))}if(p?.contrast)rep({kind:'unsupported',what:'pin.contrast',detail:"a web page cannot pin the browser's contrast",revision:m.revision});for(const [f,on]of Object.entries(was??{}))if(on&&!x.held?.[f])x.asked?.[f]?.apply();if(!p)ch.before=null;ch.pin=p?(cp&&rm?{...p,mode:last}:p):null;ch.revision=m.revision;status()}).catch(e=>console.error('exact dev:',e))};
@@ -1046,7 +1046,7 @@ for(;;){
     if (!next.tokens || design !== base) return { fallback: true };
     // The committed design's rows, those it patched set again.
     const rows = new Map(next.tokens.map((t) => [t.name, t]));
-    return scrubShow({ ...base, digest: next.digest, structure: next.structure ?? base.structure, tokens: base.tokens.map((t) => rows.get(t.name) ?? t) }, frame);
+    return scrubShow({ ...base, digest: next.digest, structure: next.structure ?? base.structure, tokens: base.tokens.map((t) => rows.get(t.name) ?? t) }, frame, { patch: values.map(({ name, css }) => [name, css]) });
   }
   /** The patched frame shown, against its texts compiled whole: `{mismatch}`
    * naming the first token that differs. */
@@ -1060,7 +1060,7 @@ for(;;){
     const mismatch = i >= 0 ? `\`${next.tokens[i].name}\`: compiled ${JSON.stringify(next.tokens[i])}, patched ${JSON.stringify(shown.tokens[i])}`
       : next.tokens.length !== shown.tokens.length || next.digest !== shown.digest || next.shape !== shown.shape || next.structure !== shown.structure ? 'the designs differ' : null;
     if (mismatch) console.log(`scrub: the patched frame is not its compile (${mismatch}); the pages get the committed design back`);
-    return mismatch ? { mismatch } : {};
+    return mismatch ? { mismatch } : frames.verify(texts[file]);
   }
   /** Preview a scrub's texts: a batch from the design the pages run, as a
    * value-only edit sends one, and its snapshot for a page that asks. */
@@ -1070,11 +1070,11 @@ for(;;){
     if (!(file in texts)) { scrubRestore(frame); return {}; }
     const next = await scrubDesign(texts[file]);
     if (next.error) return next;
-    return scrubShow(next, frame);
+    return scrubShow(next, frame, { text: texts[file] });
   }
   /** Show a scrub's design `next` on the pages, its batch and snapshot
    * marked `frame` (*1.10*). */
-  function scrubShow(next, frame) {
+  async function scrubShow(next, frame, request) {
     const from = scrubbed ?? design;
     if (!from || from.shape !== next.shape || from.tokens.length !== next.tokens.length
       || next.tokens.some((t, i) => t.name !== from.tokens[i].name || String(t.accent) !== String(from.tokens[i].accent))) return { error: 'it changes the design\'s shape: a rebuild applies on release' };
@@ -1085,6 +1085,8 @@ for(;;){
     // A token the page writes inline has no property to preview through.
     const inline = next.tokens.find((t, i) => t.inline && !same(t, from.tokens[i]));
     if (inline) return { error: `\`${inline.name}\` is written inline on this page (${inline.writer ?? 'a font weight, an SVG attribute'}): a rebuild applies on release` };
+    const previews = await frames.preview(request, frame, () => (scrubbed ?? design) === from);
+    if (previews.error || previews.fallback) return previews;
     if (!scrubbed) aside = snapshot;
     // A new preview is no released scrub's.
     scrubbed = next;
@@ -1101,11 +1103,15 @@ for(;;){
   /** Why a live proposal's texts would not apply in place on these pages
    * (dev-inline.mjs): the built reader only, so a proposal never waits on a
    * compile; with none yet, a rebuild is assumed. */
-  const inlineWhy = (texts) => inlineWhyOf({ texts, file: relative(app.dir, designPath(app.dir)), ready: toolReady,
-    read: (text) => scrubDesign(text, { readOnly: true }), pages: () => scrubbed ?? design, same });
+  const inlineWhy = async texts => {
+    const file = relative(app.dir, designPath(app.dir));
+    const why = await inlineWhyOf({ texts, file, ready: toolReady, read: text => scrubDesign(text, { readOnly: true }), pages: () => scrubbed ?? design, same });
+    return why ?? (file in texts ? frames.inlineWhy(texts[file]) : null);
+  };
   /** A scrub ended without its write: the pages back on the committed design. */
   function scrubRestore(frame) {
     released = false;
+    frames.restore(frame);
     if (!scrubbed || !design) return;
     const from = scrubbed;
     scrubbed = null;
@@ -1125,30 +1131,7 @@ for(;;){
   const installer = localInstaller({ app: () => app, origins, port, gate, listener: { host, port }, launchGate });
   // An agent attached to a tab a person has open here, once they allow it there (LLP 1012.000 D2).
   const attach = devAttach({ port, root });
-  // The source maps of the plans the resident loop serves the natives
-  // (LLP 1122 T2c), by plan digest. The child says each plan it publishes,
-  // and its map's card, on a pipe this loop gave it for that alone (fd 3:
-  // nothing a request makes is written there); this loop fetches the bytes
-  // from the child and keeps them only when they match that card. No
-  // request path takes a map in, and a process that took the child's port
-  // could not make bytes match a card it did not write. The plan said last
-  // is the running one; a pull overtaken by a later card of its plan is
-  // dropped; the 8 plans said last are kept.
-  const residentMaps = new Map(), saidAt = new Map();
-  let residentPlan = null, said = 0;
-  const residentMap = async (internal, card) => {
-    const n = ++said;
-    residentPlan = card.plan;
-    saidAt.delete(card.plan); saidAt.set(card.plan, n);
-    for (const plan of [...saidAt.keys()].slice(0, Math.max(0, saidAt.size - 8))) { saidAt.delete(plan); residentMaps.delete(plan); }
-    if (!card.map) { residentMaps.delete(card.plan); return; }
-    // (A card can come before the child listens: asked again, a while, while it is still the latest.)
-    for (let tries = 0; tries < 20 && saidAt.get(card.plan) === n; tries++) {
-      const got = await pullMap(internal, { plan: card.plan, ...card.map }, `127.0.0.1:${port}`);
-      if (got) { if (saidAt.get(card.plan) === n) residentMaps.set(got.digest, got.bytes); return; }
-      await new Promise((ok) => setTimeout(ok, 250));
-    }
-  };
+  const residentMaps = residentPlanMaps(port);
   // Serialize lock and listener handover across deletion, recreation and manifest changes.
   function mountForma(path) {
     if (wanted === path && !forma?.down) return changing;
@@ -1162,7 +1145,7 @@ for(;;){
         await Promise.all([previous.close(), oldDoors?.close()]);
       }
       if (wanted && !stopping) {
-        forma = formaServer({ appDir: app.dir, waitLock: true, waiterLost: () => { if (!stopping && forma?.down) void mountForma(designPath(app.dir)).catch(failedMount); }, pairTtlMs, remote: () => doors?.list() ?? [], live: true, page: `http://127.0.0.1:${port}`, sourceMap: (digest) => (digest ? residentMaps.get(digest) ?? pageMaps.get(digest) ?? gallery.map(digest) : residentMaps.get(residentPlan)) ?? null, designServed: () => (scrubbed ? null : served), scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: (frame) => { released = scrubbed != null && (frame ?? true); }, inline: inlineWhy } });
+        forma = formaServer({ appDir: app.dir, waitLock: true, waiterLost: () => { if (!stopping && forma?.down) void mountForma(designPath(app.dir)).catch(failedMount); }, pairTtlMs, remote: () => doors?.list() ?? [], live: true, page: `http://127.0.0.1:${port}`, sourceMap: (digest) => (digest ? residentMaps.map(digest) ?? pageMaps.get(digest) ?? gallery.map(digest) : residentMaps.map()) ?? null, designServed: () => (scrubbed ? null : served), scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: (frame) => { frames.released(frame); released = scrubbed != null && (frame ?? true); }, inline: inlineWhy } });
         mounted = wanted;
         forma.channel.greet(() => snapshot && notice(snapshot));
         doors = projectCanvas(forma, remoteAsked, `http://127.0.0.1:${port}`, listening, listening ? e => console.error(`Forma remote: ${e.message}`) : failedMount);
@@ -1233,7 +1216,7 @@ for(;;){
     }
     if (url.pathname === '/__dev/page') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
-      const opened = forma?.channel.open(frame => res.write(`data: ${JSON.stringify(frame)}\n\n`)), doc = attach.stream(req, frame => res.write(`data: ${JSON.stringify(frame)}\n\n`));
+      const opened = forma?.channel.open(frame => res.write(`data: ${JSON.stringify(frame)}\n\n`), { map: digest => pageMaps.get(digest) }), doc = attach.stream(req, frame => res.write(`data: ${JSON.stringify(frame)}\n\n`));
       // Ended once, by whichever close comes first: under Bun a request on a socket handed to the server
       // (emit('connection'): the TLS door's, an old [::1] door's) never fires req 'close'; its res 'close' does.
       let done = false;
@@ -1345,7 +1328,7 @@ for(;;){
         let cards = '';
         residentChild.stdio[3].on('data', (d) => {
           cards += d; const lines = cards.split('\n'); cards = lines.pop();
-          for (const l of lines) { const card = mapCard(l); if (card) void residentMap(internal, card); }
+          for (const l of lines) { const card = mapCard(l); if (card) void residentMaps.keep(internal, card); }
         });
         let buf = '';
         residentChild.stdout.on('data', (d) => {
