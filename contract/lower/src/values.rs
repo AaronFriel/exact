@@ -981,6 +981,7 @@ pub(crate) fn aria_words(prop: PropId) -> Option<(&'static str, &'static [&'stat
             &["true", "false", "page", "step", "location", "date", "time"],
         ),
         PropId::AccessibilitySort => ("aria-sort", &["ascending", "descending", "none", "other"]),
+        PropId::AccessibilityAutocomplete => ("aria-autocomplete", &["none", "inline", "list", "both"]),
         _ => return None,
     })
 }

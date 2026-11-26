@@ -1849,6 +1849,18 @@
       "name": "tipDone",
       "kind": "bool",
       "_comment": "@ref LLP 1035.006.000 D2: the person has done what the tip teaches. The platform retires the tip for good (TipKit's `invalidate(reason: .actionPerformed)`); it stays retired when this is false again or the app relaunches."
+    },
+    {
+      "id": 309,
+      "name": "accessibilityActiveDescendant",
+      "kind": "str",
+      "_comment": "ARIA `aria-activedescendant`: the HTML id of the descendant that holds the widget's virtual focus, as a combobox's text field names its highlighted option while real focus stays on the field. The DOM attribute on the web; AppKit and UIKit have no such property on a view, so the Apple hosts expose none."
+    },
+    {
+      "id": 310,
+      "name": "accessibilityAutocomplete",
+      "kind": "str",
+      "_comment": "ARIA `aria-autocomplete` on a text field: `none`, `inline`, `list` or `both`, what the widget does to complete input (WAI-ARIA 1.2 §6.6). The DOM attribute on the web; AppKit and UIKit have no such property on a view, so the Apple hosts expose none."
     }
   ],
   "_enums": "Wire discriminant is the 0-based index. An unknown discriminant is a typed decode rejection, never a fallback. refused: keywords the wire carries and the compiler refuses an author, because no presenter builds them (LLP 1043.000 §3 D1); `contract vocab` lists the others. No wire reads it, so it is outside the digest.",

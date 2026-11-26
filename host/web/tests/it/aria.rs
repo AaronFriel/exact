@@ -47,6 +47,30 @@ fn form_states_and_haspopup_are_the_html_attributes() {
     }
 }
 
+/// A combobox's field carries its virtual focus and completion mode as the
+/// DOM's attributes.
+#[test]
+fn combobox_attributes_are_the_html_attributes() {
+    let plan = contract::compile(
+        "component App\n  view\n    column\n      input role=\"combobox\" aria-activedescendant=\"opt-2\" aria-autocomplete=\"both\" aria-controls=\"list\" aria-expanded=true testId=\"box\"\n",
+    )
+    .unwrap();
+    let (_host, batch) = Host::boot(
+        &plan.encode(),
+        caltrain_data::Caltrain,
+        Default::default(),
+        "/",
+    )
+    .unwrap();
+    for attr in [
+        "\"aria-activedescendant\":\"opt-2\"",
+        "\"aria-autocomplete\":\"both\"",
+        "\"aria-controls\":\"list\"",
+    ] {
+        assert!(batch.contains(attr), "{attr} in {batch}");
+    }
+}
+
 /// LLP 1116 D8: a drawn range's value is ARIA's own attributes, numbers as
 /// HTML writes them.
 #[test]

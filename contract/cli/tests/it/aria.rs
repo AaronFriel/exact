@@ -394,3 +394,34 @@ fn a_button_in_a_button_is_named_and_presses_alone() {
         (Some(&Value::Number(0.0)), Some(&Value::Number(1.0)))
     );
 }
+
+/// A combobox's text field names its highlighted option (`aria-activedescendant`)
+/// and how it completes (`aria-autocomplete`), both from state, beside
+/// `aria-controls`, `aria-expanded` and `aria-haspopup`.
+#[test]
+fn combobox_field_names_its_active_option_and_completion() {
+    let mut r = boot(
+        "component App\n  state active = \"opt-0\"\n  action next\n    active = \"opt-1\"\n  view\n    column\n      input role=\"combobox\" aria-activedescendant=active aria-autocomplete=\"list\" aria-controls=\"list\" aria-expanded=true aria-haspopup=\"listbox\" testId=\"box\"\n      button press=next testId=\"next\"\n        text \"Next\"\n",
+    );
+    assert_eq!(
+        prop(&r, "box", PropId::AccessibilityActiveDescendant).as_deref(),
+        Some("opt-0")
+    );
+    assert_eq!(
+        prop(&r, "box", PropId::AccessibilityAutocomplete).as_deref(),
+        Some("list")
+    );
+    let next = view_of(&r, "next");
+    r.dispatch(next, Event::Press).unwrap();
+    assert_eq!(
+        prop(&r, "box", PropId::AccessibilityActiveDescendant).as_deref(),
+        Some("opt-1")
+    );
+    let e = contract::compile("component App\n  view\n    input aria-autocomplete=\"words\"\n")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        e.contains("`aria-autocomplete` takes \"none\", \"inline\", \"list\" or \"both\""),
+        "{e}"
+    );
+}

@@ -783,6 +783,10 @@ pub fn attr(name: &str) -> Option<AttrTarget> {
         "tabindex" => AttrTarget::Prop(p("tabIndex")),
         "aria-required" => AttrTarget::Prop(p("accessibilityRequired")),
         "aria-haspopup" => AttrTarget::Prop(p("accessibilityHasPopup")),
+        // A combobox: the field names its highlighted option (`aria-activedescendant`, an id)
+        // and how it completes (`aria-autocomplete`), beside `aria-controls`, `aria-expanded` and `aria-haspopup`.
+        "aria-activedescendant" => AttrTarget::Prop(p("accessibilityActiveDescendant")),
+        "aria-autocomplete" => AttrTarget::Prop(p("accessibilityAutocomplete")),
         "aria-current" => AttrTarget::Prop(p("accessibilityCurrent")), // Depot: a nav link's page
         "aria-sort" => AttrTarget::Prop(p("accessibilitySort")),
         // @ref LLP 1153 D7 — a table cell's, held to its tag by `tables::check`.

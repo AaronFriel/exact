@@ -1025,6 +1025,8 @@ pub fn props_of(node: &NodeFacts<'_>) -> SortedMap<String, String> {
             PropId::TabIndex => "tabindex",
             PropId::AccessibilityRequired => "aria-required",
             PropId::AccessibilityHasPopup => "aria-haspopup",
+            PropId::AccessibilityActiveDescendant => "aria-activedescendant",
+            PropId::AccessibilityAutocomplete => "aria-autocomplete",
             PropId::AccessibilityCurrent => "aria-current",
             PropId::AccessibilitySort => "aria-sort",
             // @ref LLP 1153 D7 — a table cell's own attributes.
