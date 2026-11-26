@@ -1251,6 +1251,20 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
 
 ## GPU surfaces
 
+- **Moving many positioned views with a camera is expensive on macOS.** On an
+  M5 Max, the counter-only scene averaged 4.61 million retired instructions per
+  display-link step across two runs. Adding 100 stationary, absolutely positioned labels with `font-size=9`
+  brought that to 6.35 million. Changing their `left` each step used 84.43 million.
+  After subtracting the counter-only scene, each label averaged about
+  17,000 instructions per step standing still and 798,000 moving.
+  Moving an already mounted label cost about 781,000 extra instructions. The Apple
+  host sends an unchanged paragraph before the label’s frame update. AppKit can
+  also redraw an unclipped layer-backed view when only its origin changes.
+  For plain columns with `width=20 height=20`, each averaged about 4,000 instructions
+  per step standing, 220,000 moving with `left` and 210,000 moving with `translate`.
+  For marks that follow a camera in bulk, draw
+  them in a GPU surface or let the surface place each canvas child (`ChildrenMode::Each`).
+  (macOS 27.0.1, #1762, [measurement procedure](testing.md#measuring-to-optimize-tests), LLP 1014 D5.)
 - A GPU board and grid can bind their own tokens with `surface=board(color("surface.board"), color("board.dot"))`. A transparent clear over a token-painted view also works for the board.
 
 - **A record's named fields reach the wrong surface arguments.** Records cross
