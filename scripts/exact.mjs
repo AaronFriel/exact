@@ -74,7 +74,6 @@ const { backendOrigin, literalBackendOrigin } = await import('../js/bake/src/typ
 // Snapback's client (snapback4/) is optional: a checkout without it builds every app that does not mount it.
 const snapbackDevice = existsSync(new URL('../snapback4/web/device-build.mjs', import.meta.url)) ? await import('../snapback4/web/device-build.mjs') : null;
 const { generate: gameVocabulary } = await import('../game/vocab.mjs');
-
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 /** The app's assembled bundle in this repo — `host/apple/build.mjs --bundle`'s one stable output. */
 export const bundleOf = (app) => appleArtifacts(app).bundle;
@@ -1492,7 +1491,6 @@ async function main(argv) {
   if (verb === 'install') return install(app, build(app));
   return uninstall(app);
 }
-
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { await main(process.argv.slice(2)); }
   catch (e) { console.error(`exact: ${e.message}`); process.exit(1); }

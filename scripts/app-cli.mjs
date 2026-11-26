@@ -7,6 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realp
 import { constants, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { noteBunLoaded } from '../js/bake/src/__exact_env.mjs';
+import './paths.mjs';
 
 /** The hosts a `test`, `agent` or `verify` may name first. */
 const APP_HOSTS = ['web', 'ios', 'macos', 'mac', 'linux', 'windows', 'android'];

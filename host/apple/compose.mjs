@@ -597,13 +597,18 @@ function buildSwiftDependencies({ app, graph, declarations, traitChecks, compile
     swiftRun([...args, '--print-manifest-job-graph'], dir);
     const plan = JSON.parse(readFileSync(resolve(bin, 'description.json'), 'utf8'));
     const inputs = new Set(Object.values(plan.swiftCommands).find(c => c.moduleName === name)?.inputs?.map(input => input.name));
-    const staticLibraries = Object.values(plan.copyCommands ?? {}).filter(copy => copy.outputs.some(output => inputs.has(output.name)))
-      .flatMap(copy => copy.inputs.map(input => input.name)).flatMap(path => path.endsWith('.framework')
-        ? [resolve(path, basename(path, '.framework'))] : path.endsWith('.a') ? [path] : [])
-      .filter(path => machOType(path) !== 6);
+    const binary = path => path.endsWith('.framework') ? resolve(path, basename(path, '.framework')) : path.endsWith('.a') ? path : null;
+    const staticLibraries = Object.values(plan.copyCommands ?? {}).flatMap(copy => copy.outputs.flatMap(({ name }) => {
+      const output = binary(name);
+      if (!output || !inputs.has(name)) return [];
+      // The plan is available before SwiftPM has copied the archive.
+      const original = copy.inputs?.find(input => input.kind !== 'virtual' && basename(input.name) === basename(name));
+      const source = original && binary(original.name);
+      return source && machOType(source) !== 6 ? [output] : [];
+    }));
     // Force-load every member so consumers can link symbols the shared product leaves unreferenced.
-    // Pass -force_load to clang so it precedes SwiftPM's -framework of its copy.
-    // ld64.lld reports duplicate symbols when a later -force_load loads members already taken from the copy.
+    // Pass -force_load to clang before SwiftPM's inputs and use the same archive path
+    // so ld64.lld loads each member once, including when -ObjC is present.
     if (staticLibraries.length) writeFileSync(resolve(dir, 'Package.swift'), swiftManifest(graph, name, declarations, compile,
       [...link, ...[...new Set(staticLibraries)].flatMap(path => ['-Xclang-linker', '-force_load', '-Xclang-linker', path])]));
     swiftRun([...args, ...swiftResourceOverlay(bin)], dir);
