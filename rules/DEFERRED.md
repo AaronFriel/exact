@@ -2333,6 +2333,10 @@ native build needs Rust.
 **Admitted (Charlie, 2026-10-14; LLP 1122 §9 Q2 and LLP 1121 §9 Q3), development
 builds only:** the Forma protocol server (`forma/1`, LLP 1121 D13) and the design tool
 (LLP 1122). The tool is a web JS-target app, and every client edits through the protocol.
+**AR3 (panel, 2026-11-25)** admits `remove-axis` on that server. An axis or value may
+be removed when no surviving `when` uses it. Unsetting conditions and removing the axis
+is one undoable transaction (LLP 1121 D13 and LLP 1122 §10).
+
 Each host's development build gains an **inspect mode** and a build channel: four commands
 down (inspect, outline, hold, pin) and three reports up (status, a selection,
 unsupported); the tool never drives an app. Release builds carry none of it: no endpoint,

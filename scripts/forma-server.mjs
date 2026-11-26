@@ -1494,7 +1494,7 @@ const editKey = (file, e) => `${file}\0${e.what}\0${e.name}${e.what === 'state' 
 const revertKey = o => /^(un)?set-state$/.test(o.op) ? editKey(o.file, { what: 'state', name: o.style, state: o.state, row: o.row, when: [] })
   : o.op === 'set-row' ? editKey(o.file, { what: 'row', name: o.style, row: o.row, when: [] }) : editKey(o.file, {
   what: o.op === 'set-dial' ? 'dial' : /axis/.test(o.op) ? 'axis' : /^(un)?set-param$/.test(o.op) ? 'param' : 'token',
-  name: o.op === 'add-axis' ? o.name : o.axis ?? o.name,
+  name: /axis-value$/.test(o.op) ? o.axis : o.name,
   // An axis's values each their own item, as a token's `when`s are.
   when: ['set-token', 'unset-token-when', 'set-param', 'unset-param'].includes(o.op) ? o.when : /axis-value/.test(o.op) ? [{ axis: o.axis, value: o.value }] : [],
 });

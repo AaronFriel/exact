@@ -437,6 +437,11 @@ test('a second wire for the app, whose lock is the first\'s, answers 503', async
   expect(subscribed.body.error.message).toContain('another forma server');
   const hello = await ask(second, gate, { path: '/__forma', method: 'POST', headers: local, body: '{"method":"hello"}' });
   expect(hello.status).toBe(503);
+  const remove = await ask(second, gate, { path: '/__forma', method: 'POST', headers: local, body: JSON.stringify({
+    method: 'transaction', client: 'canvas', files: { 'app.forma': disk('app.forma') }, ops: [{ op: 'remove-axis', name: 'tone' }],
+  }) });
+  expect(remove.status).toBe(503);
+  expect(remove.body.error.message).toContain('another forma server');
   // A long poll gets the `down` event once, then is told so, never
   // answered empty to ask again at once.
   const first = await ask(second, gate, { path: '/__forma/events', method: 'POST', headers: local, body: '{"after":0}' });
@@ -781,7 +786,7 @@ for (const [loop, flags] of [['the JS loop', []]]) {
     const { base, stop } = await devLoop(flags);
     try {
       const hello = await helloOf(base);
-      expect(hello.protocol).toBe('forma/1.18');
+      expect(hello.protocol).toBe('forma/1.19');
       expect(Object.keys(hello.files)).toContain('app.forma');
       // The loop's own origin, which the design tool frames, and the page's
       // header that lets only the tool (and itself) frame it.

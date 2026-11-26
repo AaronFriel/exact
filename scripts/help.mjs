@@ -516,7 +516,7 @@ bindings from the IR, generated and never committed (LLP 1121 D12): ts, forma.ts
 ColorToken union, each token's CSS per mode) and forma.css; rust, forma.rs, a
 Token<Color> constant a token (SURFACE_CARD), which session.forma().get resolves; swift,
 forma.swift, ExactFormaToken.surfaceCard; kotlin, FormaTokens.kt for Android native views.
-op takes the server's token and sends one request, or prints the change stream (subscribe).
+op uses the server's token. subscribe prints changes. A transaction can unset conditions and remove-axis.
 import css writes :root custom properties into the design, between markers a later
 import of it rewrites, naming each it refuses (LLP 1153 D6). import <kind> holds another
 system's theme on the server as proposals: the tokens as one, each role override apart.

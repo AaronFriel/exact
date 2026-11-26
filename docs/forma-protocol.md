@@ -1,7 +1,7 @@
 # The Forma protocol, `forma/1`
 
 The reference for the design server's wire (LLP 1121 D13), versioned with it. This page
-describes **`forma/1.18`**, the version `hello` reports. The design and the reasons are in LLP 1121
+describes **`forma/1.19`**, the version `hello` reports. The design and the reasons are in LLP 1121
 D13 and LLP 1122 D2, D9 and D10; what was built and how it differs from them is in each RFC's §10.
 The recipe is `docs/recipes/forma.md`. Each change to the wire changes this page in the same
 commit.
@@ -11,7 +11,7 @@ on macOS and Linux.
 
 ## Versions
 
-- `hello` reports the protocol (`"forma/1.18"`) and the IR's format number (`format`).
+- `hello` reports the protocol (`"forma/1.19"`) and the IR's format number (`format`).
 - **A minor version** adds requests or fields. A client ignores fields it doesn't know.
 - **No request carries a client's version.** A client checks `hello`'s `protocol` itself and stops
   on a major version it doesn't speak.
@@ -214,6 +214,7 @@ on macOS and Linux.
   so a reload or another client sees it; an `accept` with no `items` takes it, one naming an older `choiceAt` answers
   409 `{stale: true, choice, choiceBy, choiceAt}` (the check is optional), and `edit-held` carries it, refused alike
   when it names an older `choiceAt` (see Held proposals).
+- `forma/1.19` adds `remove-axis` and the optional `before` and `comment` fields on `add-axis`.
 
 ## Where it runs
 
@@ -836,7 +837,8 @@ design (a `set-state` or `unset-state`: the Contract source that declares its `s
 | `add-token` | `name`, `kind?`, `value`, `meta?: ["key=value"]`, `whens?: [{when, value, comment?}]`, `comment?`, `before?` | structure |
 | `rename-token` | `from`, `to` | structure |
 | `remove-token` | `name` | structure |
-| `add-axis` | `name`, `values`, `under?: "scheme=dark"` | structure |
+| `add-axis` | `name`, `values`, `under?: "scheme=dark"`, `before?`, `comment?` | structure |
+| `remove-axis` (*1.19*) | `name` | structure |
 | `add-axis-value` | `axis`, `value`, `before?` | structure |
 | `remove-axis-value` | `axis`, `value` | structure |
 | `set-param` (*1.10*) | `name`, `when?: [{axis, value}]`, `value` | the app's value of a component's param (LLP 1121 D15): its line in the design's `params` block, or one `when` line of it |
@@ -876,7 +878,18 @@ design (a `set-state` or `unset-state`: the Contract source that declares its `s
     tokens each naming the next more than once, or a sum of many, is refused where it passes;
   - (*1.17*) a chain of tokens naming one another, with the functions their values nest, is at most 512 deep (`forma-reference-depth`), past
     the importers' 256 links;
-  - naming a dial, token, `when` or axis value the design doesn't have is refused.
+  - naming a dial, token, `when`, axis or axis value the design doesn't have is refused.
+  - `remove-axis` and `remove-axis-value` report each surviving `when` that uses the
+    removed axis or value, with its file, line, owner and full condition. This includes
+    parameter overrides and inherited package tokens. In the app, use `unset-token-when`
+    or `unset-param` with `when` in the same transaction. For a package condition,
+    edit the package declaration or override the token in the app. A condition added by
+    the transaction cites its owner on disk, or its proposed line for a new owner. One `undo`
+    restores its original bytes. To remove the last value, use `remove-axis`.
+    When replacing an axis and renaming a token in one transaction, unset the old axis's conditions before the rename.
+    An axis's only `under` is the host trait `scheme=dark`. Dials have scalar defaults,
+    component declarations have unconditional defaults, and exports name tokens. Icons
+    accept no conditional values.
 - **A param's value** (*1.10*): `name` is a param's full name (`post.contract#PostButton.radius`)
   or its short one (`PostButton.radius`); a name no param of the app answers, or a short name two
   components share (whichever has the param, or neither), is refused (`forma-param-unknown`,
@@ -1249,10 +1262,12 @@ list is unchanged: it keeps its own.
     block's header);
   - the `.contract` file is not one of the app's own Contract sources now;
   - it added or removed a dial;
-  - it added an axis, reordered an axis's values, or changed an axis's `under`;
+  - it reordered an axis's values or changed an axis's `under`;
   - it changed a kind, a range, metadata, the design's name, exports, icons or a `component` block.
 
-  A removed axis is restored with `add-axis`.
+  A removed axis is restored with `add-axis`, before the next surviving axis in its
+  original order, with its ordered values, `under` and trailing comment. An axis the
+  commit added is reverted with `remove-axis` if its declaration still matches.
 - **Other refusals:**
   - everything is undone already: 409 with `already`;
   - a commit that touched no design file, or only a Contract source's code: 400;

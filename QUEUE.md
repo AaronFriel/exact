@@ -24,6 +24,20 @@
 - If Mac canvas apps need fixed-size local PDF previews, measure PDFKit's scaling and layout separately. `apple.magnification` controls WebKit-backed frames (#1763).
 - Run `host/apple/inspect-gate.test.mjs` on a busy Mac. Both Swift package inspection tests exceeded Bun’s default five-second timeout and passed with a longer timeout, taking 9.8 and 15.4 seconds.
 - Check the public API for resolving the Screenshot app's custom destination. On macOS, set a custom destination in Screenshot and open a picker with `startIn="screenshots"`. LLP 1173's resolver reads the Screenshot app's `location-screenshot` preference.
+- Check Forma token renames against the final modes. Remove an eight-value axis, add a nine-value axis, rename a token, then unset its old condition. The rename checks 72 tuples against a limit of 64, although unsetting first succeeds with nine.
+- Remove a Forma axis used by a token with a 1,020-byte name. The 1,024-byte diagnostic limit cuts off the name and its condition. Give the client their complete identities.
+- Add a Forma axis in Git, move its declaration past another axis in a later commit, then ask to revert the addition. The position check refuses to remove the otherwise identical axis.
+- Remove a referenced axis's only value, such as `one` in `when other=one`. Forma directs the client to `remove-axis`; include the condition in that reply too.
+- Set an old Forma branch to an unknown token, remove its axis, rename its owner, then unset the branch. The rename reports the unknown token alone. Moving the unset before the rename succeeds.
+- Omit the final unset in the eight-by-nine Forma rename above. The rename reports its limit before the axis removal can identify the surviving condition on the renamed token.
+- Parse a Forma token with a 1 MiB trailing comment. The lexer copies that comment into a line even though only axis declarations retain it for history.
+- In Forma, pin a connected build to `tone=b`, unset the last condition using that value, then remove the value. The build's last pin still names `tone=b` after the write succeeds.
+- Send a Forma transaction that removes a referenced non-last axis value and edits a missing design file. The response lists the condition and omits the missing file.
+- Run `two frame clients pin independently` in `host/web-js/dev-gallery.test.mjs`. After both pins arrive, a hand edit of `ink` can time out waiting 30 seconds for the log message “the batch stands.”
+- Run the design-tool test `every control on the dials panel`. The canned `MapCard.zoom` token is `param.f25020289.MapCard.zoom`, while the server returns `param.fd163e9a3.MapCard.zoom`.
+- Run the Forma server test `no web build ships inspect`. Its source-text assertion fails because the web builder reads `inspect-dev.js` to identify CSS rules in use. Check the shipped output.
+- Change only an axis's trailing comment in a Git commit and ask Forma to revert it. History currently sees no design edit.
+- In Forma, commit the deletion of `ink = #112233  // artwork` and revert the commit. The proposed `add-token` loses the trailing comment.
 - Export `qu"oted.contract` from a package manifest and resolve its `Card.inset` param in the Forma server. The quote in the path makes the name substitution produce invalid JSON and the reply exposes the internal `param.f…` name. Substitute names in JSON string values with proper escaping.
 - In a Forma server for an app importing a package and using `color="var(--ink)"`, `describe`, rename only the `ink` token to `paper` and `describe` again. The warm reply still lists the package. A fresh server drops it after the app fails to load. Include design facts that affect validation in the params cache key.
 - Pass `var(--missing, 1px)` to a component argument consumed by `width`. The build succeeds silently. Writing the same value directly on `width` emits `lower-var-undeclared`. Carry the warning back to the argument.
