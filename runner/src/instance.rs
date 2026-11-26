@@ -91,7 +91,7 @@ type CreateList = fn(
     NodesId,
     ViewId,
     &[Frame],
-    &mut Vec<Child>,
+    &mut Children,
 ) -> Result<Option<Box<dyn rare::ListState>>, InstanceError>;
 type UpdateList = fn(
     &mut dyn rare::ListState,
@@ -487,6 +487,8 @@ pub struct Update<'a> {
     scratch: vm::Scratch,
     /// Empty lexical-frame buffers, reused within this update only.
     frame_buffers: Vec<Vec<Frame>>,
+    /// Children waiting for their shared array. A nested build uses a suffix.
+    child_buffer: Vec<Child>,
     /// Resolved CSS alignment insets, top/right/bottom/left (LLP 1010 §6.9).
     pub scroll_padding: Option<&'a dyn Fn(ViewId, [f64; 2]) -> [f64; 4]>,
     /// Resolved CSS target outsets, top/right/bottom/left.
@@ -532,6 +534,7 @@ impl<'a> Update<'a> {
             reuse: false,
             scratch: vm::Scratch::default(),
             frame_buffers: Vec::new(),
+            child_buffer: Vec::new(),
             list_seeds: None,
             scroll_padding: None,
             scroll_margin: None,
@@ -726,16 +729,20 @@ fn realize(
     let children = u.sites.children(parent, arm);
     let mut out = Vec::new();
     for &(_, site) in children {
-        let child = match site {
-            Site::Node(id) => Child::Node(NodeInst::create(u, id, frames)?),
-            Site::Region(id) => Child::Region(RegionInst::create(u, id, frames)?),
-        };
+        let child = realize_child(u, site, frames)?;
         if out.is_empty() {
             out.reserve_exact(children.len());
         }
         out.push(child);
     }
     Ok(out)
+}
+
+fn realize_child(u: &mut Update<'_>, site: Site, frames: &[Frame]) -> Result<Child, InstanceError> {
+    match site {
+        Site::Node(id) => NodeInst::create(u, id, frames).map(Child::Node),
+        Site::Region(id) => RegionInst::create(u, id, frames).map(Child::Region),
+    }
 }
 
 fn roots_of(children: &[Child]) -> Vec<ViewId> {
@@ -836,7 +843,7 @@ impl NodeInst {
             if !tabs::wait(u, node, view) {
                 inst.create_list(u, frames)?;
                 if inst.list().is_none() {
-                    inst.children = realize(u, Some(node), row.arm, frames)?.into();
+                    inst.children = Children::realize(u, node, row.arm, frames)?;
                     inst.emit_children(u);
                 }
             }
