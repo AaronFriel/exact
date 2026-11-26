@@ -137,6 +137,16 @@ fn scrolls_down(node: &exact_kernel::NodeRef<'_>) -> bool {
     }
 }
 
+/// Whether an element above `node` is `disabled`: a header, or a box in
+/// it, that holds the item disables it as it disables the item's press in
+/// the page.
+fn disabled_above(kernel: &exact_kernel::Kernel, node: &exact_kernel::NodeRef<'_>) -> bool {
+    std::iter::successors(node.parent.and_then(|id| kernel.node(id)), |n| {
+        n.parent.and_then(|id| kernel.node(id))
+    })
+    .any(|n| n.props.bool(PropId::Disabled) == Some(true))
+}
+
 impl<D: DataSource> Presenter<D> {
     /// A shell shows this presenter's bars from now on, drawn through
     /// `painter` (LLP 1115.001 D11): a route's header and the root's
@@ -381,8 +391,12 @@ impl<D: DataSource> Presenter<D> {
             title: row.title,
             direction: row.direction,
             symbol: row.symbol,
-            // An inert button is no enabled item, as an inert tab is none.
-            enabled: row.enabled && !self.host.authored_visibility(id).1,
+            // An inert button is no enabled item, as an inert tab is none,
+            // and nor is one under a disabled header or box: a press on it
+            // in the page reaches nothing (`press_enabled`).
+            enabled: row.enabled
+                && !self.host.authored_visibility(id).1
+                && !disabled_above(kernel, &node),
             destructive: row.destructive,
             tint,
         })
