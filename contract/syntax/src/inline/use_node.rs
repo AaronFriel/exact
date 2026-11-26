@@ -103,7 +103,7 @@ pub(super) fn inline_use(
         let Some(a) = args.iter().find(|a| a.name == p.name) else {
             child_subst.insert(p.name.clone(), absent(*span));
             continue;
-        };
+        }
         // The argument is an expression in the parent's scope: substitute the parent's own substitutions first.
         let value = subst_expr(&a.value, subst);
         // A `none` or `[]` in it is typed by the prop's declaration,
@@ -380,8 +380,18 @@ pub(super) fn inline_use(
         );
     }
     // The fill is the use site's: inlined in this scope, at each
+    let (named, children) = split_fills(children);
+    for (fill, _) in &named {
+        if !c.slots.contains(fill) {
+            ctx.refuse(
+                "syntax-no-slot",
+                format!("`{name}` declares no `slot \"{fill}\"`, so nothing can be filled under it"),
+                *span,
+            );
+        }
+    }
     // `children` node of the child's view that renders it.
-    let fill = (c.slot && !ctx.discarded_slots.contains(name)).then(|| {
+    let fill = ((c.slot || !c.slots.is_empty()) && !ctx.discarded_slots.contains(name)).then(|| {
         Rc::new(Fill {
             nodes: children.clone(),
             subst: subst.map().clone(),
@@ -392,6 +402,7 @@ pub(super) fn inline_use(
             path: ctx.path.clone(),
         })
     });
+            named: named.iter().cloned().collect(),
     // Rename only the view: declarations were lifted above.
     let renamed = rename_nodes(&c.view, &BTreeMap::new(), n, ctx.discarded_slots);
     let outer_fill = std::mem::replace(&mut ctx.fill, fill);
@@ -423,7 +434,7 @@ pub(super) fn discarded_slots(file: &crate::File) -> BTreeSet<String> {
     loop {
         let mut changed = false;
         for component in &file.components {
-            if component.slot
+            if (component.slot || !component.slots.is_empty())
                 && !rendered.contains(&component.name)
                 && renders_fill(&component.view, &rendered)
             {
@@ -439,7 +450,7 @@ pub(super) fn discarded_slots(file: &crate::File) -> BTreeSet<String> {
         .iter()
         // A slotless component renders no fill either: its children are an
         // error (`syntax-no-slot`), refused before they are copied.
-        .filter(|component| !component.slot || !rendered.contains(&component.name))
+        .filter(|component| !(component.slot || !component.slots.is_empty()) || !rendered.contains(&component.name))
         .map(|component| component.name.clone())
         .collect()
 }
@@ -497,7 +508,7 @@ fn exceeds_site_budget(
             // fill only when the callee renders it, including forwarded slots.
             Node::Use { name, children, .. } => {
                 if let Some(component) = file.components.iter().find(|c| &c.name == name) {
-                    if component.slot && !discarded_slots.contains(name) {
+                    if (component.slot || !component.slots.is_empty()) && !discarded_slots.contains(name) {
                         pending.extend(children.iter().map(|child| (child, depth)));
                     }
                 }

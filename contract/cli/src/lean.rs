@@ -1058,7 +1058,7 @@ impl Emitter<'_> {
             Node::Use { name, span, .. } => {
                 return Err(refuse(format!("`{name}` was not expanded"), *span))
             }
-            Node::Children { span } => return Err(refuse("`children` was not expanded", *span)),
+            Node::Children { span, .. } => return Err(refuse("`children` was not expanded", *span)),
         })
     }
 }

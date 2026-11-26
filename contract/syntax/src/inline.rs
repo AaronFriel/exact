@@ -248,6 +248,7 @@ fn expand_with_sites(
         injects: source.injects.clone(),
         provides: source.provides.clone(),
         slot: source.slot,
+        slots: source.slots.clone(),
         states: source.states.clone(),
         persist: source.persist.clone(),
         derives: source.derives.clone(),
@@ -436,6 +437,8 @@ struct Ctx<'a> {
 /// owned by the arm around `children`, not the arm around the use.
 struct Fill {
     nodes: Vec<Node>,
+    /// The nodes of each named fill, `slot "name"` under the use.
+    named: BTreeMap<String, Vec<Node>>,
     subst: BTreeMap<String, Expr>,
     value_only: BTreeSet<String>,
     provides: Vec<(String, Expr)>,
@@ -494,7 +497,7 @@ fn inline_nodes(
         ctx.site_depth += usize::from(is_site);
         match n {
             Node::Use { .. } => out.extend(use_node::inline_use(n, subst, ctx)?),
-            Node::Children { span } => match ctx.fill.clone() {
+            Node::Children { name, span } => match ctx.fill.clone() {
                 Some(fill) => {
                     // The use site's scope, providers, fill and instance;
                     // the region arms (and depth) are this node's.
@@ -504,7 +507,11 @@ fn inline_nodes(
                     let outer_path = std::mem::replace(&mut ctx.path, fill.path.clone());
                     let mut site =
                         Subst::new(&fill.subst, ctx.records).with_value_only(&fill.value_only);
-                    let nodes = inline_nodes(&fill.nodes, &mut site, ctx);
+                    let picked: &[Node] = match name {
+                        Some(name) => fill.named.get(name).map_or(&[], |v| v.as_slice()),
+                        None => &fill.nodes,
+                    };
+                    let nodes = inline_nodes(picked, &mut site, ctx);
                     ctx.provides = provides;
                     ctx.fill = outer_fill;
                     ctx.instance = outer_instance;
@@ -715,7 +722,7 @@ fn rename_nodes(
                 children: if discarded_slots.contains(name) {
                     children
                         .first()
-                        .map(|c| Node::Children { span: c.span() })
+                        .map(|c| Node::Children { name: None, span: c.span() })
                         .into_iter()
                         .collect()
                 } else {
@@ -723,7 +730,7 @@ fn rename_nodes(
                 },
                 span: *span,
             },
-            Node::Children { span } => Node::Children { span: *span },
+            Node::Children { name, span } => Node::Children { name: name.clone(), span: *span },
             Node::When {
                 tag,
                 cond,

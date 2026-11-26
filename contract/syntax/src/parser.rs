@@ -1167,7 +1167,13 @@ impl Parser {
             "children" => {
                 self.next();
                 self.newline()?;
-                Ok(Node::Children { span })
+                Ok(Node::Children { name, span })
+                let name = if let TokenKind::Str(name) = self.peek_kind().clone() {
+                    self.next();
+                    Some(name)
+                } else {
+                    None
+                };
             }
             "if" => self.node_if(span),
             "for" => self.node_for(span),

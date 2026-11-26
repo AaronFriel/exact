@@ -58,6 +58,31 @@ fn a_slot_takes_the_nodes_under_a_use_in_the_use_sites_scope() {
 }
 
 #[test]
+fn named_slots_fill_their_own_places() {
+    let r = boot("slot_named.contract");
+    let k = r.kernel();
+    let child_of = |parent: &str, child: &str| {
+        let parent = k.node_by_key(k.find_by_test_id(parent)[0]).unwrap();
+        let child = k.find_by_test_id(child)[0];
+        parent.children().contains(&k.node_by_key(child).unwrap().id)
+    };
+    assert!(child_of("head-Trains", "header"));
+    assert!(child_of("foot-Trains", "footer"));
+    assert!(child_of("card-Trains", "body"));
+    // A fill left out renders nothing.
+    for part in ["head-Bare", "foot-Bare"] {
+        let node = k.node_by_key(k.find_by_test_id(part)[0]).unwrap();
+        assert!(node.children().is_empty(), "{part}");
+    }
+    // A fill for an undeclared slot is refused.
+    let e = contract::compile(
+        "component App\n  view\n    Card()\n      slot \"nope\"\n        text \"x\"\ncomponent Card\n  slot\n  view\n    children\n",
+    )
+    .unwrap_err();
+    assert_eq!(e.id, "syntax-no-slot", "{e}");
+}
+
+#[test]
 fn a_provide_section_fills_an_inject_and_the_nearest_component_wins() {
     let r = boot("provide.contract");
     let k = r.kernel();

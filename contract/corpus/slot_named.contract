@@ -1,0 +1,28 @@
+// Accept fixture: named slots. `slot "name"` declares one, `children "name"`
+// places it, and `slot "name"` under a use fills it; the nodes under no
+// `slot` fill the unnamed one. A named fill left out renders nothing.
+component App
+  state n = 2
+  view
+    column testId="root"
+      Card(title="Trains")
+        slot "header"
+          text "Header" testId="header"
+        slot "footer"
+          text `${n} left` testId="footer"
+        text "Body" testId="body"
+      Card(title="Bare")
+
+component Card
+  props
+    title: string
+  slot
+  slot "header"
+  slot "footer"
+  view
+    column testId=`card-${title}`
+      row testId=`head-${title}`
+        children "header"
+      children
+      row testId=`foot-${title}`
+        children "footer"

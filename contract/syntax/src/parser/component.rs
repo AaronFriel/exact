@@ -32,6 +32,7 @@ impl Parser {
             injects: Vec::new(),
             provides: Vec::new(),
             slot: false,
+            slots: Vec::new(),
             states: Vec::new(),
             persist: Vec::new(),
             derives: Vec::new(),
@@ -77,7 +78,9 @@ impl Parser {
                             ),
                         );
                     }
-                    if once {
+                    // `slot "name"` may repeat; the unnamed `slot` and the rest are once-only.
+                    let named_slot = w == "slot" && matches!(self.peek2(), TokenKind::Str(_));
+                    if once && !named_slot {
                         let section_span = self.peek().span;
                         if let Some((_, first)) = sections.iter().find(|(name, _)| name == &w) {
                             return duplicate("component section", &w, section_span, *first);
@@ -141,8 +144,20 @@ impl Parser {
                         }
                         "slot" => {
                             self.next();
-                            self.newline()?;
-                            c.slot = true;
+                            if let TokenKind::Str(name) = self.peek_kind().clone() {
+                                self.next();
+                                self.newline()?;
+                                if c.slots.contains(&name) {
+                                    return self.err(
+                                        "syntax-slot-duplicate",
+                                        format!("slot \"{name}\" is declared twice"),
+                                    );
+                                }
+                                c.slots.push(name);
+                            } else {
+                                self.newline()?;
+                                c.slot = true;
+                            }
                         }
                         // @ref LLP 1091.002 D1 — the loader splices the
                         // file's members in where this line stands.

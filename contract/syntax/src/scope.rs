@@ -394,6 +394,7 @@ impl Rewriter<'_> {
             injects,
             provides,
             slot: _,
+            slots: _,
             states,
             persist: _,
             derives,

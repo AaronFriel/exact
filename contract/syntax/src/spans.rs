@@ -132,7 +132,7 @@ structs! {
     StyleDecl { name, attrs, span }
     ShapeDecl { name, fields, span }
     Field { name, ty, span }
-    Component { name, props, injects, provides, slot, states, persist, derives, resources,
+    Component { name, props, injects, provides, slot, slots, states, persist, derives, resources,
         mutations, actions, tools, tasks, sequences, view, params, anatomy, members, span }
     Tool { name, consequence, additive, idempotent, closed, description, action, returns, fails,
         available, span }
@@ -199,7 +199,7 @@ record_variants! {
 record_variants! {
     Node {
         Element { tag, positional, attrs, children, span, instance }, Use { name, args, children, span },
-        Children { span },
+        Children { name, span },
         When { tag, cond, then, otherwise, span }, Each { tag, var, index, list, key, body, span },
         Match { tag, subject, some, none, span },
     }

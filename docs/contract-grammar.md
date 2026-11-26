@@ -298,7 +298,7 @@ component     = "component" IDENT block(section) ;
 section       = "props" block(field)
               | "inject" block(field)
               | "provide" block(provider)
-              | "slot" NL
+              | "slot" [ STRING ] NL                 (* STRING names a slot; any number *)
               | "state" IDENT [ ":" type ] "=" expr [ "persist" ] NL
               | "derive" IDENT "=" expr NL
               | resource | mutation | action | task | sequence
@@ -361,8 +361,8 @@ such a declaration on a `use` line. The
 component's rules hold for its members wherever they are written: a child's
 members file declares no resource.
 
-There is one `props`, `inject`, `provide`, `slot`, and `view` section at most in
-a component. Only the root may own resources, mutations, and tasks, except that
+There is one `props`, `inject`, `provide`, unnamed `slot`, and `view` section at most in
+a component (`slot "name"` may repeat, once per name). Only the root may own resources, mutations, and tasks, except that
 any component may read the device's facts, `exactViewport()` and `exactPage()`
 with no arguments (`EmptyState` reads `accessibilityTextSize`): they open no
 request, and every instance reads the root's one answer. A task's
@@ -625,7 +625,7 @@ for           = "for" IDENT [ "," IDENT ] "in" expr "key" "=" expr block(node) ;
 view-match    = "match" expr block(view-case) ;
 view-case     = "case" "some" "(" IDENT ")" block(node)
               | "case" "none" block(node) ;
-children      = "children" NL ;
+children      = "children" [ STRING ] NL ;
 special-word  = "document" | "switch" | "multiple" ;
 ```
 
@@ -644,7 +644,7 @@ arguments; its name starts uppercase to distinguish it from an element.
 A `for` key is a string, number, or boolean, with unique stable values required
 for useful row identity. Its optional second binding is the numeric row index.
 `if` conditions are boolean and `match` subjects are options. Root regions are
-refused: wrap them in an element. `children` requires a declared slot.
+refused: wrap them in an element. `children` requires a declared slot; `children "name"` a declared `slot "name"`. A use fills a named slot with a `slot "name"` line and the nodes indented under it.
 
 ## Expressions and types
 

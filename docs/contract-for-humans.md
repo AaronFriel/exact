@@ -540,7 +540,30 @@ component Card
 
 Declare `slot` on the receiving component and place `children` in its view.
 The supplied children retain their caller's lexical scope and providers. This
-is one slot, not named slots or an arbitrary render-function API.
+is not an arbitrary render-function API.
+
+A component may also declare named slots, `slot "header"`, and place each with
+`children "header"`. A use fills a named slot with `slot "header"` and the nodes
+indented under it; the nodes under no `slot` fill the unnamed slot, if there is one.
+A named slot left unfilled renders nothing, and filling one the component does not
+declare is refused (`syntax-no-slot`).
+
+```contract
+component App
+  view
+    Card()
+      slot "title"
+        text "Trains"
+      text "Body"
+
+component Card
+  slot
+  slot "title"
+  view
+    column
+      children "title"
+      children
+```
 
 ## Resources and mutations
 

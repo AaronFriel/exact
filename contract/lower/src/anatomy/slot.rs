@@ -217,7 +217,7 @@ fn placement<'c>(c: &'c Component, out: &mut Vec<LowerError>) -> Option<Vec<&'c 
     ) {
         for n in nodes {
             match n {
-                Node::Children { span } => found.push(Found {
+                Node::Children { span, .. } => found.push(Found {
                     span: *span,
                     chain: path.clone(),
                     why,

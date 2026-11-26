@@ -456,6 +456,9 @@ pub struct Component {
     /// Whether the component declares `slot`: the nodes indented under a use
     /// of it fill its `children` node (LLP 1017 P4b).
     pub slot: bool,
+    /// Named slots, `slot "name"`: the nodes a use indents under `slot "name"`
+    /// fill the `children "name"` node of the view. Each is optional at a use.
+    pub slots: Vec<String>,
     /// `state` declarations.
     pub states: Vec<Binding>,
     /// The states that say `persist` (LLP 1116 D5), in declaration order.
@@ -947,7 +950,7 @@ impl Node {
         match self {
             Node::Element { span, .. }
             | Node::Use { span, .. }
-            | Node::Children { span }
+            | Node::Children { span, .. }
             | Node::When { span, .. }
             | Node::Each { span, .. }
             | Node::Match { span, .. } => *span,
