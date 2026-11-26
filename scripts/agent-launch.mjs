@@ -1069,7 +1069,7 @@ export function refuseBackendOrigin(build, app, command = null) {
     `Rebuild for ${selected.origin}${command ? ` (${command})` : ''}, or select this baked backend explicitly with --backend ${actual}`);
 }
 
-/** Backend metadata for carriers without the default Apple build check. A portable executable's record is bound
+/** Check and return the baked backend for carriers without the default Apple build check. A portable executable's record is bound
  * to its bytes; an interrupted bake cannot authorize the executable left from the preceding build. A packaged
  * Windows directory carries its own receipt (host/windows/build.mjs `writePackagedReceipt`), since the bake cache
  * keeps only a target's latest build and a directory packaged before it would lose its record. */
@@ -1087,6 +1087,7 @@ export function refuseBinaryBackend(bin, app, { receipt, packaged = false, comma
     if (existsSync(receipt)) build = JSON.parse(readFileSync(receipt, 'utf8')).build;
   } else build = boundSettings(bin);
   refuseBackendOrigin(build, app, command);
+  return build?.backendOrigin;
 }
 
 /** An Apple build's receipt: its Rust and Swift inputs by digest, then by mtime the app's own files the receipt leaves out on purpose (the root build script's watches: the contract, app.json, data, shaders, assets — what the baked plan and bundle are made from). */

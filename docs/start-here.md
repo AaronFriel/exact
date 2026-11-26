@@ -452,6 +452,12 @@ test "an item is added, a repeat refused, checked off and kept"
   expect text "left" == "0 items left"
 ```
 
+On Android, `agent` and `test` forward the app server's loopback port to the
+selected device. Set `ANDROID_SERIAL` to choose among attached devices.
+This also works when `agent` finds a server already answering. The last drive
+using a mapping Exact created removes it. A mapping you set up stays in place,
+and a conflicting one stops the launch.
+
 Every step, launch line and `verify` flag is on the card.
 
 Interactive web drives also accept `reload` (keeps storage and fetch faults) and

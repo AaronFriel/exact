@@ -327,7 +327,9 @@ function stubServerRun(body) {
     const keeperOf = (child) => Number(spawnSyncReal('pgrep', ['-P', String(child.pid)], { encoding: 'utf8' }).stdout.trim().split('\\n')[0]) || null;
     const groupOf = (child) => { if (!groups.get(child)) groups.set(child, keeperOf(child)); return groups.get(child); };
     spyOn(Bun, 'spawn').mockImplementation((...args) => {
-      const child = spawn(...args); children.push(child);
+      const child = spawn(...args);
+      if (args[0][2] !== 'supervise') return child;
+      children.push(child);
       (async () => { while (!groups.get(child) && child.exitCode === null && child.signalCode === null) { groups.set(child, keeperOf(child)); await Bun.sleep(5); } })();
       return child;
     });
@@ -361,7 +363,7 @@ test('server command arguments reach the child in order, with DB and PORT for a 
     const db = resolve(dir, '.exact/test/db.sqlite');
     assert.deepEqual(record(), { argv, db, port: '4790' });
     assert.equal(readFileSync(db, 'utf8'), 'scratch');
-    assert.equal(readFileSync(resolve(dir, '.exact/test/owner'), 'utf8').trim(), String(process.pid));
+    assert.deepEqual(readFileSync(resolve(dir, '.exact/test/owner'), 'utf8').trim().split('\\n'), [String(process.pid), server.url]);
     await running.stop();
     assert.notEqual(await children[0].exited, 0);
     assert.equal(existsSync(resolve(dir, '.exact/test')), false);
@@ -424,13 +426,15 @@ test('database: false omits inherited DB, preserves database files, and keeps re
   `);
 }, 30_000);
 
-test('agent --test starts and stops the app server on web, ios and macos, and reuses its parent server', () => {
+test('agent --test starts and stops the app server on web, ios, macos and android, and reuses its parent server', () => {
   stubServerRun(`
     const { main } = await import(resolve(scripts, 'agent.mjs'));
     const args = ['--app', dir, '--test', resolve(dir, 'app.test.contract')];
-    for (const host of ['web', 'ios', 'macos']) {
+    for (const host of ['web', 'ios', 'macos', 'android']) {
       const code = await main([host, ...args], { runTests: async (options) => {
         assert.equal(options.host, host);
+        assert.equal(options.appServerUrl, 'http://127.0.0.1:4790');
+        assert.equal(options.running.url, options.appServerUrl);
         assert.equal(options.file, args[3]);
         assert.deepEqual(record(), { argv, db: null, port: '4790' });
         assert.equal(children.at(-1).exitCode, null);
@@ -442,8 +446,10 @@ test('agent --test starts and stops the app server on web, ios and macos, and re
       rmSync(ready);
     }
     const result = await withAppServer(dir, async () => {
-      const source = 'const { main } = await import(' + JSON.stringify(resolve(scripts, 'agent.mjs')) + ');' +
-        'process.exit(await main(' + JSON.stringify(['web', ...args]) + ', { runTests: async () => ({ results: [], passed: 1, failed: 0 }) }));';
+      writeFileSync(resolve(dir, 'app.ts'), 'export const origin = "http://127.0.0.1:8350";');
+      const source = 'import assert from "node:assert/strict"; const { main } = await import(' + JSON.stringify(resolve(scripts, 'agent.mjs')) + ');' +
+        'process.exit(await main(' + JSON.stringify(['android', ...args]) + ', { runTests: async ({ running, appServerUrl }) => {' +
+        'assert.equal(running, null); assert.equal(appServerUrl, "http://127.0.0.1:4790"); return { results: [], passed: 1, failed: 0 }; } }));';
       const child = spawnSync(process.execPath, ['-e', source], { encoding: 'utf8', timeout: 10_000 });
       assert.equal(child.status, 0, child.stdout + child.stderr);
       assert.equal(children.at(-1).exitCode, null, 'the parent server still runs');
@@ -451,12 +457,41 @@ test('agent --test starts and stops the app server on web, ios and macos, and re
     }, { verb: 'test', optional: true });
     assert.equal(result, 0);
     assert.notEqual(await children.at(-1).exited, 0);
-    assert.deepEqual([taken, given], [4, 4]);
+    assert.deepEqual([taken, given], [5, 5]);
     rmSync(ready);
     rmSync(resolve(dir, 'server.ts'));
     assert.equal(await main(['web', ...args], { runTests: async () => ({ results: [], passed: 0, failed: 1 }) }), 1);
-    assert.equal(children.length, 4, 'an app with no server still runs its tests');
+    assert.equal(children.length, 5, 'an app with no server still runs its tests');
   `);
+}, 30_000);
+
+test('Android forwards the server an agent drive adopts or starts, and no app port without one', async () => {
+  const { main } = await import('./agent.mjs');
+  const { reversedPorts } = await import('./agent-android.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-android-server-'));
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('ready') });
+  const port = String(server.port), ports = [];
+  const drive = () => main(['android', '--app', dir, '--storage', 'one', 'state'], {
+    resolveDevice: () => 'emulator', exclusiveNativeStore: (_key, launch) => launch(),
+    open: async ({ env, appServerUrl }) => {
+      assert.equal(env.EXACT_AUTH_FIXTURE, undefined);
+      ports.push(reversedPorts(env, appServerUrl));
+      return { state: async () => ({}), close: async () => {} };
+    },
+  });
+  try {
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'Test', app: { id: 'com.exact.test', name: 'Test' }, server: { database: false } }));
+    writeFileSync(resolve(dir, 'app.contract'), 'component App\n  view\n    text "Test"\n');
+    writeFileSync(resolve(dir, 'app.ts'), 'export const api = ' + JSON.stringify(server.url.origin));
+    sourceRecord(dir);
+    writeFileSync(resolve(dir, 'server.ts'), "Bun.serve({ hostname: '127.0.0.1', port: Number(process.env.PORT), fetch: () => new Response('ready') });");
+    assert.equal(await drive(), 0);
+    await server.stop(true);
+    assert.equal(await drive(), 0);
+    rmSync(resolve(dir, 'server.ts'));
+    assert.equal(await drive(), 0);
+    assert.deepEqual(ports, [[port], [port], []]);
+  } finally { await server.stop(true); rmSync(dir, { recursive: true, force: true }); }
 }, 30_000);
 
 test('an agent drive passes server arguments without DB or a scratch database', () => {
@@ -599,7 +634,7 @@ Bun.serve({ port: Number(process.env.PORT), fetch: () => new Response('ok') });`
     await running.beforeTest();
     writeFileSync(resolve(dir, '.exact/fail'), '');
     await assert.rejects(running.beforeTest(), /exited \(code 23\).*error: restart refused/);
-    assert.equal(readFileSync(resolve(dir, '.exact/test/owner'), 'utf8').trim(), String(process.pid));
+    assert.deepEqual(readFileSync(resolve(dir, '.exact/test/owner'), 'utf8').trim().split('\n'), [String(process.pid), server.url]);
     rmSync(resolve(dir, '.exact/fail'));
     await running.beforeTest();
     assert.equal(await fetch(server.url).then(r => r.text()), 'ok');

@@ -95,7 +95,7 @@ export async function phoneScreenshot({ ask, udid, appId, container, path, windo
 /** One JSON-lines protocol over stdio on desktop hosts, or a phone's outbound socket. `reader`: on Android, the app
  * on the Canvas reader (its APK), not the Linux host headless; unsaid, EXACT_ANDROID_READER decides (how a script
  * that opens a drive says it). */
-export async function openStdio({ host, plan, world, size, app, env: extra = {}, session, documents = [], device = false, phone: pick, touch = 'agent', reader = !!process.env.EXACT_ANDROID_READER, onProcess }) {
+export async function openStdio({ host, plan, world, size, app, appServerUrl, env: extra = {}, session, documents = [], device = false, phone: pick, touch = 'agent', reader = !!process.env.EXACT_ANDROID_READER, onProcess }) {
   const a = resolveApp(app);
   const linux = host === 'linux', android = host === 'android'; // @ref LLP 1107 — Android: the Linux host on a phone, under adb
   const windows = host === 'windows', portable = linux || windows || android;
@@ -116,10 +116,11 @@ export async function openStdio({ host, plan, world, size, app, env: extra = {},
   const rebuild = device ? 'bun host/apple/build.mjs --device' : windows ? windowsRebuild() : android ? androidRebuild(a, reader) : linux ? linuxRebuild(a) : null;
   // `missingBuild`: every test of a run would fail on it alike, so a test run stops at the first (LLP 1156.006.000 D8).
   if (!existsSync(device ? deviceBundle : bin)) throw Object.assign(new Error(rebuild ? `run ${rebuild} first` : `EXACT_MAC_BIN names no file: ${bin}`), { missingBuild: !!rebuild });
+  let backend;
   if (!macBuild) {
     const receipt = portable ? undefined : device ? resolve(deviceBundle, 'receipt.json')
       : /\.app\/Contents\/MacOS\/[^/]+$/.test(resolve(bin)) ? resolve(bin, '../../Resources/receipt.json') : resolve(dirname(bin), 'receipt.json');
-    refuseBinaryBackend(bin, a, { receipt, packaged: windows, command: rebuild });
+    backend = refuseBinaryBackend(bin, a, { receipt, packaged: windows, command: rebuild });
   }
   if (!portable) assertAppleIdentity(a, device ? resolve(deviceBundle, artifacts.executable) : bin);
   if (portable && process.env.EXACT_PROOF_PRODUCTS) refuseStale(host, bin, proofProductChanges(process.env.EXACT_PROOF_PRODUCTS, bin, a), 'rerun the proof'); else if (windows && process.env.EXACT_WINDOWS_BIN) unchecked('windows', 'EXACT_WINDOWS_BIN');
@@ -168,7 +169,7 @@ export async function openStdio({ host, plan, world, size, app, env: extra = {},
     if (!android) env.EXACT_FONT ??= 'DejaVu Sans';
   }
   Object.assign(env, extra);
-  const bridge = device ? await phoneBridge() : null, droid = android ? androidDeploy(a, bin, { ...env, ...extra }) : null;
+  const bridge = device ? await phoneBridge() : null, droid = android ? androidDeploy(a, bin, env, appServerUrl, backend) : null;
   let touches = null;
   try {
     if (device && touch !== 'agent') {

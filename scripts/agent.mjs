@@ -210,12 +210,13 @@ export async function main(argv, injected = {}) {
     beat.unref?.();
     return (await import('./app-server.mjs')).withAppServer(
       resolveApp(flags.app).dir,
-      async (running) => {
+      async (running, appServerUrl) => {
         const r = await (injected.runTests ?? runTests)({
           atLine,
           atResult: (t) => { at = null; report(t); },
           host,
           running,
+          appServerUrl,
           browser,
           file: flags.test,
           plan: flags.plan,
@@ -406,6 +407,7 @@ export async function main(argv, injected = {}) {
     try {
       return await (injected.open ?? open)({
         host,
+        appServerUrl: served?.url,
         browser,
         ax: ops.some(line => /^\s*tree\s+--ax(?:\s|$)/.test(line)),
         env: {

@@ -192,8 +192,9 @@ const quote = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
  * directory is this drive's, so two drives of one app do not share a binary or a screenshot. Only
  * EXACT_* variables cross, with the device's own HOME, assets, native-module directory and fonts. A dev loop and
  * the app's server on this Mac are reached through `adb reverse` for the drive (`reversedPorts`). */
-export function androidDeploy(app, bin, env) {
-  if (bin.endsWith('.apk')) return readerDeploy(app, bin, env);
+export function androidDeploy(app, bin, env, appServerUrl, backend) {
+  const reverse = (tool, serial, vars) => reverseForDrive(tool, serial, reversedPorts(vars, appServerUrl, backend));
+  if (bin.endsWith('.apk')) return readerDeploy(app, bin, env, reverse);
   if (env.EXACT_AGENT === 'live') throw new Error('android --live requires the reader APK. Set EXACT_ANDROID_BIN to an APK.');
   const serial = androidDevice(env), tool = adb(env);
   const base = `/data/local/tmp/exact/${app.id}`, home = `${base}/home`;
@@ -220,7 +221,7 @@ export function androidDeploy(app, bin, env) {
   pushSubstitutes(vars, dir, run);
   Object.assign(vars, { HOME: home, EXACT_ASSETS: dir, EXACT_NATIVE_LIBS: dir, EXACT_PAINTER: env.EXACT_PAINTER ?? 'cpu' });
   const assignments = Object.entries(vars).map(([k, v]) => `${k}=${quote(v)}`).join(' ');
-  const shot = `${dir}/agent-shot.png`, { lease, release: releasePorts } = reverseForDrive(tool, serial, vars);
+  const shot = `${dir}/agent-shot.png`, { lease, release: releasePorts } = reverse(tool, serial, vars);
   return {
     serial, dir, shot, cleanup: releasePorts,
     spawn: (args = []) => {
@@ -315,7 +316,7 @@ const RELAY_CLEANED_ERROR = 70;
  * boots at as a link's location. A drive's `--world` and `--size` do not reach it, and are refused (a test that names a
  * size is skipped, agent-test.mjs). A dev loop's `--url` does: the reader polls it (LLP 1122 D4),
  * through `adb reverse` when it is this Mac's loopback, as is the app's server a test runs here. */
-function readerDeploy(app, apk, env) {
+function readerDeploy(app, apk, env, reverse) {
   if (env.EXACT_WORLD) throw new Error('android --reader: --world does not reach the reader, which boots the plan its APK bakes');
   // A launch URL (a test's `at "/item/7"`) is the launching intent's data, which the reader boots at as a link's
   // location (EXACT_LAUNCH_URL, LLP 1133.023 D15 item 3). `/` is where it boots anyway.
@@ -351,7 +352,7 @@ function readerDeploy(app, apk, env) {
     env = { ...env, EXACT_PLAN: plan };
   }
   const vars = readerVariables(env), fixture = pushSubstitutes(vars, dir, run);
-  const { lease, release: releasePorts } = reverseForDrive(tool, serial, vars);
+  const { lease, release: releasePorts } = reverse(tool, serial, vars);
   const cleanup = code => {
     if (code !== 0 && code !== RELAY_CLEANED_ERROR) spawnSync(tool, ['-s', serial, 'shell', 'am', 'force-stop', id], { timeout: 5000 });
     if (fixture) spawnSync(tool, ['-s', serial, 'shell', 'rm', '-f', fixture], { timeout: 5000 });
@@ -385,12 +386,13 @@ function pushSubstitutes(vars, dir, run) {
 export const readerVariables = (env) => Object.fromEntries(Object.entries(env).filter(([k]) =>
   k === 'EXACT_AGENT' || k.startsWith('EXACT_AGENT_') || ['EXACT_STORE', 'EXACT_AUTH_FIXTURE', 'EXACT_DEV_PLAN', 'EXACT_PLAN', 'EXACT_UPDATE_ORIGIN', 'EXACT_UPDATE_DIR'].includes(k)));
 
-/** The ports of this Mac's loopback the reader is to reach through `adb reverse`, for the drive: a dev loop's
- * (`--url`), the app's server that a test declares its auth fixture (`test android` starts it here) and an update
- * origin `serve.mjs` serves. */
-export const reversedPorts = (vars) => [...new Set([vars.EXACT_DEV_PLAN, vars.EXACT_AUTH_FIXTURE, vars.EXACT_UPDATE_ORIGIN].map((v) => URL.parse(v ?? ''))
-  .filter((url) => url && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
-  .map((url) => url.port || (url.protocol === 'https:' ? '443' : '80')))];
+/** Host services reached by the driven app. EXACT_PLAN can also be a URL on headless Android.
+ * EXACT_LAUNCH_URL is the app's route, and local plan files are pushed to the device. */
+export const reversedPorts = (vars, appServerUrl, backend) => [...new Set([
+  appServerUrl, backend, vars.EXACT_DEV_PLAN, /^https?:\/\//i.test(vars.EXACT_PLAN) ? vars.EXACT_PLAN : null, vars.EXACT_AUTH_FIXTURE, vars.EXACT_UPDATE_ORIGIN,
+].map((v) => URL.parse(v ?? ''))
+  .filter((url) => url && ['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) && /^(?:127(?:\.\d+){3}|localhost|\[::1\])$/.test(url.hostname))
+  .map((url) => url.port || (['https:', 'wss:'].includes(url.protocol) ? '443' : '80')))];
 
 // SQLite supplies a process lock on every desktop host. The ownership file stays outside its transaction
 // so a rollback after SIGKILL cannot discard a claim for an adb change that already happened.
@@ -431,8 +433,7 @@ export function reverseRoot(serial) {
 }
 
 // Existing mappings without an ownership record are external and are never removed by a drive.
-function reverseForDrive(tool, serial, vars) {
-  const ports = reversedPorts(vars);
+function reverseForDrive(tool, serial, ports) {
   const lease = { root: reverseRoot(serial), token: randomUUID(), owner: reverseOwner(), ports: [] };
   if (ports.length) lease.ports = reverseCall('acquire', tool, serial, lease, ports);
   return { lease, release: () => releaseReverse(tool, serial, lease) };

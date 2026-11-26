@@ -81,6 +81,7 @@ export async function open({
   size,
   env,
   app,
+  appServerUrl,
   session,
   documents,
   url,
@@ -217,7 +218,7 @@ export async function open({
           ? await openIOS({ plan, app, env, session, hostFixture: true, touch, ax, onProcess })
           : host === 'linux' || host === 'android'
             ? // The APK runs at the phone's size, and refuses another (`readerDeploy`).
-              await openStdio({ host, plan, size: size ?? (host === 'android' && (reader ?? !!process.env.EXACT_ANDROID_READER) ? undefined : VIEWPORT), env, app, reader, onProcess })
+              await openStdio({ host, plan, size: size ?? (host === 'android' && (reader ?? !!process.env.EXACT_ANDROID_READER) ? undefined : VIEWPORT), env, app, appServerUrl, reader, onProcess })
             : host === 'windows'
               ? await openStdio({ host: 'windows', plan, size: size ?? VIEWPORT, env, app, onProcess })
               : host === 'ios'

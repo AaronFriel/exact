@@ -382,7 +382,7 @@ async function started(dir, server, name, forward, give, takeOwnership) {
   clearDB();
   // Its keepers' records of their ends; one left by a run that ended, its server with it, vouches for no later keeper.
   for (const file of readdirSync(runDir)) if (file.startsWith('ended-')) rmSync(resolve(runDir, file), { force: true });
-  writeFileSync(owner, `${process.pid}\n`);
+  writeFileSync(owner, `${process.pid}\n${server.url}\n`);
   takeOwnership();
   let child = null, group = null, said = { text: '' }, used = false, stopped = false, recorded = false;
   const deaths = [];
@@ -416,23 +416,19 @@ async function started(dir, server, name, forward, give, takeOwnership) {
   const fresh = async () => { await endChild(); clearDB(); used = false; await launch(); };
   try { await launch(); } catch (e) { await stop(); throw e; }
   return {
-    stop, fresh, tail, exited: () => exitStatus(child),
+    url: server.url, stop, fresh, tail, exited: () => exitStatus(child),
     exits: () => { rememberExit(); return [...deaths]; },
     beforeTest: async () => { if (used || !child || exitStatus(child) != null) await fresh(); used = true; },
     check: () => { rememberExit(); if (group) groupAlive(group); if (exitStatus(child) != null) throw new Error(`${server.entry} exited (${exitReason(child)}) during the test${tail() ? `: ${tail()}` : ''}`); },
   };
 }
 
-/** The app's server for one `agent` drive (LLP 1116.008 D1): null when the app has none, or the URL it calls already answers
- * (another drive's: used, said only when on another database; one no drive started, the builder's or another program's:
- * used, and one line names its pid and command); else started where app.ts calls it, on a database of the
- * drive's own, `.exact/agent/<storage>/db.sqlite` kept for the `--storage` name so a second drive on it sees the first's data
- * (without one, an empty database removed after; `fresh`, a drive that starts its store empty, empties it first, and is
- * refused while another drive or the builder's server is using the app server), and one line says so. `{ stop() }` ends it. Drives that overlap share the
- * server: each is a `drive-<pid>` file in `.exact/agent-server/`, the servers a drive started are `server-<pid>` (their
- * database as the file's text), and the last drive out stops them; one that did not start the server stops nothing, and the
- * builder's own is never in the list. With database: false, no database is passed, created or cleared; otherwise an entry
- * that does not read `DB` is refused (`appServer`'s `refusal`), as `test` refuses it. */
+/** Acquire the app server for an agent drive (LLP 1116.008 D1). Return null without one, otherwise its URL
+ * and a stop method that releases this drive's claim. Overlapping drives share the server until the last
+ * one leaves. A server that was already answering outside a drive stays running.
+ * A named store keeps its database under .exact/agent/<storage>. An unnamed store gets a temporary one.
+ * A fresh drive clears its database before launch and refuses to start while another server is using it.
+ * An app with server.database set to false gets no database. */
 export async function driveServer(dir, storage, say = (line) => console.error(line), { fresh = false, lockTimeoutMs = 15_000 } = {}) {
   const server = appServer(dir);
   if (!server?.url) return null;
@@ -499,6 +495,7 @@ export async function driveServer(dir, storage, say = (line) => console.error(li
     off();
     if (ending) clean();
   };
+  const running = { url: server.url, stop };
   // One drive starts the server at a time: another waits, then finds it answering.
   const lockToken = `${process.pid}:${randomUUID()}`;
   const releaseStarting = () => { if (readIn(lease, 'starting') === lockToken) rmSync(starting, { force: true }); };
@@ -550,7 +547,7 @@ export async function driveServer(dir, storage, say = (line) => console.error(li
       const other = db && records.map((r) => r.db).find((was) => was && was !== db);
       if (!records.length) say(`agent: ${server.url}${portHolder(server).holder}, a server no drive started: this drive uses it and its data${server.database ? ', not a database of its own' : ''}; stop it to have the drive start ${server.entry} itself`);
       else if (other) say(`agent: ${server.entry} at ${server.url} is another drive's, on its database (${relative(dir, other)}); this drive uses it`);
-      return { stop };
+      return running;
     }
     if (db) mkdirSync(dirname(db), { recursive: true });
     if (db && (!storage || fresh)) for (const end of ['', '-wal', '-shm', '-journal']) rmSync(`${db}${end}`, { force: true });
@@ -578,7 +575,7 @@ export async function driveServer(dir, storage, say = (line) => console.error(li
       throw new Error(`agent: ${server.url} answered before this checkout's fixture owned its port; choose another port with --backend or PORT`);
     }
     say(`agent: started ${server.entry} at ${server.url} for this drive (${!db ? 'no database' : storage ? `database ${relative(dir, db)}, kept for --storage ${storage}` : 'an empty database'}); stopped after${server.note ? `; ${server.note}` : ''}`);
-    return { stop };
+    return running;
   } finally { if (locked) releaseStarting(); }
 }
 
@@ -586,12 +583,16 @@ export async function driveServer(dir, storage, say = (line) => console.error(li
  * run, said in one line. `bun exact.mjs test` runs its tests so (LLP 1116.007 D2: `optional`: an app with no server, or one
  * whose URL app.ts does not say, runs them as they are, the second said once per test file, and the tests use whatever answers there);
  * a server entry that needs a database but does not read `DB` is refused whatever the verb (LLP 1116.008 D1);
- * a server an ancestor process runs (an older app's api-test wrapper) stays shared, said in one line.
+ * an ancestor's server stays shared. The callback receives its URL without a handle that can stop it.
  * `api-test` is the same call without `optional`: it wants a server, and says why it has none. */
 export async function withAppServer(dir, fn, { verb = 'api-test', optional = false } = {}) {
   const server = appServer(dir);
-  const owners = server ? ['api-test', 'test', 'verify'].map((name) => readIn(dir, `.exact/${name}/owner`)?.trim()).filter(Boolean) : [];
-  if (owners.length && ancestors().some((pid) => owners.includes(pid))) { console.error(`${verb}: using an ancestor’s server; tests share its data`); return fn(null); }
+  const owners = new Map(server ? ['api-test', 'test', 'verify'].map(name => readIn(dir, `.exact/${name}/owner`)?.trim().split('\n')).filter(Boolean) : []);
+  const ancestor = owners.size && ancestors().find(pid => owners.has(pid));
+  if (ancestor) {
+    console.error(`${verb}: using an ancestor’s server; tests share its data`);
+    return fn(null, owners.get(ancestor) ?? server.url);
+  }
   let running;
   try {
     if (server?.refusal) throw new Error(server.refusal);
@@ -604,7 +605,7 @@ export async function withAppServer(dir, fn, { verb = 'api-test', optional = fal
     }
   } catch (e) { console.error(`${verb}: ${e.message}`); return 1; }
   let code;
-  try { code = await fn(running); } finally { await running?.stop(); }
+  try { code = await fn(running, running?.url); } finally { await running?.stop(); }
   const deaths = running?.exits() ?? [];
   for (const death of deaths) console.error(`${verb}: ${death}`);
   return deaths.length ? code || 1 : code;

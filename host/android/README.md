@@ -195,8 +195,8 @@ channel brings the design server's live batches, pins and `prefer`s, and registe
 it. A generation that offers a replaceable Rust module's pair (an app naming `rust.module`) is refused with the URL
 loop's message and the running app kept: the APK's Rust is baked in its library and its record's `rustMode` is `off`,
 so a Rust edit needs a new APK. A drive
-takes the same URL as `--url` (`agent.mjs android --reader --url http://127.0.0.1:<port>/ …`), which reverses the
-port itself. Drives on the same adb server and device share mappings they create until the last drive releases
+takes the same URL as `--url` (`agent.mjs android --reader --url http://127.0.0.1:<port>/ …`). Reader, live and headless drives reverse loopback ports for the app server they start or use, the baked backend, the dev plan, the auth fixture and the update origin. Headless drives also reverse an HTTP(S) `EXACT_PLAN`.
+Drives on the same adb server and device share mappings they create until the last drive releases
 them. Mappings set up outside a drive are kept; a conflicting destination refuses the drive. A production bake
 opens no build channel.
 
