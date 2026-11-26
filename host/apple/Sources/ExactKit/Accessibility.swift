@@ -557,6 +557,7 @@ extension NodeView {
             // A range role is one element, its value between its bounds and
             // its `aria-valuetext` the description, as WebKit serves a drawn
             // one (LLP 1116 D8). Only a change is written: each posts.
+            // A meter names the authored view for VoiceOver. It has no native gauge to tint.
             let axRole: NSAccessibility.Role = ["slider": .slider, "meter": .levelIndicator, "scrollbar": .scrollBar, "spinbutton": .incrementor][range] ?? .progressIndicator
             setAccessibilityElement(true)
             if accessibilityRole() != axRole { setAccessibilityRole(axRole) }

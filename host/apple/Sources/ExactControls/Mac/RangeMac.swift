@@ -15,17 +15,21 @@ extension ControlHost {
         return slider
     }
 
-    func configureRange(_ slider: NSSlider, _ owner: NodeView, accent: NSColor?) {
+    func configureRange(_ slider: NSSlider, _ owner: NodeView) {
         let range = RangeSpec(owner.props)
-        slider.minValue = range.min
-        slider.maxValue = range.max
+        let native = slider as? SliderMac
+        let min = owner.props["min"], max = owner.props["max"]
+        let previous = native?.authoredBounds
+        if previous == nil || previous?.min != min { slider.minValue = range.min }
+        // HTML clamps max to min, so changing min alone can also move the upper bound.
+        if previous?.max != max || previous?.upper != range.max { slider.maxValue = range.max }
+        native?.authoredBounds = (min, max, range.max)
         let bound = owner.props["value"] ?? ""
         if appliedRange[owner.id] != bound, NSApp.currentEvent?.type != .leftMouseDragged {
             appliedRange[owner.id] = bound
             let shown = range.shown(owner.props)
             if slider.doubleValue != shown { slider.doubleValue = shown }
         }
-        if slider.trackFillColor != accent { slider.trackFillColor = accent }
         // A value set inside the knob's tracking draws only when asked to.
         slider.needsDisplay = true
         slider.setAccessibilityValue(RangeSpec.format(range.sanitize(slider.doubleValue)))
@@ -47,9 +51,7 @@ extension ControlHost {
         if !tracking {
             lastRange[id] = nil
             presenter.controlValue(id, value, input: false, change: true)
-            if let owner = presenter.views[id] {
-                configureRange(slider, owner, accent: owner.channels("accent_color").map { TextEngine.color($0) })
-            }
+            if let owner = presenter.views[id] { configureRange(slider, owner) }
         }
     }
 
@@ -60,9 +62,7 @@ extension ControlHost {
         let value = RangeSpec.format(RangeSpec(node.props).sanitize(n))
         slider.doubleValue = Double(value) ?? slider.doubleValue
         presenter.controlValue(node.id, value, input: true, change: true)
-        if let owner = presenter.views[node.id] {
-            configureRange(slider, owner, accent: owner.channels("accent_color").map { TextEngine.color($0) })
-        }
+        if let owner = presenter.views[node.id] { configureRange(slider, owner) }
         // What it shows, as the web's reply says.
         return ["typed": Int(node.id), "value": RangeSpec.format(RangeSpec(node.props).sanitize(slider.doubleValue)), "delivery": "host-activation", "native": "control"]
     }
@@ -70,7 +70,14 @@ extension ControlHost {
 
 /// A range's slider, AppKit's own, but for a Control-click its node's
 /// `contextmenu` answers (X85, `contextClicked`).
-final class SliderMac: NSSlider {
+final class SliderMac: NSSlider, AccentControl {
+    fileprivate var authoredBounds: (min: String?, max: String?, upper: Double)?
+    private let accent = ControlAccent()
+    override var trackFillColor: NSColor? { didSet { accent.nativeFill = trackFillColor } }
+    func applyAccent(_ color: NSColor?) {
+        accent.apply(color, current: trackFillColor) { super.trackFillColor = $0 }
+    }
+
     override class var cellClass: AnyClass? { get { SliderCellMac.self } set {} }
     override func accessibilityAttributeValue(_ attribute: NSAccessibility.Attribute) -> Any? {
         if attribute == .enabled, ariaUnavailableFromNode { return false }

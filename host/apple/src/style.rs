@@ -1073,6 +1073,12 @@ fn style_json_shown(
             // it (LLP 1034 §8).
             .union(StyleMask::of(StyleId::ColorScheme))
     };
+    // AppKit draws the selected segment in the group's computed accent.
+    #[cfg(target_os = "macos")]
+    let rows = match node.props.str(PropId::AccessibilityRole) {
+        Some("tablist" | "radiogroup") => rows.union(StyleMask::of(StyleId::AccentColor)),
+        _ => rows,
+    };
     let mut computed = node.computed_style(rows.union(node.style.written));
     if node.node_type == NodeType::Video {
         computed.object_fit = exact_kernel::object::video_fit(

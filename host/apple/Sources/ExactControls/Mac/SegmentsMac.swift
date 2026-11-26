@@ -51,7 +51,13 @@ private final class SegmentAccessibility: NSAccessibilityElement, InspectionOwne
     override func accessibilityPerformPress() -> Bool { native?.accessibilityPerformPress() ?? false }
 }
 
-private final class ExactSegmentedControl: NSSegmentedControl {
+private final class ExactSegmentedControl: NSSegmentedControl, AccentControl {
+    private let accent = ControlAccent()
+    override var selectedSegmentBezelColor: NSColor? { didSet { accent.nativeFill = selectedSegmentBezelColor } }
+    func applyAccent(_ color: NSColor?) {
+        accent.apply(color, current: selectedSegmentBezelColor) { super.selectedSegmentBezelColor = $0 }
+    }
+
     let ownerID: UInt32
     var accessibilityDisabledSegments: [Bool] = []
     var memberIDs: [UInt32] = []
@@ -219,6 +225,7 @@ final class SegmentHost: SegmentHosting {
                 return value
             }()
             if control.superview !== owner { owner.addSubview(control) }
+            presenter.controls.applyColors(control, owner)
             control.frame = owner.contentBox()
             control.setAccessibilityLabel(owner.props["accessibilityLabel"])
             control.segmentCount = tabs.count

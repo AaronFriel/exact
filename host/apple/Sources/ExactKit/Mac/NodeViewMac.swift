@@ -867,30 +867,29 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// @ref LLP 1034 D2
     package override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        presenter?.controls.appearanceChanged(self)
         presenter?.tables.appearanceChanged(self); refreshGroupedSeparator(); presenter?.navigation.stackSplit.recolor(self)
         if let regions = presenter?.session?.regions, regions.owns(self) { regions.geometryChanged() }
         // An `svg`'s paints are resolved again; paint motion hears the appearance (LLP 1062 D4).
         presenter?.svg?.reappear(id, dark: drawsDark, clock: presenter?.session?.clock, tint: viewTint); presenter?.session?.noteAppearance(self)
         // A path icon's fill is a resolved colour; an image view resolved its tint as it drew.
         tintIconShape()
-        guard hasSchemeColor || fieldGround != nil || inlineText.contains(where: { $0.hasSchemeColor }) else { return }
-        reapplyColors()
+        reapplyColors(repaintNode: hasSchemeColor || fieldGround != nil || inlineText.contains(where: { $0.hasSchemeColor }))
     }
     /// A system colour changed under this view (the accent, LLP 1095 D5):
     /// what it resolved is applied again, as for an appearance change; an
     /// untinted symbol follows the accent, so it counts too.
     func systemColorsChanged() {
         presenter?.navigation.stackSplit.recolor(self)
-        guard hasSchemeColor || hasSymbolLeaf || inlineText.contains(where: { $0.hasSchemeColor }) else { return }
-        reapplyColors()
+        reapplyColors(repaintNode: hasSchemeColor || hasSymbolLeaf || inlineText.contains(where: { $0.hasSchemeColor }))
     }
-    func reapplyColors() {
-        paragraphOwner.invalidateText()
-        paragraphOwner.needsDisplay = true
-        applyStyle(style)
+    func reapplyColors(repaintNode: Bool = true) {
+        if repaintNode {
+            paragraphOwner.invalidateText()
+            paragraphOwner.needsDisplay = true
+            applyStyle(style)
+            needsDisplay = true
+        }
         presenter?.controls.appearanceChanged(self)
-        needsDisplay = true
     }
     package func number(_ key: String, _ fallback: CGFloat = 0) -> CGFloat {
         if let n = style[key]?.number { return CGFloat(n) }
