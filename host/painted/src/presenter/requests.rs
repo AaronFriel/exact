@@ -30,6 +30,20 @@ mod packages;
 #[cfg(test)]
 mod packages_tests;
 
+/// A package's synchronous form is installed even in an APK with no app module.
+#[cfg(any(target_os = "android", test))]
+fn install_android_handlers(
+    slot: &exact_runner::Native,
+    handler: &exact_runner::NativeHandler,
+    app: bool,
+    call: Option<exact_runner::NativeCall>,
+) {
+    if app {
+        slot.host(Some(handler.clone()));
+    }
+    slot.host_call(call);
+}
+
 /// What the presenter asks of its shell. The number is the kind on the wire.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Request {
@@ -645,10 +659,12 @@ impl<D: DataSource> Presenter<D> {
         });
         let slot = self.host.runner().native_slot();
         #[cfg(target_os = "android")]
-        if let Some(call) = self.requests.app_module.call() {
-            slot.host(Some(handler.clone()));
-            slot.host_call(Some(call));
-        }
+        install_android_handlers(
+            &slot,
+            &handler,
+            self.requests.app_module.hosts(),
+            self.requests.app_module.call(),
+        );
         slot.host_packages(Some(handler));
     }
 

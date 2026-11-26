@@ -823,11 +823,8 @@ impl Module {
             self.host.hosted = self.native_slot.hosted();
             self.host.later = self.native_slot.handler().is_some();
         }
-        // packages live in the host's app module: their synchronous calls reach
-        // it even when the app links a native module of its own (the door)
-        if self.native_slot.hosted() {
-            self.host.hosted_call = self.native_slot.hosted_call();
-        }
+        // Package reads can have a host even when there is no app module.
+        self.host.hosted_call = self.native_slot.hosted_call();
         engine
             .harden()
             .map_err(|e| format!("exact-js: hardening failed: {e}"))?;

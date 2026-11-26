@@ -157,6 +157,16 @@ interface ExactAuthenticator {
     fun configure(builder: android.security.keystore.KeyGenParameterSpec.Builder) {}
 }
 
+/** A package reader returns null for a form or owner it does not serve.
+ * It runs on the calling thread. Use application services or thread-safe published state:
+ * main may be waiting for input, Back, or a lifecycle turn on the presenter. */
+class SynchronousExtension(
+    val read: (Context, JSONObject) -> JSONObject?,
+    private val make: (ExtensionContext) -> ExactExtension,
+) : (ExtensionContext) -> ExactExtension {
+    override fun invoke(context: ExtensionContext) = make(context)
+}
+
 /** The app's bound extensions by name, each with how to make it: what the build writes as `exact.app.ExactExtensions`. */
 interface ExtensionRoster {
     val extensions: Map<String, (ExtensionContext) -> ExactExtension>
@@ -603,7 +613,7 @@ internal object Extensions {
     fun emit(extension: String, event: String, args: JSONArray) {
         Exact.changed("exact-event:" + JSONObject().put("extension", extension).put("event", event).put("args", args).put("seq", ++emitted))
     }
-    private var application: Context? = null
+    @Volatile private var application: Context? = null
     /** The activity is resumed ([resumed], [paused]). */
     private var foreground = false
     /** The activity shows: started and not stopped ([started], [stopped]). */
@@ -818,6 +828,15 @@ internal object Extensions {
      * 1), once for the process, as an extension outlives the activities that show the app. */
     fun firstFrame() {
         written?.startAtLoad?.forEach { extension(it) }
+    }
+
+    fun sync(request: JSONObject): String {
+        val name = request.getString("extension")
+        val reader = roster[name] as? SynchronousExtension
+        val app = application
+        val value = if (app != null) reader?.read?.invoke(app, request) else null
+        val answer = value ?: JSONObject().put("error", "NotSupportedError")
+        return "=" + moduleReplyJson(answer)
     }
 
     private fun extension(name: String): ExactExtension? = made[name]

@@ -725,3 +725,26 @@ fn a_replaced_runner_reaches_the_packages_as_the_last_did() {
         );
     }
 }
+
+#[test]
+fn android_identity_admission_can_read_a_bound_package_with_or_without_an_app_module() {
+    for app in [false, true] {
+        let slot = exact_runner::Native::default();
+        let handler: exact_runner::NativeHandler = std::sync::Arc::new(|_, _| unreachable!());
+        let caps = json!({"providers":{"google":{"active":true}}});
+        let read = json!({"extension":"sign-in","sync":"getIdentityCapabilitiesSync","args":{}});
+        let call: exact_runner::NativeCall = std::sync::Arc::new({
+            let read = read.clone();
+            let caps = caps.clone();
+            move |body| {
+                assert_eq!(serde_json::from_slice::<Json>(body).unwrap(), read);
+                Ok(caps.to_string().into_bytes())
+            }
+        });
+        super::install_android_handlers(&slot, &handler, app, Some(call));
+        slot.sync([("sign-in.getIdentityCapabilitiesSync".into(), None)].into());
+        assert_eq!(slot.hosted(), app);
+        let answer = slot.hosted_call().unwrap()(read.to_string().as_bytes()).unwrap();
+        assert_eq!(serde_json::from_slice::<Json>(&answer).unwrap(), caps);
+    }
+}

@@ -63,7 +63,9 @@ export function extensionFactories(bound) {
     const usesMlKit = deferred && pkg.maven?.some(c => c.startsWith('com.google.mlkit:') || c.startsWith('com.google.android.gms:play-services-mlkit-'));
     const guard = pkg.className === 'exact.translation.TranslationModule' ? 'if (!c.agent) ' : '';
     const init = usesMlKit ? `${guard}ExactMlKit.initialize(c.application); ` : '';
-    return `        ${JSON.stringify(pkg.extension)} to { c -> ${init}${pkg.className}(c) },`;
+    const make = `{ c -> ${init}${pkg.className}(c) }`;
+    const factory = pkg.reader ? `dev.exact.canvas.SynchronousExtension(${pkg.className}::read) ${make}` : make;
+    return `        ${JSON.stringify(pkg.extension)} to ${factory},`;
   });
 }
 
