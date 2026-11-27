@@ -5,7 +5,7 @@
 /// decides (a `textarea`, an `option`, an `audio`).
 pub(super) fn element(tag: &str) -> Option<&'static str> {
     const ELEMENTS: &[&str] = &[
-        "time", "main", "header", "nav", "section", "footer", "article", "aside", "dialog",
+        "time", "label", "main", "header", "nav", "section", "footer", "article", "aside", "dialog",
         // @ref LLP 1021 D1 — HTML's separator, void: the kernel gives it no
         // children, and its UA rows are the node's own.
         "hr",

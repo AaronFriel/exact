@@ -67,6 +67,8 @@ pub fn tag(name: &str) -> Option<Tag> {
     };
     Some(match name {
         "view" | "box" => view(&[], &[]),
+        // A native label associates its first contained control on web hosts.
+        "label" => view(&[], &[(PropId::SemanticTag, "label")]),
         "column" => view(
             &[
                 (StyleId::Display, "flex"),
@@ -1135,9 +1137,6 @@ pub(crate) fn html_tag(name: &str) -> Option<&'static str> {
     Some(match name {
         "div" => "a flex container is `column` or `row`, and a plain box `view`",
         "span" | "p" | "strong" | "em" | "b" | "i" => "text is `text`",
-        "label" => {
-            "a label is `text` beside its field, and the field is named by `aria-label` (or `aria-labelledby` with the text's `id`)"
-        }
         "heading" => "a heading is `h1` (to `h6` for the level)",
         // The app farm's guesses (round 1): each names the Contract form
         // that does the job.

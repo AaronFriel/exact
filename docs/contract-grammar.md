@@ -1324,7 +1324,7 @@ Several tags share a kernel node type with different fixed properties.
 
 | Family | Names |
 | --- | --- |
-| Boxes / layout | `view`, `box`, `row`, `column`, `scroll`, `list` |
+| Boxes / layout | `view`, `box`, `row`, `column`, `label`, `scroll`, `list` |
 | Structure | `main`, `header`, `nav`, `section`, `footer`, `article`, `aside`, `dialog`, `hr` |
 | Tables / description lists | `table`, `caption`, `thead`, `tbody`, `tfoot`, `tr`, `th`, `td`; `dl`, `dt`, `dd` |
 | Text and controls | `text`, `h1`–`h6`, `time`, `button`, `link`, `input`, `textarea`, `select`, `option`, `progress` |

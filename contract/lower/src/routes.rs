@@ -702,7 +702,7 @@ fn check_scroll(tag: &str, attrs: &[Attr], children: &[Node]) -> Result<(), Lowe
 
 /// The tags that are plain boxes: they scroll only where an `overflow` row says so.
 const PLAIN: &[&str] = &[
-    "view", "box", "column", "row", "main", "header", "nav", "section", "footer", "article",
+    "view", "box", "column", "row", "label", "main", "header", "nav", "section", "footer", "article",
     "aside",
 ];
 
