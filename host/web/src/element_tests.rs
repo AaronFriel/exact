@@ -78,6 +78,24 @@ fn svg_only(prop: PropId) -> bool {
         )
 }
 
+#[test]
+fn nested_control_label_uses_the_native_html_label() {
+    let style = StyleProps::default();
+    let mut props = PropList::default();
+    props.set(PropId::SemanticTag, PropValue::Str("label".into()));
+    let facts = NodeFacts {
+        id: 1,
+        node_type: NodeType::View,
+        style: &style,
+        props: &props,
+        is_root: false,
+        inline_run: false,
+        symbol_color: false,
+        has_looks: false,
+    };
+    assert_eq!(super::tag_of(&facts, false), "label");
+}
+
 /// LLP 1116 D8: a determinate progress is HTML's own `<progress>`, which
 /// the browser draws and sizes: its `value` and `max` the attributes, its
 /// role implicit, no `type`, and none of the ring's box.

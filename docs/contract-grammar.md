@@ -1325,6 +1325,8 @@ Several tags share a kernel node type with different fixed properties.
 | Family | Names |
 | --- | --- |
 | Boxes / layout | `view`, `box`, `row`, `column`, `label`, `scroll`, `list` |
+
+`label` wraps one input and its visible text. On the web it emits a native HTML label, so the text activates the contained control; other hosts currently render it as a container without that activation.
 | Structure | `main`, `header`, `nav`, `section`, `footer`, `article`, `aside`, `dialog`, `hr` |
 | Tables / description lists | `table`, `caption`, `thead`, `tbody`, `tfoot`, `tr`, `th`, `td`; `dl`, `dt`, `dd` |
 | Text and controls | `text`, `h1`–`h6`, `time`, `button`, `link`, `input`, `textarea`, `select`, `option`, `progress` |

@@ -1806,8 +1806,7 @@ keyed `for`, exhaustive option `match`, and `children`. Wrap root regions in a
 stable element.
 HTML names Contract spells otherwise (the compiler names each): `div` is `column`,
 `row` or `view`; `span`, `p`, `strong`, `em`, `b` and `i` are `text`; `h1`–`h6` are
-headings, as written; `label` is `text` beside its field, which
-`aria-label` (or `aria-labelledby`) names; `img` is `image`; `a` is `link`; `ul`,
+headings, as written; `label` wraps one field and its visible text, with native label activation on web (other hosts currently render a container only); `img` is `image`; `a` is `link`; `ul`,
 `ol` and `li` are a `list` or a `column` of rows; `title` and `meta` are `head
 title=… description=…`; a `table` is `view display="grid"` with
 `grid-template-columns` (or a `column` of `row`s); there is no `form` (a field's
