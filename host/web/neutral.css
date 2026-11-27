@@ -287,6 +287,8 @@
   @supports (color: lab(from red l a b)) { #exact-root [navigationPresentation="modal"] input[data-exact-switch]:checked { color: lab(from var(--exact-accent, AccentColor) calc((49 - l) * 1e6 + 100) 0 0 / 1); } }
   #exact-root [navigationPresentation="modal"] input[data-exact-switch]:checked::before { background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
   @media (any-pointer: coarse) { #exact-root [navigationPresentation="modal"] input[data-exact-switch] { width: 1.5em; height: 1.5em; } }
+  /* An authored appearance owns the switch drawing; keep its native input and state. */
+  #exact-root input[data-exact-switch][data-exact-said~="appearance"]::before { content: none; }
 
   /* The spinner is not the text's ink around it (LLP 1115 D4): its node's own `color`, written, is the author's
      (`data-exact-said`, D2's bit); else an authored accent (--exact-accent-said, LLP 1121 D9): written beside an
